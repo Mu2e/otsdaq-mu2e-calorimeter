@@ -47,6 +47,7 @@ physics: {
     caloVerifier : {
       module_type  : CaloDataVerifier
       metricsLevel : 2
+      subsystemOverride : tracker
     }
   
   }

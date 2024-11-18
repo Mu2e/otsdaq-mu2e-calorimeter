@@ -18,7 +18,7 @@
 #include "artdaq-core-mu2e/Overlays/DTCEventFragment.hh"
 #include "artdaq-core-mu2e/Overlays/FragmentType.hh"
 #include "artdaq-core-mu2e/Data/EventHeader.hh"
-#include "artdaq-core-mu2e/Data/CalorimeterTestDataDecoder.hh"
+#include "artdaq-core-mu2e/Data/CalorimeterDataDecoder.hh"
 
 #include "cetlib_except/exception.h"
 
@@ -32,6 +32,7 @@ namespace mu2e {
   {
   public:
     struct Config {
+      fhicl::Atom<int> data_type {fhicl::Name("dataType" ) , fhicl::Comment("Data type (0:standard, 1:debug, 2:counters)"), 0};
       fhicl::Atom<int> metrics_level {fhicl::Name("metricsLevel" ) , fhicl::Comment("Metrics reporting level"), 1};
       fhicl::Atom<std::string> subsystem_override {fhicl::Name("subsystemOverride" ) , fhicl::Comment("Override calo subsystem [\"calo\", \"tracker\"]"), "calo"};
     };
@@ -51,6 +52,7 @@ namespace mu2e {
 
   private:
     std::set<int> dtcs_;
+    int           data_type_;
     int           metrics_reporting_level_;
     DTCLib::DTC_Subsystem subsystem_;
     bool          isFirstEvent_;
@@ -59,6 +61,7 @@ namespace mu2e {
 
 mu2e::CaloDataVerifier::CaloDataVerifier(const art::EDFilter::Table<Config>& config)
   : art::EDFilter{config}, 
+    data_type_(config().data_type()),
     metrics_reporting_level_(config().metrics_level()),
     isFirstEvent_(true)    
 {
@@ -131,7 +134,7 @@ bool mu2e::CaloDataVerifier::filter(art::Event& event){
       TLOG(TLVL_DEBUG) << "Calo subevent header:\n" << caloEvent_header->toJson();
       uint64_t dtcID = caloEvent_header->source_dtc_id;
 
-      mu2e::CalorimeterTestDataDecoder caloDecoder(subevent);
+      mu2e::CalorimeterDataDecoder caloDecoder(subevent);
       nCaloEvents++;
 
       // Iterate over the data blocks (ROCs)
@@ -143,50 +146,66 @@ bool mu2e::CaloDataVerifier::filter(art::Event& event){
         DTCLib::DTC_DataHeaderPacket* dataHeader = dataBlocks[iroc].GetHeader().get();
         TLOG(TLVL_DEBUG) << dataHeader->toJSON() << std::endl;
 
-        // Print the calo data decoder info
-        auto CaloPacketColl = caloDecoder.GetCalorimeterHitData(iroc);
-        uint nHits = CaloPacketColl->size();
-        TLOG(TLVL_INFO) << "There are " << nHits << " hits in DTC " << dtcID << " ROC " << iroc << " / " << nROCs << std::endl;
-        for (uint ihit = 0; ihit<nHits; ihit++){
-          mu2e::CalorimeterTestDataDecoder::CalorimeterHitTestDataPacket hit = CaloPacketColl->at(ihit).first;
-          std::vector<uint16_t> hit_waveform = CaloPacketColl->at(ihit).second;
-
-          if (hit_waveform.size() == 0){
-            TLOG(TLVL_WARNING) << "[CaloDataVerifier::filter] found empty waveform! DTC " << dtcID << " ROC " << iroc << " hit " << ihit
-              << " BoardID " << hit.BoardID << " ChannelID " << hit.ChannelID;
-          }
-
-          nCaloHits++;
-    
-          TLOG(TLVL_DEBUG)
-            << "Hit "                        << ihit << " :"                                 << std::endl
-            << "\tBeginMarker: "               << std::hex << hit.BeginMarker << std::dec       << std::endl
-            << "\tBoardID: "                   << hit.BoardID                                   << std::endl
-            << "\tChannelID: "                 << hit.ChannelID                                 << std::endl
-            << "\tInPayloadEventWindowTag: "   << hit.InPayloadEventWindowTag                   << std::endl
-            << "\tLastSampleMarker: "          << std::hex << hit.LastSampleMarker << std::dec  << std::endl
-            << "\tErrorFlags: "                << hit.ErrorFlags                                << std::endl
-            << "\tTime: "                      << hit.Time                                      << std::endl
-            << "\tIndexOfMaxDigitizerSample: " << hit.IndexOfMaxDigitizerSample                 << std::endl
-            << "\tNumberOfSamples: "           << hit.NumberOfSamples                           << std::endl;
-          
-          if (metricMan != nullptr){
-            TLOG(TLVL_DEBUG) << "[CaloDataVerifier::filter] sending hit metrics to Grafana..." << std::endl;
-            metricMan->sendMetric("BoardID", hit.BoardID, "Board ID number",
-              metrics_reporting_level_, artdaq::MetricMode::LastPoint);
-            metricMan->sendMetric("ChannelID", hit.ChannelID, "Channel ID number",
-              metrics_reporting_level_, artdaq::MetricMode::LastPoint);
-            metricMan->sendMetric("NumberOfSamples", hit.NumberOfSamples, "Number of samples",
-              metrics_reporting_level_, artdaq::MetricMode::LastPoint);
-          }
-          
-        }
-
-        if (metricMan != nullptr){
-          metricMan->sendMetric("nHits", int(nHits), "Hits",
-            metrics_reporting_level_, artdaq::MetricMode::LastPoint);
-        }
+        if (data_type_ == 0){ // STANDARD HITS
         
+          auto caloHits = caloDecoder.GetCalorimeterHitData(iroc);
+          uint nHits = caloHits->size();
+          TLOG(TLVL_INFO) << "There are " << nHits << " hits in DTC " << dtcID << " ROC " << iroc << " / " << nROCs << std::endl;
+          for (uint ihit = 0; ihit<nHits; ihit++){
+            mu2e::CalorimeterDataDecoder::CalorimeterHitDataPacket hit = caloHits->at(ihit).first;
+            std::vector<uint16_t> hit_waveform = caloHits->at(ihit).second;
+            if (hit_waveform.size() == 0){
+              TLOG(TLVL_WARNING) << "[CaloDataVerifier::filter] found empty waveform! DTC " << dtcID << " ROC " << iroc << " hit " << ihit
+                << " BoardID " << hit.BoardID << " ChannelNumber " << hit.ChannelNumber;
+            }
+            nCaloHits++;
+          }
+        
+        } else if (data_type_ == 1){ // DEBUG HITS
+
+          auto caloHits = caloDecoder.GetCalorimeterHitTestData(iroc);
+          uint nHits = caloHits->size();
+          TLOG(TLVL_INFO) << "There are " << nHits << " hits in DTC " << dtcID << " ROC " << iroc << " / " << nROCs << std::endl;
+          for (uint ihit = 0; ihit<nHits; ihit++){
+            mu2e::CalorimeterDataDecoder::CalorimeterHitTestDataPacket hit = caloHits->at(ihit).first;
+            std::vector<uint16_t> hit_waveform = caloHits->at(ihit).second;
+  
+            if (hit_waveform.size() == 0){
+              TLOG(TLVL_WARNING) << "[CaloDataVerifier::filter] found empty waveform! DTC " << dtcID << " ROC " << iroc << " hit " << ihit
+                << " BoardID " << hit.BoardID << " ChannelID " << hit.ChannelID;
+            }
+  
+            nCaloHits++;
+      
+            TLOG(TLVL_DEBUG)
+              << "Hit "                        << ihit << " :"                                 << std::endl
+              << "\tBeginMarker: "               << std::hex << hit.BeginMarker << std::dec       << std::endl
+              << "\tBoardID: "                   << hit.BoardID                                   << std::endl
+              << "\tChannelID: "                 << hit.ChannelID                                 << std::endl
+              << "\tInPayloadEventWindowTag: "   << hit.InPayloadEventWindowTag                   << std::endl
+              << "\tLastSampleMarker: "          << std::hex << hit.LastSampleMarker << std::dec  << std::endl
+              << "\tErrorFlags: "                << hit.ErrorFlags                                << std::endl
+              << "\tTime: "                      << hit.Time                                      << std::endl
+              << "\tIndexOfMaxDigitizerSample: " << hit.IndexOfMaxDigitizerSample                 << std::endl
+              << "\tNumberOfSamples: "           << hit.NumberOfSamples                           << std::endl;
+            
+            if (metricMan != nullptr){
+              TLOG(TLVL_DEBUG) << "[CaloDataVerifier::filter] sending hit metrics to Grafana..." << std::endl;
+              metricMan->sendMetric("BoardID", hit.BoardID, "Board ID number",
+                metrics_reporting_level_, artdaq::MetricMode::LastPoint);
+              metricMan->sendMetric("ChannelID", hit.ChannelID, "Channel ID number",
+                metrics_reporting_level_, artdaq::MetricMode::LastPoint);
+              metricMan->sendMetric("NumberOfSamples", hit.NumberOfSamples, "Number of samples",
+                metrics_reporting_level_, artdaq::MetricMode::LastPoint);
+            }
+            
+          }
+  
+          if (metricMan != nullptr){
+            metricMan->sendMetric("nHits", int(nHits), "Hits",
+              metrics_reporting_level_, artdaq::MetricMode::LastPoint);
+          }
+        }
       }
 
       if (metricMan != nullptr){
