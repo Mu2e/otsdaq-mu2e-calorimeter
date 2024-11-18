@@ -1,6 +1,7 @@
 #include "art/Framework/Core/EDFilter.h"
 #include "art/Framework/Core/ModuleMacros.h"
 #include "art/Framework/Principal/Event.h"
+//#include "art/Framework/Services/Registry/ServiceHandle.h"
 #include "art/Framework/Principal/Handle.h"
 #include "art/Framework/Principal/Run.h"
 #include "messagefacility/MessageLogger/MessageLogger.h"
@@ -23,6 +24,7 @@
 
 #include <iomanip>
 #include <sstream>
+#include <vector>
 
 
 namespace mu2e {
@@ -30,7 +32,6 @@ namespace mu2e {
   {
   public:
     struct Config {
-      fhicl::Atom<int>  diagLevel     {fhicl::Name("diagLevel")     , fhicl::Comment("diagnostic level")};
       fhicl::Atom<int>  metrics_level {fhicl::Name("metricsLevel" ) , fhicl::Comment("Metrics reporting level"), 1};
     };
 
@@ -39,10 +40,16 @@ namespace mu2e {
     bool filter(art::Event & e) override;
     virtual bool endRun(art::Run& run ) override;
 
+    long int getEventWindow(ushort ewt[3]){
+      long int eventWindow = static_cast<long int>(ewt[0]) +
+        (static_cast<long int>(ewt[1]) << 16) +
+        (static_cast<long int>(ewt[2]) << 32);
+      return eventWindow;
+    }
+
 
   private:
     std::set<int> dtcs_;
-    int           diagLevel_;
     int           metrics_reporting_level_;
     bool          isFirstEvent_;
   };
@@ -50,21 +57,17 @@ namespace mu2e {
 
 mu2e::CaloDataVerifier::CaloDataVerifier(const art::EDFilter::Table<Config>& config)
   : art::EDFilter{config}, 
-  diagLevel_(config().diagLevel()),
-  isFirstEvent_(true)    
-  {
-    produces<mu2e::EventHeader>();
-  }
-
-bool mu2e::CaloDataVerifier::filter(art::Event& event)
+    metrics_reporting_level_(config().metrics_level()),
+    isFirstEvent_(true)    
 {
+  //produces<mu2e::EventHeader>();
+}
+
+bool mu2e::CaloDataVerifier::filter(art::Event& event){
 
   art::EventNumber_t eventNumber = event.event();
 
-  // Collection of CaloHits for the event
-  std::unique_ptr<std::vector<mu2e::CalorimeterTestDataDecoder>> caloFragColl(
-      new std::vector<mu2e::CalorimeterTestDataDecoder>);
-
+  TLOG(TLVL_INFO) << "mu2e::CaloDataVerifier::filter eventNumber= " << (int)eventNumber << std::endl;
 
   artdaq::Fragments fragments;
   artdaq::FragmentPtrs containerFragments;
@@ -72,6 +75,7 @@ bool mu2e::CaloDataVerifier::filter(art::Event& event)
   std::vector<art::Handle<artdaq::Fragments>> fragmentHandles;
   fragmentHandles = event.getMany<std::vector<artdaq::Fragment>>();
 
+  TLOG(TLVL_DEBUG) << "Iterating through " << fragmentHandles.size() << " fragment handles\n";
   for (const auto& handle : fragmentHandles) {
     if (!handle.isValid() || handle->empty()) {
       continue;
@@ -98,67 +102,68 @@ bool mu2e::CaloDataVerifier::filter(art::Event& event)
     }
   }
 
-  if (diagLevel_ > 0) {
-    std::cout << "[CaloDataVerifier::filter] Found nHandlesnFragments  "
-              << fragments.size() << std::endl;
-  }
+  size_t nCaloEvents(0);
+  size_t nCaloHits(0);
 
-  size_t nFrags(0);
-
-
+  TLOG(TLVL_DEBUG) << "Iterating through " << fragments.size() << " fragments\n";
   for (const auto& frag : fragments) {
-    mu2e::DTCEventFragment bb(frag);
+    mu2e::DTCEventFragment eventFragment(frag);
 
-    auto caloSEvents = bb.getSubsystemData(DTCLib::DTC_Subsystem::DTC_Subsystem_Calorimeter);
-    for (const auto& subevent : caloSEvents) {
-      mu2e::CalorimeterTestDataDecoder cf(subevent);
-      caloFragColl->emplace_back(cf);
-      ++nFrags;
+    DTCLib::DTC_Event dtcevent = eventFragment.getData();
+    //DTCLib::DTC_EventHeader* eventHeader = dtcevent.GetHeader();
+    std::vector<DTCLib::DTC_SubEvent> subevents = dtcevent.GetSubEvents();
+    TLOG(TLVL_DEBUG) << "Found " << subevents.size() << " total subevents\n";
+  
+    auto caloSubEvents = eventFragment.getSubsystemData(DTCLib::DTC_Subsystem::DTC_Subsystem_Tracker); //DTC_Subsystem_Calorimeter);
+    TLOG(TLVL_DEBUG) << "Iterating through " << caloSubEvents.size() << " calorimeter subevents\n";
+    for (const auto& subevent : caloSubEvents) {
 
-      // iterate over the data blocks
+      // Retrieve the calo DTC header
+      const DTCLib::DTC_SubEventHeader* caloEvent_header = subevent.GetHeader();
+      TLOG(TLVL_DEBUG) << "Calo subevent header:\n" << caloEvent_header->toJson();
+      uint64_t dtcID = caloEvent_header->source_dtc_id;
+
+      mu2e::CalorimeterTestDataDecoder caloDecoder(subevent);
+      nCaloEvents++;
+
+      // Iterate over the data blocks (ROCs)
       std::vector<DTCLib::DTC_DataBlock> dataBlocks = subevent.GetDataBlocks();
-      for (unsigned int j = 0; j < dataBlocks.size(); ++j){
-        if (diagLevel_ > 0) std::cout << "Data block [" << j << "]:" << std::endl;
+      uint nROCs = dataBlocks.size();
+      TLOG(TLVL_DEBUG) << "Iterating through " << nROCs << " data blocks (ROCs)\n";
+      for (uint iroc = 0; iroc < nROCs; iroc++){
         // print the data block header
-        DTCLib::DTC_DataHeaderPacket* dataHeader = dataBlocks[j].GetHeader().get();
-        if (diagLevel_ > 0) std::cout << dataHeader->toJSON() << std::endl;
-
-        // print the data block payload
-        const void* dataPtr = dataBlocks[j].GetData();
-        if (diagLevel_ > 0) std::cout << "Data payload:" << std::endl;
-        for (int l = 0; l < dataHeader->GetByteCount() - 16; l += 2){
-          auto thisWord = reinterpret_cast<const uint16_t*>(dataPtr)[l];
-          if (diagLevel_ > 0) std::cout << "\t0x" << std::hex << std::setw(4) << std::setfill('0') << static_cast<int>(thisWord) << std::endl;
-        }
+        DTCLib::DTC_DataHeaderPacket* dataHeader = dataBlocks[iroc].GetHeader().get();
+        TLOG(TLVL_DEBUG) << dataHeader->toJSON() << std::endl;
 
         // Print the calo data decoder info
-        auto CaloPacketColl = cf.GetCalorimeterHitData(j);
-        uint npackets = CaloPacketColl->size();
-        if (diagLevel_ > 0) std::cout << "There are " << npackets << " hit packets" << std::endl;
-        for (uint packet_i = 0; packet_i<npackets; packet_i++){
-          mu2e::CalorimeterTestDataDecoder::CalorimeterHitTestDataPacket hit = CaloPacketColl->at(packet_i).first;
-          std::vector<uint16_t> hit_bytes = CaloPacketColl->at(packet_i).second;
+        auto CaloPacketColl = caloDecoder.GetCalorimeterHitData(iroc);
+        uint nHits = CaloPacketColl->size();
+        TLOG(TLVL_INFO) << "There are " << nHits << " hits in DTC " << dtcID << " ROC " << iroc << " / " << nROCs << std::endl;
+        for (uint ihit = 0; ihit<nHits; ihit++){
+          mu2e::CalorimeterTestDataDecoder::CalorimeterHitTestDataPacket hit = CaloPacketColl->at(ihit).first;
+          std::vector<uint16_t> hit_waveform = CaloPacketColl->at(ihit).second;
 
-          if (diagLevel_ > 0) {
-            std::cout << "Hit packet "   << packet_i << " :"<<std::endl;
-            std::cout << "BeginMarker: " << hit.BeginMarker << std::endl;
-            std::cout << "BoardID: "     << hit.BoardID     << std::endl;
-            std::cout << "ChannelID: "   << hit.ChannelID   << std::endl;
-            std::cout << "InPayloadEventWindowTag: "   << hit.InPayloadEventWindowTag << std::endl;
-            std::cout << "LastSampleMarker: "          << hit.LastSampleMarker << std::endl;
-            std::cout << "ErrorFlags: "                << hit.ErrorFlags << std::endl;
-            std::cout << "Time: "                      << hit.Time << std::endl;
-            std::cout << "IndexOfMaxDigitizerSample: " << hit.IndexOfMaxDigitizerSample << std::endl;
-            std::cout << "NumberOfSamples: "           << hit.NumberOfSamples << std::endl;
-  
-            std::cout << "Dumping the waveform: " << std::endl;
-            for (uint wi=0; wi<hit_bytes.size(); wi++){
-              std::cout << hit_bytes[wi] << " ";
-            }
-            std::cout << std::endl;
+          if (hit_waveform.size() == 0){
+            TLOG(TLVL_WARNING) << "[CaloDataVerifier::filter] found empty waveform! DTC " << dtcID << " ROC " << iroc << " hit " << ihit
+              << " BoardID " << hit.BoardID << " ChannelID " << hit.ChannelID;
           }
 
+          nCaloHits++;
+    
+          TLOG(TLVL_DEBUG)
+            << "Hit "                        << ihit << " :"                                 << std::endl
+            << "\tBeginMarker: "               << std::hex << hit.BeginMarker << std::dec       << std::endl
+            << "\tBoardID: "                   << hit.BoardID                                   << std::endl
+            << "\tChannelID: "                 << hit.ChannelID                                 << std::endl
+            << "\tInPayloadEventWindowTag: "   << hit.InPayloadEventWindowTag                   << std::endl
+            << "\tLastSampleMarker: "          << std::hex << hit.LastSampleMarker << std::dec  << std::endl
+            << "\tErrorFlags: "                << hit.ErrorFlags                                << std::endl
+            << "\tTime: "                      << hit.Time                                      << std::endl
+            << "\tIndexOfMaxDigitizerSample: " << hit.IndexOfMaxDigitizerSample                 << std::endl
+            << "\tNumberOfSamples: "           << hit.NumberOfSamples                           << std::endl;
+          
           if (metricMan != nullptr){
+            TLOG(TLVL_DEBUG) << "[CaloDataVerifier::filter] sending hit metrics to Grafana..." << std::endl;
             metricMan->sendMetric("BoardID", hit.BoardID, "Board ID number",
               metrics_reporting_level_, artdaq::MetricMode::LastPoint);
             metricMan->sendMetric("ChannelID", hit.ChannelID, "Channel ID number",
@@ -166,31 +171,38 @@ bool mu2e::CaloDataVerifier::filter(art::Event& event)
             metricMan->sendMetric("NumberOfSamples", hit.NumberOfSamples, "Number of samples",
               metrics_reporting_level_, artdaq::MetricMode::LastPoint);
           }
+          
         }
+
+        if (metricMan != nullptr){
+          metricMan->sendMetric("nHits", int(nHits), "Hits",
+            metrics_reporting_level_, artdaq::MetricMode::LastPoint);
+        }
+        
+      }
+
+      if (metricMan != nullptr){
+        metricMan->sendMetric("nSubEvents", caloSubEvents.size(), "Subevents",
+          metrics_reporting_level_, artdaq::MetricMode::LastPoint);
       }
     }
 
-    if (metricMan != nullptr){
-      metricMan->sendMetric("nSubEvents", caloSEvents.size(), "Subevents",
-        metrics_reporting_level_, artdaq::MetricMode::LastPoint);
+    TLOG(TLVL_DEBUG) << "[CaloDataVerifier::filter] found " << nCaloEvents << " calo subevents" << std::endl;
+    TLOG(TLVL_DEBUG) << "[CaloDataVerifier::filter] found " << nCaloHits << " calo hits" << std::endl;
+
+    if (nCaloEvents == 0) {
+      TLOG(TLVL_WARNING) << "[CaloDataVerifier::filter] found no calo subevents!" << std::endl;
     }
-  }
+  
+    TLOG(TLVL_INFO) << "mu2e::CaloDataVerifier::filter exiting eventNumber="
+                << (int)(event.event()) << " / timestamp=" << (int)eventNumber << std::endl;
+    
+    if (metricMan != nullptr){
+      TLOG(TLVL_DEBUG) << "Sending nFragments metric!\n";
+      metricMan->sendMetric("nFragments", fragments.size(), "Fragments",
+  			metrics_reporting_level_, artdaq::MetricMode::LastPoint);
+    }
 
-
-
-  if ( (diagLevel_ > 0) && (nFrags == 0)) {
-    std::cout << "[CaloDataVerifier::filter] found no fragments!" << std::endl;
-  }
-
-  if (diagLevel_ > 0) {
-    std::cout << "mu2e::CaloDataVerifier::filter exiting eventNumber="
-              << (int)(event.event()) << " / timestamp=" << (int)eventNumber << std::endl;
-  }
-
-
-  if (metricMan != nullptr){
-    metricMan->sendMetric("nFragments", fragments.size(), "Fragments",
-      metrics_reporting_level_, artdaq::MetricMode::LastPoint);
   }
 
   return true;
