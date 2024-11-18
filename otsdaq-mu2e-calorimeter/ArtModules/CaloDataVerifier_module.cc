@@ -32,7 +32,8 @@ namespace mu2e {
   {
   public:
     struct Config {
-      fhicl::Atom<int>  metrics_level {fhicl::Name("metricsLevel" ) , fhicl::Comment("Metrics reporting level"), 1};
+      fhicl::Atom<int> metrics_level {fhicl::Name("metricsLevel" ) , fhicl::Comment("Metrics reporting level"), 1};
+      fhicl::Atom<std::string> subsystem_override {fhicl::Name("subsystemOverride" ) , fhicl::Comment("Override calo subsystem [\"calo\", \"tracker\"]"), "calo"};
     };
 
     explicit CaloDataVerifier(const art::EDFilter::Table<Config>& config);
@@ -51,6 +52,7 @@ namespace mu2e {
   private:
     std::set<int> dtcs_;
     int           metrics_reporting_level_;
+    DTCLib::DTC_Subsystem subsystem_;
     bool          isFirstEvent_;
   };
 }  // namespace mu2e
@@ -60,6 +62,12 @@ mu2e::CaloDataVerifier::CaloDataVerifier(const art::EDFilter::Table<Config>& con
     metrics_reporting_level_(config().metrics_level()),
     isFirstEvent_(true)    
 {
+  if (config().subsystem_override() == "calo"){
+    subsystem_ = DTCLib::DTC_Subsystem::DTC_Subsystem_Calorimeter;
+  } else if (config().subsystem_override() == "tracker"){
+    subsystem_ = DTCLib::DTC_Subsystem::DTC_Subsystem_Tracker;
+  } 
+
   //produces<mu2e::EventHeader>();
 }
 
@@ -114,7 +122,7 @@ bool mu2e::CaloDataVerifier::filter(art::Event& event){
     std::vector<DTCLib::DTC_SubEvent> subevents = dtcevent.GetSubEvents();
     TLOG(TLVL_DEBUG) << "Found " << subevents.size() << " total subevents\n";
   
-    auto caloSubEvents = eventFragment.getSubsystemData(DTCLib::DTC_Subsystem::DTC_Subsystem_Tracker); //DTC_Subsystem_Calorimeter);
+    auto caloSubEvents = eventFragment.getSubsystemData(subsystem_);
     TLOG(TLVL_DEBUG) << "Iterating through " << caloSubEvents.size() << " calorimeter subevents\n";
     for (const auto& subevent : caloSubEvents) {
 
