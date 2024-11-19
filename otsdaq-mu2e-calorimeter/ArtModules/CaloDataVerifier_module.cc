@@ -34,6 +34,7 @@ namespace mu2e {
     struct Config {
       fhicl::Atom<int> data_type {fhicl::Name("dataType" ) , fhicl::Comment("Data type (0:standard, 1:debug, 2:counters)"), 0};
       fhicl::Atom<int> metrics_level {fhicl::Name("metricsLevel" ) , fhicl::Comment("Metrics reporting level"), 1};
+      fhicl::Atom<bool> produce_calo_decoders {fhicl::Name("produceCaloDecoders" ) , fhicl::Comment("Produce calo decoders [default: true]"), true};
       fhicl::Atom<std::string> subsystem_override {fhicl::Name("subsystemOverride" ) , fhicl::Comment("Override calo subsystem [\"calo\", \"tracker\"]"), "calo"};
     };
 
@@ -54,6 +55,7 @@ namespace mu2e {
     std::set<int> dtcs_;
     int           data_type_;
     int           metrics_reporting_level_;
+    bool          produceCaloDecoders_;
     DTCLib::DTC_Subsystem subsystem_;
     bool          isFirstEvent_;
   };
@@ -63,22 +65,27 @@ mu2e::CaloDataVerifier::CaloDataVerifier(const art::EDFilter::Table<Config>& con
   : art::EDFilter{config}, 
     data_type_(config().data_type()),
     metrics_reporting_level_(config().metrics_level()),
+    produceCaloDecoders_(config().produce_calo_decoders()),
     isFirstEvent_(true)    
 {
   if (config().subsystem_override() == "calo"){
     subsystem_ = DTCLib::DTC_Subsystem::DTC_Subsystem_Calorimeter;
   } else if (config().subsystem_override() == "tracker"){
     subsystem_ = DTCLib::DTC_Subsystem::DTC_Subsystem_Tracker;
-  } 
+  }
 
-  //produces<mu2e::EventHeader>();
+  if (produceCaloDecoders_) {
+    produces<std::vector<mu2e::CalorimeterDataDecoder>>();
+  }
 }
 
 bool mu2e::CaloDataVerifier::filter(art::Event& event){
 
   art::EventNumber_t eventNumber = event.event();
-
   TLOG(TLVL_INFO) << "mu2e::CaloDataVerifier::filter eventNumber= " << (int)eventNumber << std::endl;
+
+  //Prepare vector of output data decoders
+  std::unique_ptr<std::vector<mu2e::CalorimeterDataDecoder>> caloDecoderColl(new std::vector<mu2e::CalorimeterDataDecoder>);
 
   artdaq::Fragments fragments;
   artdaq::FragmentPtrs containerFragments;
@@ -135,6 +142,9 @@ bool mu2e::CaloDataVerifier::filter(art::Event& event){
       uint64_t dtcID = caloEvent_header->source_dtc_id;
 
       mu2e::CalorimeterDataDecoder caloDecoder(subevent);
+      if (produceCaloDecoders_) {
+        caloDecoderColl->emplace_back(caloDecoder);
+      }
       nCaloEvents++;
 
       // Iterate over the data blocks (ROCs)
@@ -231,7 +241,10 @@ bool mu2e::CaloDataVerifier::filter(art::Event& event){
     }
 
   }
-
+  
+  if (produceCaloDecoders_) {
+    event.put(std::move(caloDecoderColl));
+  }
   return true;
 }
 
