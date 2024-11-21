@@ -51,24 +51,25 @@ void* get_in_addr(struct sockaddr* sa)
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-int makeSocket(char* ip, int port)
+//==============================================================================
+int makeSocket(const char* ip, int port, struct sockaddr_in &ai_addr)
 {
-	int                     sockfd;
-	struct addrinfo         hints, *servinfo, *p;
-	int                     rv;
-	int                     numbytes;
-	struct sockaddr_storage their_addr;
-	socklen_t               addr_len;
-	char                    s[INET6_ADDRSTRLEN];
+	int             sockfd;
+	struct addrinfo hints, *servinfo, *p;
+	int             rv;
+	// int                     numbytes;
+	// struct sockaddr_storage their_addr;
+	// socklen_t               addr_len;
+	// char                    s[INET6_ADDRSTRLEN];
 
 	memset(&hints, 0, sizeof hints);
 	hints.ai_family   = AF_UNSPEC;
 	hints.ai_socktype = SOCK_DGRAM;
 
-	if((rv = getaddrinfo(ip, HWPORT, &hints, &servinfo)) != 0)
+	if((rv = getaddrinfo(ip, std::to_string(port).c_str(), &hints, &servinfo)) != 0)
 	{
-		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
-		return 1;
+		__SS__ << "getaddrinfo: " << gai_strerror(rv) << __E__;
+		__SS_THROW__;
 	}
 
 	// loop through all the results and make a socket
@@ -76,7 +77,7 @@ int makeSocket(char* ip, int port)
 	{
 		if((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
 		{
-			perror("sw: socket");
+			__COUT_WARN__ << "sw: socket failed, trying other address..." << __E__;
 			continue;
 		}
 
@@ -85,14 +86,16 @@ int makeSocket(char* ip, int port)
 
 	if(p == NULL)
 	{
-		fprintf(stderr, "sw: failed to create socket\n");
-		return 2;
+		__SS__ << "sw: failed to create socket" << __E__;
+		__SS_THROW__;
 	}
 
-	freeaddrinfo(servinfo);
+	//copy ai_addr, which is needed for sendto
+	memcpy(&ai_addr, p->ai_addr, sizeof(ai_addr));
 
+	freeaddrinfo(servinfo);
 	return sockfd;
-}
+} //end makeSocket()
 
 int main(int argc, char* argv[])
 {
@@ -142,6 +145,8 @@ int main(int argc, char* argv[])
 		return 2;
 	}
 
+	struct sockaddr_in ai_addr;
+	memcpy(&ai_addr, p->ai_addr, sizeof(ai_addr));
 	freeaddrinfo(servinfo);
 
 	//////////////////////////////////////////////////////////////////////
@@ -184,7 +189,7 @@ int main(int argc, char* argv[])
 			       8);  // increment each time
 		packetSz = RX_DATA_OFFSET + buff[1] * 8;
 
-		if((numbytes = sendto(sockfd, buff, packetSz, 0, p->ai_addr, p->ai_addrlen)) ==
+		if((numbytes = sendto(sockfd, buff, packetSz, 0, (struct sockaddr*)&ai_addr, sizeof(ai_addr))) == //p->ai_addr, p->ai_addrlen)) ==
 		   -1)
 		{
 			perror("sw: sendto");
@@ -196,7 +201,7 @@ int main(int argc, char* argv[])
 		              // ///////////////////////////////////////////////////////////
 		packetSz = RX_DATA_OFFSET;
 
-		if((numbytes = sendto(sockfd, buff, packetSz, 0, p->ai_addr, p->ai_addrlen)) ==
+		if((numbytes = sendto(sockfd, buff, packetSz, 0, (struct sockaddr*)&ai_addr, sizeof(ai_addr))) == //p->ai_addr, p->ai_addrlen)) ==
 		   -1)
 		{
 			perror("sw: sendto");
@@ -259,7 +264,7 @@ int main(int argc, char* argv[])
 		memset((void*)&buff[RX_DATA_OFFSET + 7], 1, 1);  // enable data
 		packetSz = RX_DATA_OFFSET + buff[1] * 8;
 
-		if((numbytes = sendto(sockfd, buff, packetSz, 0, p->ai_addr, p->ai_addrlen)) ==
+		if((numbytes = sendto(sockfd, buff, packetSz, 0, (struct sockaddr*)&ai_addr, sizeof(ai_addr))) == //p->ai_addr, p->ai_addrlen)) ==
 		   -1)
 		{
 			perror("sw: sendto");
@@ -278,7 +283,7 @@ int main(int argc, char* argv[])
 		memcpy((void*)&buff[RX_DATA_OFFSET], (void*)&val, 8);
 		packetSz = RX_DATA_OFFSET + buff[1] * 8;
 
-		if((numbytes = sendto(sockfd, buff, packetSz, 0, p->ai_addr, p->ai_addrlen)) ==
+		if((numbytes = sendto(sockfd, buff, packetSz, 0, (struct sockaddr*)&ai_addr, sizeof(ai_addr))) == //p->ai_addr, p->ai_addrlen)) ==
 		   -1)
 		{
 			perror("sw: sendto");
@@ -342,7 +347,7 @@ int main(int argc, char* argv[])
 		memset((void*)&buff[RX_DATA_OFFSET + 7], 0, 1);  // disable data
 		packetSz = RX_DATA_OFFSET + buff[1] * 8;
 
-		if((numbytes = sendto(sockfd, buff, packetSz, 0, p->ai_addr, p->ai_addrlen)) ==
+		if((numbytes = sendto(sockfd, buff, packetSz, 0, (struct sockaddr*)&ai_addr, sizeof(ai_addr))) == //p->ai_addr, p->ai_addrlen)) ==
 		   -1)
 		{
 			perror("sw: sendto");

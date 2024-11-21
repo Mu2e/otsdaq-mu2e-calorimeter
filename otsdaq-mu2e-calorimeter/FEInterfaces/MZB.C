@@ -116,4 +116,3 @@ MZB_OSCMDCODE_t mz_string_to_enum(const char* str){
     return SYNTAX_ERROR;
 
 }
-

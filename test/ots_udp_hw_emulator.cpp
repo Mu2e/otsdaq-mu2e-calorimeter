@@ -55,25 +55,25 @@ void* get_in_addr(struct sockaddr* sa)
 	return &(((struct sockaddr_in6*)sa)->sin6_addr);
 }
 
-int makeSocket(const char* ip, int port, struct addrinfo*& p)
+//==============================================================================
+int makeSocket(const char* ip, int port, struct sockaddr_in &ai_addr)
 {
-	int                     sockfd;
-	struct addrinfo         hints, *servinfo;
-	int                     rv;
-	int                     numberOfBytes;
-	struct sockaddr_storage their_addr;
-	socklen_t               addr_len;
-	char                    s[INET6_ADDRSTRLEN];
+	int             sockfd;
+	struct addrinfo hints, *servinfo, *p;
+	int             rv;
+	// int                     numbytes;
+	// struct sockaddr_storage their_addr;
+	// socklen_t               addr_len;
+	// char                    s[INET6_ADDRSTRLEN];
 
 	memset(&hints, 0, sizeof hints);
 	hints.ai_family   = AF_UNSPEC;
 	hints.ai_socktype = SOCK_DGRAM;
-	char portStr[10];
-	sprintf(portStr, "%d", port);
-	if((rv = getaddrinfo(ip, portStr, &hints, &servinfo)) != 0)
+
+	if((rv = getaddrinfo(ip, std::to_string(port).c_str(), &hints, &servinfo)) != 0)
 	{
-		__PRINTF__("getaddrinfo: %s\n", gai_strerror(rv));
-		return -1;
+		__SS__ << "getaddrinfo: " << gai_strerror(rv) << __E__;
+		__SS_THROW__;
 	}
 
 	// loop through all the results and make a socket
@@ -81,7 +81,7 @@ int makeSocket(const char* ip, int port, struct addrinfo*& p)
 	{
 		if((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
 		{
-			__PRINTF__("sw: socket\n");
+			__COUT_WARN__ << "sw: socket failed, trying other address..." << __E__;
 			continue;
 		}
 
@@ -90,14 +90,16 @@ int makeSocket(const char* ip, int port, struct addrinfo*& p)
 
 	if(p == NULL)
 	{
-		__PRINTF__("sw: failed to create socket\n");
-		return -1;
+		__SS__ << "sw: failed to create socket" << __E__;
+		__SS_THROW__;
 	}
 
-	freeaddrinfo(servinfo);
+	//copy ai_addr, which is needed for sendto
+	memcpy(&ai_addr, p->ai_addr, sizeof(ai_addr));
 
+	freeaddrinfo(servinfo);
 	return sockfd;
-}
+} //end makeSocket()
 
 int main(int argc, char** argv)
 {
@@ -113,7 +115,7 @@ int main(int argc, char** argv)
 	unsigned short streamToPort;
 
 	int                     sockfd;
-	int                     sendSockfd = 0;
+	int                     sendSockfd = -1;
 	struct addrinfo         hints, *servinfo, *p;
 	int                     rv;
 	int                     numberOfBytes;
@@ -162,6 +164,9 @@ int main(int argc, char** argv)
 	}
 
 	freeaddrinfo(servinfo);
+
+
+	struct sockaddr_in ai_addr;
 
 	//////////////////////////////////////////////////////////////////////
 	////////////// ready to go //////////////
@@ -419,9 +424,10 @@ int main(int argc, char** argv)
 						         << "Stream destination port: 0x" << streamToPort << dec
 						         << " " << streamToPort << endl;
 
-						close(sendSockfd);
-						sendSockfd = 0;
-						sendSockfd = makeSocket(streamToIP.c_str(), streamToPort, p);
+						if(sendSockfd != -1)
+							close(sendSockfd);
+						sendSockfd = -1;
+						sendSockfd = makeSocket(streamToIP.c_str(), streamToPort, ai_addr);//p);
 						if(sendSockfd != -1)
 						{
 							__COUT__ << "************************************************"
@@ -515,7 +521,7 @@ int main(int argc, char** argv)
 					//	    			__COUT__ << value << std::endl;
 
 					if((numberOfBytes = sendto(
-					        sendSockfd, buff, packetSz, 0, p->ai_addr, p->ai_addrlen)) ==
+					        sendSockfd, buff, packetSz, 0, (struct sockaddr*)&ai_addr, sizeof(ai_addr)) == //p->ai_addr, p->ai_addrlen)) ==
 					   -1)
 					{
 						perror("Hw: sendto");
@@ -548,7 +554,7 @@ int main(int argc, char** argv)
 				if(sendSockfd != -1)
 				{
 					if((numberOfBytes = sendto(
-					        sendSockfd, buff, packetSz, 0, p->ai_addr, p->ai_addrlen)) ==
+					        sendSockfd, buff, packetSz, 0, (struct sockaddr*)&ai_addr, sizeof(ai_addr)) == //p->ai_addr, p->ai_addrlen)) ==
 					   -1)
 					{
 						perror("hw: sendto");
@@ -568,6 +574,8 @@ int main(int argc, char** argv)
 	}  // end main loop
 
 	close(sockfd);
+	if(sendSockfd != -1)
+		close(sendSockfd);
 
 	return 0;
 }

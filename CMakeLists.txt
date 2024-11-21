@@ -10,7 +10,7 @@ cmake_minimum_required (VERSION 3.19 FATAL_ERROR)
 
 find_package(cetmodules 3.16.00 REQUIRED)
 
-project(otsdaq_mu2e_calorimeter VERSION 3.02.00)
+project(otsdaq_mu2e_calorimeter VERSION 3.03.00)
 
 include(CetCMakeEnv)
 cet_cmake_env()
@@ -60,5 +60,12 @@ endif()
 #INSTALL(DIRECTORY XDAQConfigurations DESTINATION ${product}/${version}/Data)
 #FILE(COPY ServiceData DESTINATION Data)
 #INSTALL(DIRECTORY ServiceData DESTINATION ${product}/${version}/Data)
+
+#FILE(COPY boardConfig/nominal DESTINATION boardConfig)
+#install(DIRECTORY boardConfig/nominal DESTINATION boardConfig FILE_PERMISSIONS USE_SOURCE_PERMISSIONS DIRECTORY_PERMISSIONS USE_SOURCE_PERMISSIONS)
+
+FILE(COPY boardConfig DESTINATION .)
+install(DIRECTORY boardConfig DESTINATION . FILE_PERMISSIONS USE_SOURCE_PERMISSIONS DIRECTORY_PERMISSIONS USE_SOURCE_PERMISSIONS)
+
 
 cet_cmake_config()
