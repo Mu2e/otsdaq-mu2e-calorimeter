@@ -1022,126 +1022,102 @@ void ROCCalorimeterInterface::SetBoardVoltages(bool hvonoff, int  boardID, std::
 
   usleep(100000);
 
-  <<<<<<< HEAD
-	    /*command = "SLEWRATE"; 
-	      =======
+  /*command = "SLEWRATE"; 
+    paramVect[0] = 40;
+    paramVect[1] = NAN;
+    paramVect[2] = NAN;
+    paramVect[3] = NAN;
+    paramVect[4] = NAN;
+    paramVect[5] = NAN;
+    paramVect[6] = NAN;
+    paramVect[7] = NAN;
+    paramVect[8] = NAN;
 
-	      command = "SLEWRATE"; 
-	      >>>>>>> develop
-	      paramVect[0] = 40;
-	      paramVect[1] = NAN;
-	      paramVect[2] = NAN;
-	      paramVect[3] = NAN;
-	      paramVect[4] = NAN;
-	      paramVect[5] = NAN;
-	      paramVect[6] = NAN;
-	      paramVect[7] = NAN;
-	      paramVect[8] = NAN;
+    SendMzCommand(command, paramVect);
 
-	      SendMzCommand(command, paramVect);
-
-	      <<<<<<< HEAD
-	      usleep(100000);*/
+    usleep(100000);*/
 	
-	    =======
-	    usleep(100000);
-  >>>>>>> develop
 
-	    if(hvonoff == 1){
+  if(hvonoff == 1){
 
-	      char buff[50];
-	      sprintf(buff, "board%03d.config", boardID);
+    char buff[50];
+    sprintf(buff, "board%03d.config", boardID);
         
-	      //to do:
-	      //std::string filename = std::string(__ENV__("CALORIMETER_CONF_DIR")) + "/" + buff;
-	      //fix it asking to ryan or eric.. 
+    //to do:
+    //std::string filename = std::string(__ENV__("CALORIMETER_CONF_DIR")) + "/" + buff;
+    //fix it asking to ryan or eric.. 
 
 
-	      std::string filename = std::string("/home/mu2ecalo/ots_spack/srcs/otsdaq-mu2e-calorimeter/boardConfig/") + conf + std::string("/") + buff;		
-	      <<<<<<< HEAD
-		//std::string filename = std::string("/home/users/moresca/ots_spack2/srcs/otsdaq-mu2e-calorimeter/boardConfig/") + conf + std::string("/") + buff;		
+    std::string filename = std::string("/home/mu2ecalo/ots_spack/srcs/otsdaq-mu2e-calorimeter/boardConfig/") + conf + std::string("/") + buff;		
+    //std::string filename = std::string("/home/users/moresca/ots_spack2/srcs/otsdaq-mu2e-calorimeter/boardConfig/") + conf + std::string("/") + buff;		
 
-		=======
-		>>>>>>> develop
-		      std::ifstream confFile(filename);
+    std::ifstream confFile(filename);
 
-	      if(!confFile.is_open())
-		{
-		  __FE_SS__ << "Could not open file: " << filename << __E__;
-		  __FE_SS_THROW__;;
-		}
+    if(!confFile.is_open())
+      {
+	__FE_SS__ << "Could not open file: " << filename << __E__;
+	__FE_SS_THROW__;;
+      }
 
-	      __MOUT_INFO__ << "Opening file: " << filename << __E__;
+    __MOUT_INFO__ << "Opening file: " << filename << __E__;
 
-	      <<<<<<< HEAD
-			float vbias[20];
+    float vbias[20];
 	   
-	      for(int ichan = 0; ichan<20; ichan++){
+    for(int ichan = 0; ichan<20; ichan++){
 
-		int chindex;
-		std::string type;
+      int chindex;
+      std::string type;
 
-		confFile >> chindex >> vbias[ichan] >> type;
-		__MOUT_INFO__ << chindex << "  " <<  vbias[ichan]  <<  "  " << type << __E__;
+      confFile >> chindex >> vbias[ichan] >> type;
+      __MOUT_INFO__ << chindex << "  " <<  vbias[ichan]  <<  "  " << type << __E__;
 
 
-	      }
+    }
 
-	      /*for(int ichan = 0; ichan<20; ichan++){
-		=======
+    /*for(int ichan = 0; ichan<20; ichan++){
 
-		for(int ichan = 0; ichan<20; ichan++){
-		>>>>>>> develop
+      int chindex;
+      float vbias;
+      std::string type;
 
-		int chindex;
-		float vbias;
-		std::string type;
-
-		confFile >> chindex >> vbias >> type;
+      confFile >> chindex >> vbias >> type;
         
-		__MOUT_INFO__ << chindex << "  " <<  vbias  <<  "  " << type << __E__;
+      __MOUT_INFO__ << chindex << "  " <<  vbias  <<  "  " << type << __E__;
 
-		command = "DACSET";
-		paramVect[0] = chindex+1;
-		paramVect[1] = vbias;
-		paramVect[2] = NAN;
-		paramVect[3] = NAN;
-		paramVect[4] = NAN;
-		paramVect[5] = NAN;
-		paramVect[6] = NAN;
-		paramVect[7] = NAN;
-		paramVect[8] = NAN;
+      command = "DACSET";
+      paramVect[0] = chindex+1;
+      paramVect[1] = vbias;
+      paramVect[2] = NAN;
+      paramVect[3] = NAN;
+      paramVect[4] = NAN;
+      paramVect[5] = NAN;
+      paramVect[6] = NAN;
+      paramVect[7] = NAN;
+      paramVect[8] = NAN;
 
-		<<<<<<< HEAD
-		usleep(500000);
+      usleep(500000);
 
-		SendMzCommand(command, paramVect);
+      SendMzCommand(command, paramVect);
             
 
-		RMZB_writeSiPMbias(chindex+1, vbias);
-		usleep(100000);
+      RMZB_writeSiPMbias(chindex+1, vbias);
+      usleep(100000);
 
 
-		}*/
+      }*/
 
-	      RMZB_writeAllSiPMbias(vbias);
-
-	      =======
-		usleep(100000);
-
-		SendMzCommand(command, paramVect);
-
-	    }
-  >>>>>>> develop
-
-			      __MOUT_INFO__ << "Ramping up.. " << filename << __E__;
-
-  confFile.close();
-
-  __MOUT_INFO__ << "Configuration done.." << filename << __E__;
+    RMZB_writeAllSiPMbias(vbias);
 
 
-}
+
+    __MOUT_INFO__ << "Ramping up.. " << filename << __E__;
+
+    confFile.close();
+
+    __MOUT_INFO__ << "Configuration done.." << filename << __E__;
+
+
+  }
 
 } //end SetBoardVoltages()
 
@@ -1280,39 +1256,27 @@ void ROCCalorimeterInterface::SetupForNoiseTaking(unsigned int numberOfsamples)
 {
   __COUT_INFO__ << "SetupForNoiseTaking()" << __E__;
 
-  <<<<<<< HEAD
-	    writeRegister(ROC_ADDRESS_MASK_A, 1023); 
+  writeRegister(ROC_ADDRESS_MASK_A, 1023); 
   writeRegister(ROC_ADDRESS_MASK_B, 1023); 
 
-  =======
-    writeRegister(ROC_ADDRESS_DDRRESET,  1); 
-    writeRegister(ROC_ADDRESS_DDRRESET,  0); 
-    writeRegister(ROC_ADDRESS_ANALOGRESET,  1); 
-    writeRegister(ROC_ADDRESS_ANALOGRESET,  0); 
-	
-    >>>>>>> develop
-	      writeRegister(ROC_ADDRESS_IS_PATTERN, 0);
-    writeRegister(ROC_ADDRESS_IS_COUNTER, 0); 
-    writeRegister(ROC_ADDRESS_IS_LASER,   0); 
+  writeRegister(ROC_ADDRESS_IS_PATTERN, 0);
+  writeRegister(ROC_ADDRESS_IS_COUNTER, 0); 
+  writeRegister(ROC_ADDRESS_IS_LASER,   0); 
 
-    writeRegister(ROC_ADDRESS_EW_DELAY,   0); 
-    writeRegister(ROC_ADDRESS_EW_BLIND,   0); 
-    writeRegister(ROC_ADDRESS_EW_LENGHT,   numberOfsamples); 
+  writeRegister(ROC_ADDRESS_EW_DELAY,   0); 
+  writeRegister(ROC_ADDRESS_EW_BLIND,   0); 
+  writeRegister(ROC_ADDRESS_EW_LENGHT,   numberOfsamples); 
 
-    writeRegister(ROC_ADDRESS_OSCMODE_FLAG,   1); 
-    writeRegister(ROC_ADDRESS_OSCMODE_LENGHT,   numberOfsamples); 
+  writeRegister(ROC_ADDRESS_OSCMODE_FLAG,   1); 
+  writeRegister(ROC_ADDRESS_OSCMODE_LENGHT,   numberOfsamples); 
 
-    <<<<<<< HEAD
-	      writeRegister(ROC_ADDRESS_DDRRESET,  1); 
-    writeRegister(ROC_ADDRESS_DDRRESET,  0); 
-    writeRegister(ROC_ADDRESS_ANALOGRESET,  1); 
-    writeRegister(ROC_ADDRESS_ANALOGRESET,  0); 
+  writeRegister(ROC_ADDRESS_DDRRESET,  1); 
+  writeRegister(ROC_ADDRESS_DDRRESET,  0); 
+  writeRegister(ROC_ADDRESS_ANALOGRESET,  1); 
+  writeRegister(ROC_ADDRESS_ANALOGRESET,  0); 
 
 
-    =======
-      >>>>>>> develop
-
-		__COUT_INFO__ << "end SetupForNoiseTaking()" << __E__;
+  __COUT_INFO__ << "end SetupForNoiseTaking()" << __E__;
 } //end SetupForNoiseTaking()
 
 
@@ -1363,43 +1327,32 @@ void ROCCalorimeterInterface::SetupForADCsDataTaking(unsigned int threshold)
 
     // Close file
     myFile.close();*/
-  <<<<<<< HEAD
-
-    =======
-    >>>>>>> develop
 
 	
-	  writeRegister(ROC_ADDRESS_MASK_A, 1023); 
+  writeRegister(ROC_ADDRESS_MASK_A, 1023); 
   writeRegister(ROC_ADDRESS_MASK_B, 1023); 
 
   writeRegister(ROC_ADDRESS_IS_PATTERN, 0);
   writeRegister(ROC_ADDRESS_IS_COUNTER, 0); 
   writeRegister(ROC_ADDRESS_IS_LASER,   0); 
   writeRegister(ROC_ADDRESS_OSCMODE_FLAG,   0); 
-  <<<<<<< HEAD
-    =======
 
-    >>>>>>> develop
-
-	  writeRegister(ROC_ADDRESS_EW_DELAY,   0); 
+  writeRegister(ROC_ADDRESS_EW_DELAY,   0); 
   writeRegister(ROC_ADDRESS_EW_BLIND,   0); 
   writeRegister(ROC_ADDRESS_EW_LENGHT,   19500); 
-  <<<<<<< HEAD
 
-	    writeRegister(ROC_ADDRESS_DDRRESET,  1); 
+  writeRegister(ROC_ADDRESS_DDRRESET,  1); 
   writeRegister(ROC_ADDRESS_DDRRESET,  0); 
   writeRegister(ROC_ADDRESS_ANALOGRESET,  1); 
   writeRegister(ROC_ADDRESS_ANALOGRESET,  0); 
-  =======
-    >>>>>>> develop
 
 
-	      //Write Roc thrsholds using 
-	      for(int ich=0; ich<20; ich++)
-		{
-		  //writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ich, std::stoi(csvRows[0][ich+1]));
-		  writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ich, threshold); 
-		}
+  //Write Roc thrsholds using 
+  for(int ich=0; ich<20; ich++)
+    {
+      //writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ich, std::stoi(csvRows[0][ich+1]));
+      writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ich, threshold); 
+    }
 
   /*for (const std::vector<std::string>& row : csvRows)
     {
