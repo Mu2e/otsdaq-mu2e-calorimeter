@@ -120,6 +120,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
     void SetupForADCsDataTaking		(unsigned int threshold);	
 
 	void SendMzCommand(__ARGS__);
+	void ROCSlowControl(__ARGS__);
     void SendMzCommand(std::string command, float paramVect[]);
 	void EnableAndPowerSiPMs(__ARGS__);
     void EnableAndPowerSiPMs(bool hvonoff, float vbias);
@@ -136,6 +137,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 
 
 	void ReadROCErrorCounter		(__ARGS__);
+	void ReadMBRegisters		(__ARGS__);
 
 
 
