@@ -12,7 +12,8 @@
 #include <stdlib.h>
 #include <math.h>
 #include <unistd.h>
-
+#include <vector>
+#include <iomanip>
 
 #define CT_MAJOR                2       /* MU2E-SPI major release version        */
 #define CT_MINOR                2       /* MU2E-SPI minor release version        */
@@ -344,5 +345,6 @@ MZB_OSCMDCODE_MAP_t code_map[] = {
 uint8_t* MZB_Encode_CMD_Command_raw(MZB_OSCMDCODE_t cmdCode, float* params);
 unsigned ees_chksum(void *ptr, int len);
 MZB_OSCMDCODE_t mz_string_to_enum(const char* str);
+
 
 #endif
