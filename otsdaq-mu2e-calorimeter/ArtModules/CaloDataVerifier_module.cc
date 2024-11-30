@@ -218,11 +218,11 @@ void mu2e::CaloDataVerifier::processCaloData(mu2e::DTCEventFragment& eventFragme
         for (uint ihit = 0; ihit<nHits; ihit++){
           mu2e::CalorimeterDataDecoder::CalorimeterHitTestDataPacket hit = caloHits->at(ihit).first;
           std::vector<uint16_t> hit_waveform = caloHits->at(ihit).second;
-         if (hit_waveform.size() == 0){
+          if (hit_waveform.size() == 0){
             TLOG(TLVL_WARNING) << "[CaloDataVerifier::filter] found empty waveform! DTC " << dtcID << " ROC " << iroc << " hit " << ihit
               << " BoardID " << hit.BoardID << " ChannelID " << hit.ChannelID;
           }
-         nCaloHits++;
+          nCaloHits++;
     
           TLOG(TLVL_DEBUG)
             << "Hit "                          << ihit << " :"                                  << std::endl
@@ -248,6 +248,37 @@ void mu2e::CaloDataVerifier::processCaloData(mu2e::DTCEventFragment& eventFragme
             metricMan->sendMetric("ChannelID", hit.ChannelID, "Channel ID number",
               metrics_reporting_level_, artdaq::MetricMode::LastPoint);
             metricMan->sendMetric("NumberOfSamples", hit.NumberOfSamples, "Number of samples",
+              metrics_reporting_level_, artdaq::MetricMode::LastPoint);
+          }
+        }
+       if (metricMan != nullptr){
+          metricMan->sendMetric("nHits", int(nHits), "Hits",
+            metrics_reporting_level_, artdaq::MetricMode::LastPoint);
+        }
+      } else if (data_type_ == 2){ // COUNTERS
+        auto caloHits = caloDecoder.GetCalorimeterCountersData(iroc);
+        uint nHits = caloHits->size();
+        TLOG(TLVL_INFO) << "There are " << nHits << " hits in DTC " << dtcID << " ROC " << iroc << " / " << nROCs << std::endl;
+        for (uint ihit = 0; ihit<nHits; ihit++){
+          mu2e::CalorimeterDataDecoder::CalorimeterCountersDataPacket hit = caloHits->at(ihit).first;
+          std::vector<uint32_t> hit_counters = caloHits->at(ihit).second;
+          if (hit_counters.size() == 0){
+            TLOG(TLVL_WARNING) << "[CaloDataVerifier::filter] found empty counters! DTC " << dtcID << " ROC " << iroc << " hit " << ihit;
+          }
+          nCaloHits++;
+    
+          TLOG(TLVL_DEBUG)
+            << "Hit "                          << ihit << " :"                                  << std::endl
+            << "\numberOfCounters: "           << hit.numberOfCounters                          << std::endl
+            << "\tcounters size: "             << hit_counters.size()                           << std::endl;
+
+          std::stringstream ss_wf;
+          for (auto sample : hit_counters) ss_wf << sample << " ";
+          TLOG(TLVL_DEBUG) << "Counters:\n" << ss_wf.str();
+          
+          if (metricMan != nullptr){
+            TLOG(TLVL_DEBUG) << "[CaloDataVerifier::filter] sending hit metrics to Grafana..." << std::endl;
+            metricMan->sendMetric("NumberOfCounters", hit.numberOfCounters, "Number of counters",
               metrics_reporting_level_, artdaq::MetricMode::LastPoint);
           }
         }
