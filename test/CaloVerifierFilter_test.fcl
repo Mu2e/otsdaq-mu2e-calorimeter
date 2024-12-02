@@ -26,6 +26,9 @@ source : {
 }
 
 services : {
+  
+  TimeTracker: {}
+
   ArtdaqSharedMemoryServiceInterface: {
     service_provider: ArtdaqSharedMemoryService 
     waiting_time: 1
@@ -36,6 +39,12 @@ services : {
     service_provider: ArtdaqFragmentNamingService
     helper_plugin: Mu2e
   }
+  
+  GeometryService		:		{inputFile: "Offline/Mu2eG4/geom/geom_common.txt" bFieldFile: "Offline/Mu2eG4/geom/bfgeom_reco_v01.txt" simulatedDetector : {tool_type: "Mu2e"}}
+  ConditionsService		:		{ conditionsfile : "Offline/ConditionsService/data/conditions_01.txt"}
+  GlobalConstantsService		:		{inputFile : "Offline/GlobalConstantsService/data/globalConstants_01.txt"}
+  DbService		:		@local::DbEmpty
+  ProditionsService		:		@local::Proditions
 }
 
 
@@ -45,42 +54,68 @@ physics: {
   filters: {
   
     caloVerifier : {
-      module_type  : CaloDataVerifier
-      metricsLevel : 2
-      subsystemOverride : tracker
+      module_type         : CaloDataVerifier
+      dataType            : 1
+      metricsLevel        : 2
+      subsystemOverride   : tracker
+      produceCaloDecoders : true
     }
   
   }
   
   producers : {
     genFrags : {
-      module_type : ArtFragmentsFromDTCEvents
-      diagLevel   : 10
+      module_type  : ArtFragmentsFromDTCEvents
+      diagLevel    : 10
       makeCaloFrag : 1
       makeTrkFrag  : 1
       makeCRVFrag  : 0
       makeSTMFrag  : 0
     }
+
+    makeCaloHits : {
+      module_type    : CaloHitsFromFragments
+      caloTag        : "caloVerifier"
+      diagLevel      : 1
+      digiSampling   : 5
+      deltaTPulses   : 5.
+      nPEperMeV      : 30
+      noiseLevelMeV  : 0.55
+      nSigmaNoise    : 4
+      # hitEDepMax    : 80.
+      hitEDepMax     : 1000. # for testing
+      hitEDepMin     : 0.0
+      caphriEDepMax  : 5.0 #MeV
+      caphriEDepMin  : 1.0 #MeV
+    }
+
+    makeCaloReco : {
+      module_type    : CaloRecoFromFragments
+      caloTag        : "caloVerifier"
+      dataType       : 1
+      diagLevel      : 0
+    }
   }
   
-  t1 : [ caloVerifier ]
-  e1 : [ ] # dump, outfile ]
+  t1 : [ caloVerifier , makeCaloReco ]
+  e1 : [ outfile ] # dump, outfile ]
   
   trigger_paths  : [t1]
-  end_paths : [e1]
+  end_paths      : [e1]
 }
 
 outputs:  {
-    outfile :  {
-        module_type   :   RootOutput
-        fileName      :   "calo_filter.art"
-    }
+  outfile :  {
+    module_type : RootDAQOut
+    fileName    : "calo_filter.art"
+    outputCommands: [ "drop *", "keep mu2e::CaloDigis_*_*_*" ]
+  }
 
-    dump: {
-        module_type: FileDumperOutput
-        wantProductFriendlyClassName: true
-        onlyIfPresent: true
-   }
+  dump: {
+    module_type: FileDumperOutput
+    wantProductFriendlyClassName: true
+    onlyIfPresent: true
+  }
 }
 
 services.TFileService.fileName : "CaloVerifierFilter_test.root"
