@@ -96,13 +96,20 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(
   registerFEMacroFunction("Configure Link",
 			  static_cast<FEVInterface::frontEndMacroFunction_t>(
 									     &ROCCalorimeterInterface::ConfigureLink),
-			  std::vector<std::string>{"Configuration folder, Default:= nominal", "HV Enabled, Default := 0]", "Upload MZB calibration parameters, Default := 0]"}, //inputs parameters
+			  std::vector<std::string>{"Configuration folder, Default:= nominal", "HV Enabled, Default := 0]", "Upload MZB calibration parameters, Default := 0]", "Upload DiRAC thresholds, Default := 0]"}, //inputs parameters
 			  std::vector<std::string>{}, //output parameters
 			  1);  // requiredUserPermissions
 
   registerFEMacroFunction("Calibrate Mzb",
 			  static_cast<FEVInterface::frontEndMacroFunction_t>(
 									     &ROCCalorimeterInterface::CalibrateMZB),
+			  std::vector<std::string>{"BoardID, Default := -1]"}, //inputs parameters
+			  std::vector<std::string>{}, //output parameters
+			  1);  // requiredUserPermissions
+
+  registerFEMacroFunction("SetADCsThreasholds",
+			  static_cast<FEVInterface::frontEndMacroFunction_t>(
+									     &ROCCalorimeterInterface::SetADCsThreasholds),
 			  std::vector<std::string>{"BoardID, Default := -1]"}, //inputs parameters
 			  std::vector<std::string>{}, //output parameters
 			  1);  // requiredUserPermissions
@@ -125,10 +132,16 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(
   registerFEMacroFunction("Setup for ADCs Data Taking",
 			  static_cast<FEVInterface::frontEndMacroFunction_t>(
 									     &ROCCalorimeterInterface::SetupForADCsDataTaking),
-			  std::vector<std::string>{"Threshold [units of adccounts, Default := 2300]"}, //inputs parameters
+			  std::vector<std::string>{"Set Threshold? [bool, Default := 0]", "Threshold [units of adccounts, Default := 2300]"}, //inputs parameters
 			  std::vector<std::string>{}, //output parameters
 			  1);  // requiredUserPermissions
 
+  registerFEMacroFunction("Toggle MB Busy for Noise",
+			  static_cast<FEVInterface::frontEndMacroFunction_t>(
+									     &ROCCalorimeterInterface::ToggleMBBusy),
+			  std::vector<std::string>{"On/Off [Busy On/Off, Default := 1]"}, //inputs parameters
+			  std::vector<std::string>{}, //output parameters
+			  1);  // requiredUserPermissions
 
   registerFEMacroFunction("ROC Status",
 			  static_cast<FEVInterface::frontEndMacroFunction_t>(
@@ -592,7 +605,7 @@ bool ROCCalorimeterInterface::running(void)
 {
 
   //SetupForPatternFixedLengthDataTaking(40);
-  SetupForADCsDataTaking(40);
+  SetupForADCsDataTaking(0, 2300);
 
   return false;
   
@@ -776,7 +789,7 @@ void ROCCalorimeterInterface::SendMzCommand(__ARGS__)
   SendMzCommand(command, paramVect);
 
  
-} //end SetupForADCsDataTaking()
+} //end SendMzCommand()
 
 //==================================================================================================
 
@@ -838,9 +851,10 @@ void ROCCalorimeterInterface::ConfigureLink(__ARGS__)
   std::string conf = __GET_ARG_IN__("Configuration folder, Default:= nominal", std::string, "nominal");
   bool hvonoff = __GET_ARG_IN__("HV Enabled, Default := 0]", bool, 0);
   bool doCalibration = __GET_ARG_IN__("Upload MZB calibration parameters, Default := 0]", bool, 0);
+  bool setThresholds = __GET_ARG_IN__("Upload DiRAC thresholds, Default := 0]", bool, 0);
 
 
-  ConfigureLink(conf, hvonoff, doCalibration);
+  ConfigureLink(conf, hvonoff, doCalibration, setThresholds);
 
 
 } //end ConfigureLink()
@@ -852,21 +866,23 @@ void ROCCalorimeterInterface::ConfigureLink(__ARGS__)
 //==================================================================================================
 
 
-void ROCCalorimeterInterface::ConfigureLink(std::string conf, bool hvonoff, bool doCalibration)
+void ROCCalorimeterInterface::ConfigureLink(std::string conf, bool hvonoff, bool doCalibration, bool setThresholds)
 {
 
   DTCLib::roc_address_t address = 147;
   DTCLib::roc_data_t    readVal;
   readVal = readRegister(address);
         
-  // std::string filename = std::string("/home/mu2ecalo/ots_spack/srcs/otsdaq-mu2e-calorimeter/boardConfig/boardMap.conf");		
-  cet::filepath_lookup_after1 lookup_policy("MU2E_CALORIMETER_CONFIG_PATH");
-  auto file_path = lookup_policy("boardMap.config");//FIXME! THIS NEEDS TO BE A VARIABLE
-  std::ifstream confMap(file_path);
+  std::string filename = std::string("/home/mu2ecalo/ots_vst/srcs/otsdaq-mu2e-calorimeter/boardConfig/boardMap.config");		
+  //cet::filepath_lookup_after1 lookup_policy("MU2E_CALORIMETER_CONFIG_PATH");
+  //auto file_path = lookup_policy("boardMap.config");//FIXME! THIS NEEDS TO BE A VARIABLE
+//  std::ifstream confMap(file_path);
+  std::ifstream confMap(filename);
+
 
   if(!confMap.is_open())
     {
-      __FE_SS__ << "Could not open file: " << file_path << __E__;
+      __FE_SS__ << "Could not open file: " << filename << __E__;
       __FE_SS_THROW__;;
     }
 
@@ -887,6 +903,7 @@ void ROCCalorimeterInterface::ConfigureLink(std::string conf, bool hvonoff, bool
 
   if(boardid != -1){
     if(doCalibration) CalibrateMZB(boardid);
+    if(setThresholds) SetADCsThreasholds(boardid);
     SetBoardVoltages(hvonoff, boardid, conf);
     writeRegister(ROC_ADDRESS_BOARD_ID,  boardid); 
   }
@@ -934,10 +951,15 @@ void ROCCalorimeterInterface::CalibrateMZB(int  boardID)
   //fix it asking to ryan or eric.. 
 
 
-  std::string filename = std::string("mzbCalib/") + buff;		
-  cet::filepath_lookup_after1 lookup_policy("MU2E_CALORIMETER_CONFIG_PATH");
-  auto file_path = lookup_policy(filename);//FIXME! THIS NEEDS TO BE A VARIABLE
-  std::ifstream confFile(file_path);
+  std::string filename = std::string("/home/mu2ecalo/ots_vst/srcs/otsdaq-mu2e-calorimeter/boardConfig/");		
+
+  filename = filename + std::string("mzbCalib/") + buff;		
+  //cet::filepath_lookup_after1 lookup_policy("MU2E_CALORIMETER_CONFIG_PATH");
+  //auto file_path = lookup_policy(filename);//FIXME! THIS NEEDS TO BE A VARIABLE
+  //std::ifstream confFile(file_path);
+
+  std::ifstream confFile(filename);
+
 
   if(!confFile.is_open())
     {
@@ -987,6 +1009,88 @@ void ROCCalorimeterInterface::CalibrateMZB(int  boardID)
 //==================================================================================================
 
 
+//==================================================================================================
+
+
+void ROCCalorimeterInterface::SetADCsThreasholds(__ARGS__)
+{
+
+  int boardID = __GET_ARG_IN__("BoardID, Default := -1]", int, -1);
+
+  SetADCsThreasholds(boardID);
+
+
+} //end ConfigureLink()
+
+
+
+
+
+void ROCCalorimeterInterface::SetADCsThreasholds(int  boardID)
+{
+	
+  char buff[50];
+  sprintf(buff, "dirac%03d.baseline", boardID);
+        
+  //to do:
+  //std::string filename = std::string(__ENV__("CALORIMETER_CONF_DIR")) + "/" + buff;
+  //fix it asking to ryan or eric.. 
+
+
+  std::string filename = std::string("/home/mu2ecalo/ots_vst/srcs/otsdaq-mu2e-calorimeter/boardConfig/");		
+
+  filename = filename + std::string("diracCalib/") + buff;		
+  //cet::filepath_lookup_after1 lookup_policy("MU2E_CALORIMETER_CONFIG_PATH");
+  //auto file_path = lookup_policy(filename);//FIXME! THIS NEEDS TO BE A VARIABLE
+  //std::ifstream confFile(file_path);
+
+  std::ifstream confFile(filename);
+
+
+  if(!confFile.is_open())
+  {
+      __FE_SS__ << "Could not open file: " << filename << __E__;
+  
+      for(int ichan = 0; ichan<20; ichan++){
+        writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ichan, 2300); 
+      }
+  }
+  else{ 
+  
+    __MOUT_INFO__ << "Opening file: " << filename << __E__;
+
+    for(int ichan = 0; ichan<20; ichan++){
+
+      int chindex;
+      float baseline;
+      float sigma;
+      int thr2set; 
+
+      confFile >> chindex;
+      confFile >> baseline;
+      confFile >> sigma;
+      confFile >> thr2set;
+  
+      __MOUT_INFO__ << chindex <<  "  " << baseline << "  " << sigma <<  "  " << thr2set << __E__;
+      writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ichan, thr2set); 
+
+    }
+
+
+    confFile.close();
+
+  }
+
+  __MOUT_INFO__ << "Thresholds set done.." << filename << __E__;
+
+
+} //end SetADCsThreasholds()
+
+
+
+//==================================================================================================
+
+
 void ROCCalorimeterInterface::SetBoardVoltages(bool hvonoff, int  boardID, std::string conf)
 {
 	
@@ -1022,7 +1126,7 @@ void ROCCalorimeterInterface::SetBoardVoltages(bool hvonoff, int  boardID, std::
 
   usleep(100000);
 
-  /*command = "SLEWRATE"; 
+  command = "SLEWRATE"; 
     paramVect[0] = 40;
     paramVect[1] = NAN;
     paramVect[2] = NAN;
@@ -1035,7 +1139,7 @@ void ROCCalorimeterInterface::SetBoardVoltages(bool hvonoff, int  boardID, std::
 
     SendMzCommand(command, paramVect);
 
-    usleep(100000);*/
+    usleep(100000);
 	
 
   if(hvonoff == 1){
@@ -1048,7 +1152,7 @@ void ROCCalorimeterInterface::SetBoardVoltages(bool hvonoff, int  boardID, std::
     //fix it asking to ryan or eric.. 
 
 
-    std::string filename = std::string("/home/mu2ecalo/ots_spack/srcs/otsdaq-mu2e-calorimeter/boardConfig/") + conf + std::string("/") + buff;		
+    std::string filename = std::string("/home/mu2ecalo/ots_vst/srcs/otsdaq-mu2e-calorimeter/boardConfig/") + conf + std::string("/") + buff;		
     //std::string filename = std::string("/home/users/moresca/ots_spack2/srcs/otsdaq-mu2e-calorimeter/boardConfig/") + conf + std::string("/") + buff;		
 
     std::ifstream confFile(filename);
@@ -1223,9 +1327,10 @@ void ROCCalorimeterInterface::ReadROCErrorCounter(__ARGS__)
 
 void ROCCalorimeterInterface::SetupForADCsDataTaking(__ARGS__)
 {
+  bool setThr = __GET_ARG_IN__("Set Threshold? [bool, Default := 0]", bool, 0);
   unsigned int threshold = __GET_ARG_IN__("Threshold [units of adccounts, Default := 2300]", uint32_t, 2300);
 
-  SetupForADCsDataTaking(threshold);
+  SetupForADCsDataTaking(setThr, threshold);
 
 
 } //end SetupForADCsDataTaking()
@@ -1242,9 +1347,10 @@ void ROCCalorimeterInterface::SetupForNoiseTaking(__ARGS__)
   SetupForNoiseTaking(numberOfsamples);
 
 
-} //end SetupForADCsDataTaking()
+} //end SetupForNoiseTaking()
 
 //==================================================================================================
+
 
 
 
@@ -1284,7 +1390,7 @@ void ROCCalorimeterInterface::SetupForNoiseTaking(unsigned int numberOfsamples)
 //==================================================================================================
 
 
-void ROCCalorimeterInterface::SetupForADCsDataTaking(unsigned int threshold)
+void ROCCalorimeterInterface::SetupForADCsDataTaking(bool setThr, unsigned int threshold)
 {
   __COUT_INFO__ << "SetupForADCsDataTaking()" << __E__;
 
@@ -1348,11 +1454,13 @@ void ROCCalorimeterInterface::SetupForADCsDataTaking(unsigned int threshold)
 
 
   //Write Roc thrsholds using 
-  for(int ich=0; ich<20; ich++)
+  if(setThr){
+    for(int ich=0; ich<20; ich++)
     {
       //writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ich, std::stoi(csvRows[0][ich+1]));
       writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ich, threshold); 
     }
+  }
 
   /*for (const std::vector<std::string>& row : csvRows)
     {
@@ -1366,6 +1474,29 @@ void ROCCalorimeterInterface::SetupForADCsDataTaking(unsigned int threshold)
 
   __COUT_INFO__ << "end SetupForADCsDataTaking()" << __E__;
 } //end SetupForADCsDataTaking()
+
+
+//==================================================================================================
+
+
+void ROCCalorimeterInterface::ToggleMBBusy(__ARGS__)
+{
+
+  unsigned int busyonoff = __GET_ARG_IN__("On/Off [Busy On/Off, Default := 1]", bool, 1);
+  ToggleMBBusy(busyonoff);
+
+} //end ToggleMBBusy()
+
+
+
+void ROCCalorimeterInterface::ToggleMBBusy(bool busyonoff)
+{
+
+    writeRegister(ROC_ADDRESS_MZB_BUSY, busyonoff); 
+
+} //end ToggleMBBusy()
+
+//==================================================================================================
 
 
 
