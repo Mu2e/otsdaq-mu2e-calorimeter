@@ -37,18 +37,18 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(
 
   __CFG_COUT__ << "Constructor..." << __E__;
 
-  __MCOUT_INFO__("ROCPolarFireCoreInterface instantiated with link: "
-		 << linkID_ << " and EventWindowDelayOffset = " << delay_ << __E__);
+  __CFG_COUT_INFO__ << "ROCPolarFireCoreInterface instantiated with link: "
+		  << linkID_ << " and EventWindowDelayOffset = " << delay_ << __E__;
 
   try
-    {
-      inputTemp_ = getSelfNode().getNode("inputTemperature").getValue<double>();
-    }
+  {
+    inputTemp_ = getSelfNode().getNode("inputTemperature").getValue<double>();
+  }
   catch(...)
-    {
-      __CFG_COUT__ << "inputTemperature field not defined. Defaulting..." << __E__;
-      inputTemp_ = 15.;
-    }
+  {
+    __CFG_COUT__ << "inputTemperature field not defined. Defaulting..." << __E__;
+    inputTemp_ = 15.;
+  }
 
   temp1_.noiseTemp(inputTemp_);
 	
@@ -553,39 +553,39 @@ __FE_COUT__ << "Calling read MZB block: link number " << std::dec << linkID_
 //======================================================================================================
 
 void ROCCalorimeterInterface::configure(void) try
-  {
-    ROCPolarFireCoreInterface::configure();
+{
+  ROCPolarFireCoreInterface::configure();
 
-    // consider that we know all the init files
-    // all the init information are stored in the configuration tree    // 
-    // set parameter 
-    // int linkID = getSelfNode().getNode("linkID").getValue<int>();
-    //	__MOUTV__(linkID);
+  // consider that we know all the init files
+  // all the init information are stored in the configuration tree    // 
+  // set parameter 
+  // int linkID = getSelfNode().getNode("linkID").getValue<int>();
+  //	__COUTV__(linkID);
 
-    runSequenceOfCommands("ROCTypeLinkTable/LinkToConfigureSequence"); /*Run Configure Sequence Commands*/
-    
-    //    int myTemp = GetTemperature(1);
-    // 	__MOUTV__(myTemp);
-    // 	__MOUT__<<"my temp"<<myTemp<<__E__;
-    //     __COUTV__(myTemp);
-    //     __MCOUTV__(myTemp);
-  }
- catch(const std::runtime_error& e)
-   {
-     __FE_MOUT__ << "Error caught: " << e.what() << __E__;
-     throw;
-   }
- catch(...)
-   {
-     __FE_SS__ << "Unknown error caught. Check printouts!" << __E__;
-     try	{ throw; } //one more try to printout extra info
-     catch(const std::exception &e)
-       {
-	 ss << "Exception message: " << e.what();
-       }
-     catch(...){}
-     __FE_SS_THROW__;
-   }
+  runSequenceOfCommands("ROCTypeLinkTable/LinkToConfigureSequence"); /*Run Configure Sequence Commands*/
+  
+  //    int myTemp = GetTemperature(1);
+  // 	__COUTV__(myTemp);
+  // 	__COUT__<<"my temp"<<myTemp<<__E__;
+  //     __COUTV__(myTemp);
+  //     __MCOUTV__(myTemp);
+}
+catch(const std::runtime_error& e)
+{
+  __FE_COUT__ << "Error caught: " << e.what() << __E__;
+  throw;
+}
+catch(...)
+{
+  __FE_SS__ << "Unknown error caught. Check printouts!" << __E__;
+  try	{ throw; } //one more try to printout extra info
+  catch(const std::exception &e)
+    {
+ss << "Exception message: " << e.what();
+    }
+  catch(...){}
+  __FE_SS_THROW__;
+}
 
 //==================================================================================================
 bool ROCCalorimeterInterface::running(void)
@@ -602,7 +602,7 @@ bool ROCCalorimeterInterface::running(void)
 //==================================================================================================
 void ROCCalorimeterInterface::Configure(__ARGS__)
 {
-  __MOUT_INFO__ << "Configure called" << __E__;
+  __COUT_INFO__ << "Configure called" << __E__;
   configure();
 }
 
@@ -610,19 +610,19 @@ void ROCCalorimeterInterface::Configure(__ARGS__)
 //==================================================================================================
 void ROCCalorimeterInterface::SetVoltageChannel(__ARGS__)
 {
-  __MOUT_INFO__ << "Set called" << __E__;
+  __COUT_INFO__ << "Set called" << __E__;
 }
 
 //==================================================================================================
 void ROCCalorimeterInterface::GetVoltageChannel(__ARGS__)
 {
-  __MOUT_INFO__ << "Get called" << __E__;
+  __COUT_INFO__ << "Get called" << __E__;
   __SET_ARG_OUT__("readValue", 12);
 }
 //==================================================================================================
 void ROCCalorimeterInterface::GetTempChannel(__ARGS__)
 {
-  __MOUT_INFO__ << "Temp is" << __E__;
+  __COUT_INFO__ << "Temp is" << __E__;
   int channelnumber = __GET_ARG_IN__("channelNumber",int);
   __SET_ARG_OUT__("readValue",GetTemperature(channelnumber));
 }
@@ -733,12 +733,12 @@ void ROCCalorimeterInterface::SendMzCommand(std::string command, float paramVect
   vectToWrite = MZB_Encode_CMD_Command_raw(cmd_code, paramVect);	
 	
   //uint16_t *input_data = &vectToWrite;
-  //__MOUT_INFO__ << "Mz debug ****" << __E__;
+  //__COUT_INFO__ << "Mz debug ****" << __E__;
 
   std::vector<uint16_t> input_data;
   for (std::size_t i = 0; i < MZ_BUFFER_SIZE; i += 2) {
     uint16_t value = (static_cast<uint16_t>(vectToWrite[i]) << 8) | (static_cast<uint16_t>(vectToWrite[i + 1]));
-    __MOUT_INFO__ << std::hex << std::setprecision(4) << std::setfill('0') << "0x" << value << __E__;
+    __COUT_INFO__ << std::hex << std::setprecision(4) << std::setfill('0') << "0x" << value << __E__;
     input_data.push_back(value);
 
   }
@@ -945,7 +945,7 @@ void ROCCalorimeterInterface::CalibrateMZB(int  boardID)
       __FE_SS_THROW__;;
     }
 
-  __MOUT_INFO__ << "Opening file: " << filename << __E__;
+  __COUT_INFO__ << "Opening file: " << filename << __E__;
 
   for(int ichan = 0; ichan<20; ichan++){
 
@@ -964,7 +964,7 @@ void ROCCalorimeterInterface::CalibrateMZB(int  boardID)
       confFile >> slope >> offset;
       paramVect[(icalib*2)+1] = slope;
       paramVect[(icalib*2)+2] = offset;
-      __MOUT_INFO__ << slope <<  "  " << offset << __E__;
+      __COUT_INFO__ << slope <<  "  " << offset << __E__;
     } 
        	
     usleep(100000);
@@ -976,7 +976,7 @@ void ROCCalorimeterInterface::CalibrateMZB(int  boardID)
 
   confFile.close();
 
-  __MOUT_INFO__ << "Calibration done.." << filename << __E__;
+  __COUT_INFO__ << "Calibration done.." << filename << __E__;
 
 
 	
@@ -1059,7 +1059,7 @@ void ROCCalorimeterInterface::SetBoardVoltages(bool hvonoff, int  boardID, std::
 	__FE_SS_THROW__;;
       }
 
-    __MOUT_INFO__ << "Opening file: " << filename << __E__;
+    __COUT_INFO__ << "Opening file: " << filename << __E__;
 
     float vbias[20];
 	   
@@ -1069,7 +1069,7 @@ void ROCCalorimeterInterface::SetBoardVoltages(bool hvonoff, int  boardID, std::
       std::string type;
 
       confFile >> chindex >> vbias[ichan] >> type;
-      __MOUT_INFO__ << chindex << "  " <<  vbias[ichan]  <<  "  " << type << __E__;
+      __COUT_INFO__ << chindex << "  " <<  vbias[ichan]  <<  "  " << type << __E__;
 
 
     }
@@ -1082,7 +1082,7 @@ void ROCCalorimeterInterface::SetBoardVoltages(bool hvonoff, int  boardID, std::
 
       confFile >> chindex >> vbias >> type;
         
-      __MOUT_INFO__ << chindex << "  " <<  vbias  <<  "  " << type << __E__;
+      __COUT_INFO__ << chindex << "  " <<  vbias  <<  "  " << type << __E__;
 
       command = "DACSET";
       paramVect[0] = chindex+1;
@@ -1110,11 +1110,11 @@ void ROCCalorimeterInterface::SetBoardVoltages(bool hvonoff, int  boardID, std::
 
 
 
-    __MOUT_INFO__ << "Ramping up.. " << filename << __E__;
+    __COUT_INFO__ << "Ramping up.. " << filename << __E__;
 
     confFile.close();
 
-    __MOUT_INFO__ << "Configuration done.." << filename << __E__;
+    __COUT_INFO__ << "Configuration done.." << filename << __E__;
 
 
   }
@@ -1551,7 +1551,7 @@ void ROCCalorimeterInterface::GetStatus(__ARGS__)
       
   uint16_t value = ((uint16_t) (*(p+1)) << 8) | ((uint16_t) (*p));
   //uint16_t value = (static_cast<uint16_t>(vectToWrite[i]) << 8) | (static_cast<uint16_t>(vectToWrite[i + 1]));
-  __MOUT_INFO__ << std::hex << std::setprecision(4) << std::setfill('0') << "0x" << value << __E__;
+  __COUT_INFO__ << std::hex << std::setprecision(4) << std::setfill('0') << "0x" << value << __E__;
   input_data.push_back(value);
   }
 
