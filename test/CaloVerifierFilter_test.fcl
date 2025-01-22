@@ -55,10 +55,14 @@ physics: {
   
     caloVerifier : {
       module_type         : CaloDataVerifier
-      dataType            : 1
+      verbosity           : 0
+      dataType            : 2
       metricsLevel        : 2
       subsystemOverride   : tracker
       produceCaloDecoders : true
+      producePlots        : false
+      produceTree         : false
+      stopOnFailure       : false
     }
   
   }
@@ -93,12 +97,12 @@ physics: {
       module_type    : CaloRecoFromFragments
       caloTag        : "caloVerifier"
       dataType       : 1
-      diagLevel      : 0
+      diagLevel      : 1
     }
   }
   
-  t1 : [ caloVerifier , makeCaloReco ]
-  e1 : [ outfile ] # dump, outfile ]
+  t1 : [ caloVerifier ]#, makeCaloReco ]
+  e1 : [ ]#outfile ] # dump, outfile ]
   
   trigger_paths  : [t1]
   end_paths      : [e1]
