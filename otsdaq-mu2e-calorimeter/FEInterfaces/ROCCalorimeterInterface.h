@@ -52,35 +52,35 @@ namespace ots
 
         ROC_ADDRESS_ERRCNT                   = 17,
 
-	ROC_ADDRESS_WORKMODE                 = 122,
+        ROC_ADDRESS_WORKMODE                 = 122,
 
-	ROC_ADDRESS_EW_LENGHT                = 123,
-	ROC_ADDRESS_EW_BLIND                 = 124,
-	ROC_ADDRESS_EW_DELAY                 = 125,
+        ROC_ADDRESS_EW_LENGHT                = 123,
+        ROC_ADDRESS_EW_BLIND                 = 124,
+        ROC_ADDRESS_EW_DELAY                 = 125,
 
-	ROC_ADDRESS_MASK_A                   = 120,
-	ROC_ADDRESS_MASK_B                   = 121,
-	ROC_ADDRESS_BASE_THRESHOLD           = 100,
- 
-	ROC_ADDRESS_IS_COUNTER               = 79,
-	ROC_ADDRESS_COUNTER_IS_FALLING       = 80,
-	ROC_ADDRESS_COUNTER_SIZE             = 81,
+        ROC_ADDRESS_MASK_A                   = 120,
+        ROC_ADDRESS_MASK_B                   = 121,
+        ROC_ADDRESS_BASE_THRESHOLD           = 100,
+      
+        ROC_ADDRESS_IS_COUNTER               = 79,
+        ROC_ADDRESS_COUNTER_IS_FALLING       = 80,
+        ROC_ADDRESS_COUNTER_SIZE             = 81,
 
-	ROC_ADDRESS_IS_LASER                 = 78,
-	ROC_ADDRESS_LASER_DELAY              = 77,
+        ROC_ADDRESS_IS_LASER                 = 78,
+        ROC_ADDRESS_LASER_DELAY              = 77,
 
-	ROC_ADDRESS_MZB_BUSY                 = 140, 
+        ROC_ADDRESS_MZB_BUSY                 = 140, 
 
-	ROC_ADDRESS_SELECTLINE               = 141, 
+        ROC_ADDRESS_SELECTLINE               = 141, 
 
-	ROC_ADDRESS_BOARD_ID                 = 142, 
+        ROC_ADDRESS_BOARD_ID                 = 142, 
 
-	ROC_ADDRESS_OSCMODE_FLAG             = 148, 
-	ROC_ADDRESS_OSCMODE_LENGHT           = 149, 
+        ROC_ADDRESS_OSCMODE_FLAG             = 148, 
+        ROC_ADDRESS_OSCMODE_LENGHT           = 149, 
 
-	ROC_ADDRESS_BOARD_U_ID_LSB           = 145, 
-	ROC_ADDRESS_BOARD_U_ID_CSB           = 146,
-	ROC_ADDRESS_BOARD_U_ID_MSB           = 147
+        ROC_ADDRESS_BOARD_U_ID_LSB           = 145, 
+        ROC_ADDRESS_BOARD_U_ID_CSB           = 146,
+        ROC_ADDRESS_BOARD_U_ID_MSB           = 147
 
 
 
@@ -117,7 +117,7 @@ namespace ots
     void SetupForPatternFixedLengthDataTaking		(__ARGS__);
     void SetupForPatternFixedLengthDataTaking       (unsigned int numberOfWords);	
     void SetupForADCsDataTaking		(__ARGS__);
-    void SetupForADCsDataTaking		(unsigned int threshold);	
+    void SetupForADCsDataTaking		(bool setThr, unsigned int threshold);	
 
     void SendMzCommand(__ARGS__);
     void ROCSlowControl(__ARGS__);
@@ -131,11 +131,16 @@ namespace ots
     void RMZB_writeAllSiPMbias(float *hv);
 
     void ConfigureLink(__ARGS__);
-    void ConfigureLink(std::string conf, bool hvonoff, bool doCalibration);
+    void ConfigureLink(std::string conf, bool hvonoff, bool doCalibration, bool setThresholds);
     void CalibrateMZB(__ARGS__);
-    void CalibrateMZB(int boardID);
+    void CalibrateMZB(int boardid);
 
 
+    void ToggleMBBusy(__ARGS__);
+    void ToggleMBBusy(bool busyonoff);
+    void SetADCsThreasholds(__ARGS__);
+    void SetADCsThreasholds(int boardid);
+    
     void ReadROCErrorCounter		(__ARGS__);
     void ReadMBRegisters		(__ARGS__);
 
