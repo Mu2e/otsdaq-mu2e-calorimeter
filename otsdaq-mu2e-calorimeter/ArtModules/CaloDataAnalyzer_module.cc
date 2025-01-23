@@ -33,7 +33,6 @@
 #include "TGraph.h"
 #include "TTree.h"
 
-
 namespace mu2e {
   class CaloDataAnalyzer : public art::EDAnalyzer
   {
@@ -47,14 +46,6 @@ namespace mu2e {
 
     explicit CaloDataAnalyzer(const art::EDAnalyzer::Table<Config>& config);
 	void analyze(art::Event const& event) override;
-
-    long int getEventWindow(ushort ewt[3]){
-      long int eventWindow = static_cast<long int>(ewt[0]) +
-        (static_cast<long int>(ewt[1]) << 16) +
-        (static_cast<long int>(ewt[2]) << 32);
-      return eventWindow;
-    }
-    
     void processDTCData(mu2e::CalorimeterDataDecoder const& caloDecoder);
 
   private:

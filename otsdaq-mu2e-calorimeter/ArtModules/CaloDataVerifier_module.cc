@@ -45,13 +45,6 @@ namespace mu2e {
 
     bool filter(art::Event & e) override;
     virtual bool endRun(art::Run& run ) override;
-
-    long int getEventWindow(ushort ewt[3]){
-      long int eventWindow = static_cast<long int>(ewt[0]) +
-        (static_cast<long int>(ewt[1]) << 16) +
-        (static_cast<long int>(ewt[2]) << 32);
-      return eventWindow;
-    }
     
     artdaq::Fragments getFragments(art::Event& event);
     void processCaloData(mu2e::DTCEventFragment& eventFragment, std::unique_ptr<std::vector<mu2e::CalorimeterDataDecoder>> const& caloDecoderColl);
