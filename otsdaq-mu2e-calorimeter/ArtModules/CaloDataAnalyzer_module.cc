@@ -259,7 +259,6 @@ void mu2e::CaloDataAnalyzer::processDTCData(mu2e::CalorimeterDataDecoder const& 
       uint nHits = caloHits->size();
       roc_hits.push_back(nHits);
       
-      
       t_dtcID = dtcID;
       t_currentDTCEventWindow = thisDTCEWT;
       t_currentROCEventWindow[nROCs] = thisROCEWT;
@@ -269,10 +268,17 @@ void mu2e::CaloDataAnalyzer::processDTCData(mu2e::CalorimeterDataDecoder const& 
       tH_currentDTCEventWindow = thisDTCEWT;
       tH_currentROCEventWindow = thisROCEWT;
       tH_nhits = nHits;
+
       for (uint ihit = 0; ihit<nHits; ihit++){
         mu2e::CalorimeterDataDecoder::CalorimeterHitTestDataPacket hit = caloHits->at(ihit).first;
         std::vector<uint16_t> hit_waveform = caloHits->at(ihit).second;
         
+        //Check that the hit is good
+        if (hit.BeginMarker != 0xAAA) continue;
+        if (hit.LastSampleMarker == 0) continue;
+        if (hit_waveform.size() == 0) continue;
+        if (hit.IndexOfMaxDigitizerSample >= hit_waveform.size()) continue;
+
         nCaloHits++;
 
         //Fill hists
@@ -281,6 +287,7 @@ void mu2e::CaloDataAnalyzer::processDTCData(mu2e::CalorimeterDataDecoder const& 
         h1_t0->Fill(hit.Time);
         h1_maxIndex->Fill(hit.IndexOfMaxDigitizerSample);
         h1_nSamples->Fill(hit.NumberOfSamples);
+
         for (uint wfi=0; wfi<hit_waveform.size(); wfi++){
           h2_waveforms->Fill(wfi,hit_waveform[wfi]);
         }
@@ -301,6 +308,7 @@ void mu2e::CaloDataAnalyzer::processDTCData(mu2e::CalorimeterDataDecoder const& 
           t_ADC[t_nsamples] = adc;
           t_nsamples++;
         }
+
         tH_boardID = hit.BoardID;
         tH_linkID = iroc;
         tH_chanID = hit.ChannelID;
