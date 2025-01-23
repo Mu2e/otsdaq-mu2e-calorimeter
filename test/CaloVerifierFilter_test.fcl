@@ -60,8 +60,6 @@ physics: {
       metricsLevel        : 2
       subsystemOverride   : tracker
       produceCaloDecoders : true
-      producePlots        : false
-      produceTree         : false
       stopOnFailure       : false
     }
   
@@ -100,9 +98,20 @@ physics: {
       diagLevel      : 1
     }
   }
+
+  analyzers : {
+
+    caloAnalyzer : {
+      module_type         : CaloDataAnalyzer
+      filterModuleLabel   : "caloVerifier"
+      filterInstanceLabel : ""
+      verbosity           : 0
+      dataType            : 2
+    }
+  }
   
   t1 : [ caloVerifier ]#, makeCaloReco ]
-  e1 : [ ]#outfile ] # dump, outfile ]
+  e1 : [ caloAnalyzer ]#outfile ] # dump, outfile ]
   
   trigger_paths  : [t1]
   end_paths      : [e1]
