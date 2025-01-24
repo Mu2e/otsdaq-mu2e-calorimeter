@@ -38,6 +38,7 @@ namespace mu2e {
       fhicl::Atom<int> metrics_level {fhicl::Name("metricsLevel" ) , fhicl::Comment("Metrics reporting level"), 1};
       fhicl::Atom<bool> produce_calo_decoders {fhicl::Name("produceCaloDecoders" ) , fhicl::Comment("Produce calo decoders [default: true]"), true};
       fhicl::Atom<bool> stop_on_failure {fhicl::Name("stopOnFailure" ) , fhicl::Comment("Throw exception if checks fail [default: false]"), false};
+      fhicl::Atom<bool> check_ewts {fhicl::Name("checkEWTs" ) , fhicl::Comment("Check for EWT continuity across events [default: false]"), false};
       fhicl::Atom<std::string> subsystem_override {fhicl::Name("subsystemOverride" ) , fhicl::Comment("Override calo subsystem [\"calo\", \"tracker\"]"), "calo"};
     };
 
@@ -69,6 +70,7 @@ namespace mu2e {
     int           metrics_reporting_level_;
     bool          produceCaloDecoders_;
     bool          stopOnFailure_;
+    bool          checkEWTs_;
     DTCLib::DTC_Subsystem subsystem_;
     
     size_t nCaloEvents;
@@ -114,7 +116,8 @@ mu2e::CaloDataVerifier::CaloDataVerifier(const art::EDFilter::Table<Config>& con
     data_type_(config().data_type()),
     metrics_reporting_level_(config().metrics_level()),
     produceCaloDecoders_(config().produce_calo_decoders()),
-    stopOnFailure_(config().stop_on_failure())
+    stopOnFailure_(config().stop_on_failure()),
+    checkEWTs_(config().check_ewts())
 {
   if (config().subsystem_override() == "calo"){
     subsystem_ = DTCLib::DTC_Subsystem::DTC_Subsystem_Calorimeter;
@@ -284,7 +287,7 @@ void mu2e::CaloDataVerifier::processCaloData(mu2e::DTCEventFragment& eventFragme
     auto& this_subevent = caloDecoder.event_;
 
     uint64_t dtcID = this_subevent.GetDTCID();
-    if (!checkAndUpdateDTCEWT(this_subevent)){
+    if (checkEWTs_ && !checkAndUpdateDTCEWT(this_subevent)){
       event_failed_DTCEWTs++;
       failMap_DTCEWTs[dtcID]++;
       failedEvent = true;
@@ -298,7 +301,7 @@ void mu2e::CaloDataVerifier::processCaloData(mu2e::DTCEventFragment& eventFragme
     std::vector<int> roc_hits;
     for (uint iroc = 0; iroc < nROCs; iroc++){
 
-      if (!checkAndUpdateROCEWT(dataBlocks[iroc])){
+      if (checkEWTs_ && !checkAndUpdateROCEWT(dataBlocks[iroc])){
         event_failed_ROCEWTs++;
         failMap_ROCEWTs[dtcID][iroc]++;
         failedEvent = true;
@@ -375,7 +378,7 @@ void mu2e::CaloDataVerifier::processCaloData(mu2e::DTCEventFragment& eventFragme
           }
           nCaloHits++;
 
-          if (!checkAndUpdateROCCounter(dataBlocks[iroc], hit_counters)){
+          if (checkEWTs_ && !checkAndUpdateROCCounter(dataBlocks[iroc], hit_counters)){
             event_failed_ROCCounters++;
             failedEvent = true;
             failMap_ROCCounters[dtcID][iroc]++;

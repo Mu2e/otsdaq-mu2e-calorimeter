@@ -38,19 +38,19 @@ namespace mu2e {
   {
   public:
     struct Config {
-      fhicl::Atom<std::string> filterModuleLabel {fhicl::Name("filterModuleLabel" ) , fhicl::Comment("filterModuleLabel"), ""};
-      fhicl::Atom<std::string> filterInstanceLabel {fhicl::Name("filterInstanceLabel" ) , fhicl::Comment("filterInstanceLabel"), ""};
+      fhicl::Atom<std::string> unpackerModuleLabel {fhicl::Name("unpackerModuleLabel" ) , fhicl::Comment("unpackerModuleLabel"), ""};
+      fhicl::Atom<std::string> unpackerInstanceLabel {fhicl::Name("unpackerInstanceLabel" ) , fhicl::Comment("unpackerInstanceLabel"), ""};
       fhicl::Atom<int> verbosity {fhicl::Name("verbosity" ) , fhicl::Comment("Verbosity [0-2]"), 0};
       fhicl::Atom<int> data_type {fhicl::Name("dataType" ) , fhicl::Comment("Data type (0:standard, 1:debug, 2:counters)"), 0};
     };
 
     explicit CaloDataAnalyzer(const art::EDAnalyzer::Table<Config>& config);
 	void analyze(art::Event const& event) override;
-    void processDTCData(mu2e::CalorimeterDataDecoder const& caloDecoder);
+    void processCaloData(mu2e::CalorimeterDataDecoder const& caloDecoder);
 
   private:
-    std::string   filterModuleLabel_;
-    std::string   filterInstanceLabel_;
+    std::string   unpackerModuleLabel_;
+    std::string   unpackerInstanceLabel_;
     int           verbosity_;
     int           data_type_;
     
@@ -122,8 +122,8 @@ namespace mu2e {
 
 mu2e::CaloDataAnalyzer::CaloDataAnalyzer(const art::EDAnalyzer::Table<Config>& config)
   : art::EDAnalyzer{config},
-    filterModuleLabel_(config().filterModuleLabel()),
-    filterInstanceLabel_(config().filterInstanceLabel()),
+    unpackerModuleLabel_(config().unpackerModuleLabel()),
+    unpackerInstanceLabel_(config().unpackerInstanceLabel()),
     verbosity_(config().verbosity()),
     data_type_(config().data_type())
 {
@@ -204,11 +204,11 @@ void mu2e::CaloDataAnalyzer::analyze(art::Event const& event){
   nCaloEvents = 0;
   nCaloHits = 0;
 
-  const auto &caloDecoderColl = *event.getValidHandle<CalorimeterDataDecoders>({filterModuleLabel_, filterInstanceLabel_});
+  const auto &caloDecoderColl = *event.getValidHandle<CalorimeterDataDecoders>({unpackerModuleLabel_, unpackerInstanceLabel_});
 
   TLOG(TLVL_DEBUG + 6) << "Iterating through " << caloDecoderColl.size() << " DTCs\n";
   for (const auto& caloDTC : caloDecoderColl) {
-    processDTCData(caloDTC);
+    processCaloData(caloDTC);
   }
 
   g_eventHits->AddPoint(this_eventNumber,nCaloHits);
@@ -223,7 +223,7 @@ void mu2e::CaloDataAnalyzer::analyze(art::Event const& event){
   //TLOG(TLVL_INFO) << "mu2e::CaloDataAnalyzer::analyzer exiting eventNumber=" << (int)eventNumber;
 }
 
-void mu2e::CaloDataAnalyzer::processDTCData(mu2e::CalorimeterDataDecoder const& caloDecoder){
+void mu2e::CaloDataAnalyzer::processCaloData(mu2e::CalorimeterDataDecoder const& caloDecoder){
 
   auto& this_subevent = caloDecoder.event_;
   long int thisDTCEWT = this_subevent.GetEventWindowTag().GetEventWindowTag(true);
