@@ -447,7 +447,7 @@ bool mu2e::CaloDataVerifier::checkAndUpdateDTCEWT(const DTCLib::DTC_SubEvent& su
                 << " previous: " << lastDTCEventWindow[dtcID] << "\n";
     }
     if (dtcEWT != lastDTCEventWindow[dtcID] + 1) {
-      TLOG(TLVL_ERROR) << "Error in the event window (DTC " << dtcID << ")!\n"
+      TLOG(TLVL_DEBUG + 6) << "Error in the event window (DTC " << dtcID << ")!\n"
                        << "current: " << dtcEWT
                        << " previous: " << lastDTCEventWindow[dtcID]
                        << "\nCurrent DTC HEADER: " << subevent.GetHeader()->toJson();
@@ -471,7 +471,7 @@ bool mu2e::CaloDataVerifier::checkAndUpdateROCEWT(const DTCLib::DTC_DataBlock& d
                 << " previous: " << lastROCEventWindow[dtcID][rocID] << "\n";
     }
     if (rocEWT != lastROCEventWindow[dtcID][rocID] + 1) {
-      TLOG(TLVL_ERROR) << "Error in the event window (DTC: " << dtcID << ", ROC: " << rocID << ")!\n"
+      TLOG(TLVL_DEBUG + 6) << "Error in the event window (DTC: " << dtcID << ", ROC: " << rocID << ")!\n"
                        << "current: " << rocEWT
                        << " previous: " << lastROCEventWindow[dtcID][rocID]
                        << "\nCurrent ROC HEADER: " << rocHeader->toJSON();
@@ -496,7 +496,7 @@ bool mu2e::CaloDataVerifier::checkAndUpdateROCCounter(const DTCLib::DTC_DataBloc
                 << " previous: " << lastROCCounter[dtcID][rocID] << "\n";
     }
     if (thisFirstCounter != lastROCCounter[dtcID][rocID] + 1) {
-      TLOG(TLVL_ERROR) << "Error in the ROC counter sequence (DTC: " << dtcID << ", ROC: " << rocID << ")!\n"
+      TLOG(TLVL_DEBUG + 6) << "Error in the ROC counter sequence (DTC: " << dtcID << ", ROC: " << rocID << ")!\n"
                        << "current: " << thisFirstCounter
                        << " previous: " << lastROCCounter[dtcID][rocID] << "\n";
       lastROCCounter[dtcID][rocID] = thisLastCounter;
@@ -521,7 +521,7 @@ bool mu2e::CaloDataVerifier::checkCounters(const DTCLib::DTC_DataBlock& dataBloc
   uint64_t rocID = rocHeader->GetLinkID();
   for (uint i=0; i<hit_counters.size()-1; i++){
     if (hit_counters[i+1] != hit_counters[i] + 1){
-      TLOG(TLVL_ERROR) << "Error in the counter sequence (DTC: " << dtcID << ", ROC: " << rocID << ")!\n"
+      TLOG(TLVL_DEBUG + 6) << "Error in the counter sequence (DTC: " << dtcID << ", ROC: " << rocID << ")!\n"
                        << "counter " << i <<" : " << hit_counters[i] << "\n"
                        << "counter " << i+1 <<" : " << hit_counters[i+1] << "\n";
       return false;
