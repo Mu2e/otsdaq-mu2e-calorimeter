@@ -1057,7 +1057,7 @@ void ROCCalorimeterInterface::SetADCsThreasholds(int  boardID)
   }
   else{ 
   
-    __MOUT_INFO__ << "Opening file: " << filename << __E__;
+    __COUT_INFO__ << "Opening file: " << filename << __E__;
 
     for(int ichan = 0; ichan<20; ichan++){
 
@@ -1071,7 +1071,7 @@ void ROCCalorimeterInterface::SetADCsThreasholds(int  boardID)
       confFile >> sigma;
       confFile >> thr2set;
   
-      __MOUT_INFO__ << chindex <<  "  " << baseline << "  " << sigma <<  "  " << thr2set << __E__;
+      __COUT_INFO__ << chindex <<  "  " << baseline << "  " << sigma <<  "  " << thr2set << __E__;
       writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ichan, thr2set); 
 
     }
@@ -1081,7 +1081,7 @@ void ROCCalorimeterInterface::SetADCsThreasholds(int  boardID)
 
   }
 
-  __MOUT_INFO__ << "Thresholds set done.." << filename << __E__;
+  __COUT_INFO__ << "Thresholds set done.." << filename << __E__;
 
 
 } //end SetADCsThreasholds()
