@@ -56,6 +56,7 @@ namespace mu2e {
     bool checkHitLastMarker(const mu2e::CalorimeterDataDecoder::CalorimeterHitTestDataPacket& hit);
     bool checkAndUpdateROCCounter(const DTCLib::DTC_DataBlock& dataBlock, const std::vector<uint32_t>& hit_counters);
     bool checkCounters(const DTCLib::DTC_DataBlock& dataBlock, const std::vector<uint32_t>& hit_counters);
+    bool checkEmulatedCounters(const DTCLib::DTC_DataBlock& dataBlock, const std::vector<uint32_t>& hit_counters);
 
     void printEvent(const DTCLib::DTC_Event& dtcevent);
     void printSubEvent(const DTCLib::DTC_SubEvent& subevent);
@@ -172,10 +173,10 @@ bool mu2e::CaloDataVerifier::filter(art::Event& event){
     total_failed_LastMarker += event_failed_LastMarker;
 
     if (failedEvent && verbosity_ > 0){
-      std::cout << "Failed event " << (int)eventNumber << ", stopping here\n";
+      std::cout << "Failed event " << (int)eventNumber << "\n";
       std::cout << "Previous event was " << (int)(previousArtEvent->event()) << "\n";
 
-      if (stopOnFailure_) throw cet::exception("CaloDataVerifier") << "Failure detected!";
+      if (stopOnFailure_) throw cet::exception("CaloDataVerifier") << "Failure detected! Stopping.";
     }
   }
 
@@ -412,6 +413,52 @@ void mu2e::CaloDataVerifier::processCaloData(mu2e::DTCEventFragment& eventFragme
           
         } // end of hit loop
 
+      } else if (data_type_ == 3){ /////// EMULATED COUNTERS ///////
+        auto caloHits = caloDecoder.GetEmulatedCountersData(iroc);
+        uint nHits = caloHits->size();
+        roc_hits.push_back(nHits);
+        for (uint ihit = 0; ihit<nHits; ihit++){
+          mu2e::CalorimeterDataDecoder::CalorimeterCountersDataPacket hit = caloHits->at(ihit).first;
+          std::vector<uint32_t> hit_counters = caloHits->at(ihit).second;
+          if (hit_counters.size() == 0){
+            TLOG(TLVL_WARNING) << "[CaloDataVerifier::filter] found empty counters! DTC " << dtcID << " ROC " << iroc << " hit " << ihit;
+          }
+          nCaloHits++;
+
+          if (checkEWTs_ && !checkAndUpdateROCCounter(dataBlocks[iroc], hit_counters)){
+            event_failed_ROCCounters++;
+            failedEvent = true;
+            failMap_ROCCounters[dtcID][iroc]++;
+          }
+
+          if (!checkEmulatedCounters(dataBlocks[iroc], hit_counters)){
+            event_failed_Counters++;
+            failedEvent = true;
+            failMap_Counters[dtcID][iroc]++;
+            if (verbosity_ > 1){
+              std::cout << "Dumping these counters:\n";
+              for (auto c : hit_counters){
+                std::cout << c << " ";
+              }
+              std::cout << std::endl;
+            }
+          }
+    
+          TLOG(TLVL_DEBUG + 6)
+            << "Hit "                          << ihit << " :"                                  << std::endl
+            << "\numberOfCounters: "           << hit.numberOfCounters                          << std::endl
+            << "\tcounters size: "             << hit_counters.size()                           << std::endl;
+
+          std::stringstream ss_wf;
+          for (auto sample : hit_counters) ss_wf << sample << " ";
+          TLOG(TLVL_DEBUG + 6) << "Counters:\n" << ss_wf.str();
+
+          std::stringstream ss_wf_hex;
+          for (auto sample : hit_counters) ss_wf_hex << std::hex << std::setw(8) << std::setfill('0') << sample << std::dec << " ";
+          TLOG(TLVL_DEBUG + 6) << "Counters (hex):\n" << ss_wf_hex.str();
+          
+        } // end of hit loop
+
       }
 
       //Print number of hits per ROC
@@ -522,6 +569,21 @@ bool mu2e::CaloDataVerifier::checkCounters(const DTCLib::DTC_DataBlock& dataBloc
   for (uint i=0; i<hit_counters.size()-1; i++){
     if (hit_counters[i+1] != hit_counters[i] + 1){
       TLOG(TLVL_DEBUG + 6) << "Error in the counter sequence (DTC: " << dtcID << ", ROC: " << rocID << ")!\n"
+                       << "counter " << i <<" : " << hit_counters[i] << "\n"
+                       << "counter " << i+1 <<" : " << hit_counters[i+1] << "\n";
+      return false;
+    }
+  }
+  return true;
+}
+
+bool mu2e::CaloDataVerifier::checkEmulatedCounters(const DTCLib::DTC_DataBlock& dataBlock, const std::vector<uint32_t>& hit_counters){
+  DTCLib::DTC_DataHeaderPacket* rocHeader = dataBlock.GetHeader().get();
+  uint64_t dtcID = rocHeader->GetID();
+  uint64_t rocID = rocHeader->GetLinkID();
+  for (uint i=0; i<hit_counters.size()-1; i++){
+    if (hit_counters[i+1] != hit_counters[i] + 2){
+      TLOG(TLVL_ERROR) << "Error in the counter sequence (DTC: " << dtcID << ", ROC: " << rocID << ")!\n"
                        << "counter " << i <<" : " << hit_counters[i] << "\n"
                        << "counter " << i+1 <<" : " << hit_counters[i+1] << "\n";
       return false;

@@ -61,6 +61,7 @@ physics: {
       subsystemOverride   : tracker
       produceCaloDecoders : true
       stopOnFailure       : false
+      checkEWTs           : false
     }
   
   }
@@ -70,7 +71,7 @@ physics: {
       module_type  : ArtFragmentsFromDTCEvents
       diagLevel    : 10
       makeCaloFrag : 1
-      makeTrkFrag  : 1
+      makeTrkFrag  : 0
       makeCRVFrag  : 0
       makeSTMFrag  : 0
     }
@@ -91,11 +92,11 @@ physics: {
       caphriEDepMin  : 1.0 #MeV
     }
 
-    makeCaloReco : {
-      module_type    : CaloRecoFromFragments
+    makeCaloDigi : {
+      module_type    : CaloDigiFromFragments
       caloTag        : "caloVerifier"
       dataType       : 1
-      diagLevel      : 1
+      diagLevel      : 0
     }
   }
 
@@ -103,15 +104,15 @@ physics: {
 
     caloAnalyzer : {
       module_type         : CaloDataAnalyzer
-      filterModuleLabel   : "caloVerifier"
-      filterInstanceLabel : ""
+      unpackerModuleLabel   : "caloVerifier"
+      unpackerInstanceLabel : ""
       verbosity           : 0
-      dataType            : 2
+      dataType            : 1
     }
   }
   
-  t1 : [ caloVerifier ]#, makeCaloReco ]
-  e1 : [ caloAnalyzer ]#outfile ] # dump, outfile ]
+  t1 : [ caloVerifier ]#, makeCaloDigi ]#, makeCaloReco ]
+  e1 : [ ]#caloAnalyzer ]#outfile ] # dump, outfile ]
   
   trigger_paths  : [t1]
   end_paths      : [e1]
