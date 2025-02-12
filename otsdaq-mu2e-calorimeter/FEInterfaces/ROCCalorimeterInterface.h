@@ -131,15 +131,15 @@ namespace ots
     void RMZB_writeAllSiPMbias(float *hv);
 
     void ConfigureLink(__ARGS__);
-    void ConfigureLink(std::string conf, bool hvonoff, bool doCalibration, bool setThresholds);
+    void ConfigureLink(std::string conf, std::string confFile, bool hvonoff, bool doCalibration, bool setThresholds, int offset);
     void CalibrateMZB(__ARGS__);
     void CalibrateMZB(int boardid);
 
 
     void ToggleMBBusy(__ARGS__);
     void ToggleMBBusy(bool busyonoff);
-    void SetADCsThreasholds(__ARGS__);
-    void SetADCsThreasholds(int boardid);
+    void SetADCsThresholds(__ARGS__);
+    void SetADCsThresholds(int boardid, int offset);
     
     void ReadROCErrorCounter		(__ARGS__);
     void ReadMBRegisters		(__ARGS__);
