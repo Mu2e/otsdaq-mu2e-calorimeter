@@ -172,9 +172,11 @@ bool mu2e::CaloDataVerifier::filter(art::Event& event){
     total_failed_BeginMarker += event_failed_BeginMarker;
     total_failed_LastMarker += event_failed_LastMarker;
 
-    if (failedEvent && verbosity_ > 0){
-      std::cout << "Failed event " << (int)eventNumber << "\n";
-      std::cout << "Previous event was " << (int)(previousArtEvent->event()) << "\n";
+    if (failedEvent){
+      if (verbosity_ > 0){
+        std::cout << "Failed event " << (int)eventNumber << "\n";
+        //std::cout << "Previous event was " << (int)(previousArtEvent->event()) << "\n";
+      }
 
       if (stopOnFailure_) throw cet::exception("CaloDataVerifier") << "Failure detected! Stopping.";
     }
@@ -201,6 +203,8 @@ bool mu2e::CaloDataVerifier::filter(art::Event& event){
       metrics_reporting_level_, artdaq::MetricMode::LastPoint);
     metricMan->sendMetric("nHits", int(nCaloHits), "Hits per event",
       metrics_reporting_level_, artdaq::MetricMode::LastPoint);
+  } else {
+    TLOG(TLVL_DEBUG + 6) << "WARNING: No metric manager found!";
   }
 
   TLOG(TLVL_DEBUG + 6) << "[CaloDataVerifier::filter] found " << nCaloEvents << " calo subevents in event" << (int)eventNumber;
@@ -652,10 +656,11 @@ void mu2e::CaloDataVerifier::printRunSummary(){
 
   std::cout << "Total hits per channel:" << std::endl;
   for (auto board : totalHitMap){
-    std::cout << "\tBoard " << board.first << std::endl;
-    for (auto channel : board.second){
-      std::cout << "\t\tChannel " << channel.first << " , hits: " << channel.second << std::endl;
+    std::cout << "\tBoard " << board.first << ": ";
+    for (int channel=0; channel<20; channel++){
+      std::cout << board.second[channel] << " ";
     }
+    std::cout << std::endl;
   }
 
   std::cout << "Failures:" << std::endl
