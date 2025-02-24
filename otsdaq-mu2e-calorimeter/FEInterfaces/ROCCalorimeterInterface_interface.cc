@@ -21,21 +21,21 @@ using namespace ots;
 // 259 (and others) ==> the number of words in block read is written first as a block
 // write
 const std::set<DTCLib::roc_address_t> ROCCalorimeterInterface::SPECIAL_BLOCK_READ_ADDRS_(
-	{263, 256, 257, 261, 262, 264, 260});
+    {263, 256, 257, 261, 262, 264, 260});
 
 //=========================================================================================
 ROCCalorimeterInterface::ROCCalorimeterInterface(
-	const std::string&       rocUID,
-	const ConfigurationTree& theXDAQContextConfigTree,
-	const std::string&       theConfigurationPath)
-	: ROCPolarFireCoreInterface(rocUID, theXDAQContextConfigTree, theConfigurationPath)
+    const std::string&       rocUID,
+    const ConfigurationTree& theXDAQContextConfigTree,
+    const std::string&       theConfigurationPath)
+    : ROCPolarFireCoreInterface(rocUID, theXDAQContextConfigTree, theConfigurationPath)
 {
 	INIT_MF("." /*directory used is USER_DATA/LOG/.*/);
 
 	__CFG_COUT__ << "Constructor..." << __E__;
 
 	__CFG_COUT_INFO__ << "ROCPolarFireCoreInterface instantiated with link: " << linkID_
-					  << " and EventWindowDelayOffset = " << delay_ << __E__;
+	                  << " and EventWindowDelayOffset = " << delay_ << __E__;
 
 	try
 	{
@@ -59,146 +59,146 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(
 	//                         1);  // requiredUserPermissions
 
 	registerFEMacroFunction(
-		"Setup for Fixed-length Pattern Data Taking",
-		static_cast<FEVInterface::frontEndMacroFunction_t>(
-			&ROCCalorimeterInterface::SetupForPatternFixedLengthDataTaking),
-		std::vector<std::string>{
-			"Fixed Length of Event [units of 16-bit words, Default := 8]"},  // inputs
-																			 // parameters
-		std::vector<std::string>{},  // output parameters
-		1);                          // requiredUserPermissions
+	    "Setup for Fixed-length Pattern Data Taking",
+	    static_cast<FEVInterface::frontEndMacroFunction_t>(
+	        &ROCCalorimeterInterface::SetupForPatternFixedLengthDataTaking),
+	    std::vector<std::string>{
+	        "Fixed Length of Event [units of 16-bit words, Default := 8]"},  // inputs
+	                                                                         // parameters
+	    std::vector<std::string>{},  // output parameters
+	    1);                          // requiredUserPermissions
 
 	registerFEMacroFunction(
-		"Send Mz Command",
-		static_cast<FEVInterface::frontEndMacroFunction_t>(
-			&ROCCalorimeterInterface::SendMzCommand),
-		std::vector<std::string>{"command tag from mz manual",
-								 "argument 0, Default := 0]",
-								 "argument 1, Default := 0]",
-								 "argument 2, Default := 0]",
-								 "argument 3, Default := 0]",
-								 "argument 4, Default := 0]",
-								 "argument 5, Default := 0]",
-								 "argument 6, Default := 0]",
-								 "argument 7, Default := 0]",
-								 "argument 8, Default := 0]",
-								 "argument 9, Default := 0]"},  // inputs parameters
-		std::vector<std::string>{},                             // output parameters
-		1);                                                     // requiredUserPermissions
+	    "Send Mz Command",
+	    static_cast<FEVInterface::frontEndMacroFunction_t>(
+	        &ROCCalorimeterInterface::SendMzCommand),
+	    std::vector<std::string>{"command tag from mz manual",
+	                             "argument 0, Default := 0]",
+	                             "argument 1, Default := 0]",
+	                             "argument 2, Default := 0]",
+	                             "argument 3, Default := 0]",
+	                             "argument 4, Default := 0]",
+	                             "argument 5, Default := 0]",
+	                             "argument 6, Default := 0]",
+	                             "argument 7, Default := 0]",
+	                             "argument 8, Default := 0]",
+	                             "argument 9, Default := 0]"},  // inputs parameters
+	    std::vector<std::string>{},                             // output parameters
+	    1);                                                     // requiredUserPermissions
 
 	registerFEMacroFunction(
-		"Enable and Power SiPMs",
-		static_cast<FEVInterface::frontEndMacroFunction_t>(
-			&ROCCalorimeterInterface::EnableAndPowerSiPMs),
-		std::vector<std::string>{
-			"HV Enabled, Default := 0]",
-			"Bias voltage to set, Default := 0]"},  // inputs parameters
-		std::vector<std::string>{},                 // output parameters
-		1);                                         // requiredUserPermissions
+	    "Enable and Power SiPMs",
+	    static_cast<FEVInterface::frontEndMacroFunction_t>(
+	        &ROCCalorimeterInterface::EnableAndPowerSiPMs),
+	    std::vector<std::string>{
+	        "HV Enabled, Default := 0]",
+	        "Bias voltage to set, Default := 0]"},  // inputs parameters
+	    std::vector<std::string>{},                 // output parameters
+	    1);                                         // requiredUserPermissions
 
 	registerFEMacroFunction(
-		"Set Board Voltages",
-		static_cast<FEVInterface::frontEndMacroFunction_t>(
-			&ROCCalorimeterInterface::SetBoardVoltages),
-		std::vector<std::string>{"configuration folder, Default:= nominal",
-								 "Left/Right, Default := 0]",
-								 "Board Number in Crate, Default := 0]",
-								 "Crate Number, Default := 0]",
-								 "Half Number, Default := 0]",
-								 "Disk Number, Default := 0]",
-								 "Board ID, Default := -1]",
-								 "HV Enabled, Default := 0]"},  // inputs parameters
-		std::vector<std::string>{},                             // output parameters
-		1);                                                     // requiredUserPermissions
+	    "Set Board Voltages",
+	    static_cast<FEVInterface::frontEndMacroFunction_t>(
+	        &ROCCalorimeterInterface::SetBoardVoltages),
+	    std::vector<std::string>{"configuration folder, Default:= nominal",
+	                             "Left/Right, Default := 0]",
+	                             "Board Number in Crate, Default := 0]",
+	                             "Crate Number, Default := 0]",
+	                             "Half Number, Default := 0]",
+	                             "Disk Number, Default := 0]",
+	                             "Board ID, Default := -1]",
+	                             "HV Enabled, Default := 0]"},  // inputs parameters
+	    std::vector<std::string>{},                             // output parameters
+	    1);                                                     // requiredUserPermissions
 
 	registerFEMacroFunction(
-		"Configure Link",
-		static_cast<FEVInterface::frontEndMacroFunction_t>(
-			&ROCCalorimeterInterface::ConfigureLink),
-		std::vector<std::string>{"Configuration folder, Default:= nominal",
-								 "HV Enabled, Default := 0]",
-								 "Upload MZB calibration parameters, Default := 0]",
-								 "Upload DiRAC thresholds, Default := 0]",
-								 "Offset, Default := 0]"},  // inputs parameters
+	    "Configure Link",
+	    static_cast<FEVInterface::frontEndMacroFunction_t>(
+	        &ROCCalorimeterInterface::ConfigureLink),
+	    std::vector<std::string>{"Configuration folder, Default:= nominal",
+	                             "HV Enabled, Default := 0]",
+	                             "Upload MZB calibration parameters, Default := 0]",
+	                             "Upload DiRAC thresholds, Default := 0]",
+	                             "Offset, Default := 0]"},  // inputs parameters
 
-		std::vector<std::string>{},  // output parameters
-		1);                          // requiredUserPermissions
-
-	registerFEMacroFunction(
-		"Calibrate Mzb",
-		static_cast<FEVInterface::frontEndMacroFunction_t>(
-			&ROCCalorimeterInterface::CalibrateMZB),
-		std::vector<std::string>{"BoardID, Default := -1]"},  // inputs parameters
-		std::vector<std::string>{},                           // output parameters
-		1);                                                   // requiredUserPermissions
+	    std::vector<std::string>{},  // output parameters
+	    1);                          // requiredUserPermissions
 
 	registerFEMacroFunction(
-		"SetADCsThresholds",
-		static_cast<FEVInterface::frontEndMacroFunction_t>(
-			&ROCCalorimeterInterface::SetADCsThresholds),
-		std::vector<std::string>{"BoardID, Default := -1]",
-								 "Offset, Default := 0]"},  // inputs parameters
-		std::vector<std::string>{},                         // output parameters
-		1);                                                 // requiredUserPermissions
+	    "Calibrate Mzb",
+	    static_cast<FEVInterface::frontEndMacroFunction_t>(
+	        &ROCCalorimeterInterface::CalibrateMZB),
+	    std::vector<std::string>{"BoardID, Default := -1]"},  // inputs parameters
+	    std::vector<std::string>{},                           // output parameters
+	    1);                                                   // requiredUserPermissions
 
 	registerFEMacroFunction(
-		"SetupForNoiseTaking",
-		static_cast<FEVInterface::frontEndMacroFunction_t>(
-			&ROCCalorimeterInterface::SetupForNoiseTaking),
-		std::vector<std::string>{
-			"Number of noise samples per evt [Default := 20]"},  // inputs parameters
-		std::vector<std::string>{},                              // output parameters
-		1);  // requiredUserPermissions
+	    "SetADCsThresholds",
+	    static_cast<FEVInterface::frontEndMacroFunction_t>(
+	        &ROCCalorimeterInterface::SetADCsThresholds),
+	    std::vector<std::string>{"BoardID, Default := -1]",
+	                             "Offset, Default := 0]"},  // inputs parameters
+	    std::vector<std::string>{},                         // output parameters
+	    1);                                                 // requiredUserPermissions
 
 	registerFEMacroFunction(
-		"Read ROC Error Counter",
-		static_cast<FEVInterface::frontEndMacroFunction_t>(
-			&ROCCalorimeterInterface::ReadROCErrorCounter),
-		std::vector<std::string>{"Address to read, Default := 0]"},  // inputs parameters
-		std::vector<std::string>{"Status"},                          // output parameters
-		1);  // requiredUserPermissions
+	    "SetupForNoiseTaking",
+	    static_cast<FEVInterface::frontEndMacroFunction_t>(
+	        &ROCCalorimeterInterface::SetupForNoiseTaking),
+	    std::vector<std::string>{
+	        "Number of noise samples per evt [Default := 20]"},  // inputs parameters
+	    std::vector<std::string>{},                              // output parameters
+	    1);  // requiredUserPermissions
 
 	registerFEMacroFunction(
-		"Setup for ADCs Data Taking",
-		static_cast<FEVInterface::frontEndMacroFunction_t>(
-			&ROCCalorimeterInterface::SetupForADCsDataTaking),
-		std::vector<std::string>{
-			"Set Threshold? [bool, Default := 0]",
-			"Threshold [units of adccounts, Default := 2300]"},  // inputs parameters
-		std::vector<std::string>{},                              // output parameters
-		1);  // requiredUserPermissions
+	    "Read ROC Error Counter",
+	    static_cast<FEVInterface::frontEndMacroFunction_t>(
+	        &ROCCalorimeterInterface::ReadROCErrorCounter),
+	    std::vector<std::string>{"Address to read, Default := 0]"},  // inputs parameters
+	    std::vector<std::string>{"Status"},                          // output parameters
+	    1);  // requiredUserPermissions
 
 	registerFEMacroFunction(
-		"Toggle MB Busy for Noise",
-		static_cast<FEVInterface::frontEndMacroFunction_t>(
-			&ROCCalorimeterInterface::ToggleMBBusy),
-		std::vector<std::string>{
-			"On/Off [Busy On/Off, Default := 1]"},  // inputs parameters
-		std::vector<std::string>{},                 // output parameters
-		1);                                         // requiredUserPermissions
+	    "Setup for ADCs Data Taking",
+	    static_cast<FEVInterface::frontEndMacroFunction_t>(
+	        &ROCCalorimeterInterface::SetupForADCsDataTaking),
+	    std::vector<std::string>{
+	        "Set Threshold? [bool, Default := 0]",
+	        "Threshold [units of adccounts, Default := 2300]"},  // inputs parameters
+	    std::vector<std::string>{},                              // output parameters
+	    1);  // requiredUserPermissions
+
+	registerFEMacroFunction(
+	    "Toggle MB Busy for Noise",
+	    static_cast<FEVInterface::frontEndMacroFunction_t>(
+	        &ROCCalorimeterInterface::ToggleMBBusy),
+	    std::vector<std::string>{
+	        "On/Off [Busy On/Off, Default := 1]"},  // inputs parameters
+	    std::vector<std::string>{},                 // output parameters
+	    1);                                         // requiredUserPermissions
 
 	registerFEMacroFunction("ROC Status",
-							static_cast<FEVInterface::frontEndMacroFunction_t>(
-								&ROCCalorimeterInterface::GetStatus),
-							std::vector<std::string>{},          // inputs parameters
-							std::vector<std::string>{"Status"},  // output parameters
-							1);  // requiredUserPermissions
+	                        static_cast<FEVInterface::frontEndMacroFunction_t>(
+	                            &ROCCalorimeterInterface::GetStatus),
+	                        std::vector<std::string>{},          // inputs parameters
+	                        std::vector<std::string>{"Status"},  // output parameters
+	                        1);  // requiredUserPermissions
 
 	registerFEMacroFunction("ROC Slow Control",
-							static_cast<FEVInterface::frontEndMacroFunction_t>(
-								&ROCCalorimeterInterface::ROCSlowControl),
-							std::vector<std::string>{},          // inputs parameters
-							std::vector<std::string>{"Status"},  // output parameters
-							1);  // requiredUserPermissions
+	                        static_cast<FEVInterface::frontEndMacroFunction_t>(
+	                            &ROCCalorimeterInterface::ROCSlowControl),
+	                        std::vector<std::string>{},          // inputs parameters
+	                        std::vector<std::string>{"Status"},  // output parameters
+	                        1);  // requiredUserPermissions
 
 	registerFEMacroFunction("Read MB Registers",
-							static_cast<FEVInterface::frontEndMacroFunction_t>(
-								&ROCCalorimeterInterface::ReadMBRegisters),
-							std::vector<std::string>{
-								"Number of 16 bits words to read, Default := 20]",
-								"Mezzanine Address, Default := 0]"},  // inputs parameters
-							std::vector<std::string>{"Status"},       // output parameters
-							1);  // requiredUserPermissions
+	                        static_cast<FEVInterface::frontEndMacroFunction_t>(
+	                            &ROCCalorimeterInterface::ReadMBRegisters),
+	                        std::vector<std::string>{
+	                            "Number of 16 bits words to read, Default := 20]",
+	                            "Mezzanine Address, Default := 0]"},  // inputs parameters
+	                        std::vector<std::string>{"Status"},       // output parameters
+	                        1);  // requiredUserPermissions
 
 	// registerFEMacroFunction("SetROCCaloVoltageChannel",
 	//                         static_cast<FEVInterface::frontEndMacroFunction_t>(
@@ -215,19 +215,19 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(
 	//                         parameters 1);  // requiredUserPermissions
 
 	registerFEMacroFunction("Configure State Machine",
-							static_cast<FEVInterface::frontEndMacroFunction_t>(
-								&ROCCalorimeterInterface::Configure),
-							std::vector<std::string>{},  // inputs parameters
-							std::vector<std::string>{},  // output parameters
-							1);                          // requiredUserPermissions
+	                        static_cast<FEVInterface::frontEndMacroFunction_t>(
+	                            &ROCCalorimeterInterface::Configure),
+	                        std::vector<std::string>{},  // inputs parameters
+	                        std::vector<std::string>{},  // output parameters
+	                        1);                          // requiredUserPermissions
 
 	// // function for webgui
 	// 	registerFEMacroFunction("GetROCCaloTemperatureChannel",
 	// 	                        static_cast<FEVInterface::frontEndMacroFunction_t>(
 	// 	                            &ROCCalorimeterInterface::GetTempChannel),
 	// 	                        std::vector<std::string>{"channelNumber"}, //inputs
-	// parameters 	                        std::vector<std::string>{"readValue"}, //output parameters 	                        1);  //
-	// requiredUserPermissions
+	// parameters 	                        std::vector<std::string>{"readValue"},
+	// //output parameters 	                        1);  // requiredUserPermissions
 
 }  // end constructor()
 
@@ -241,7 +241,7 @@ ROCCalorimeterInterface::~ROCCalorimeterInterface(void)
 
 //==================================================================================================
 void ROCCalorimeterInterface::writeEmulatorRegister(uint16_t address,
-													uint16_t data_to_write)
+                                                    uint16_t data_to_write)
 {
 	__CFG_COUT__ << "emulator write" << __E__;
 
@@ -251,7 +251,7 @@ void ROCCalorimeterInterface::writeEmulatorRegister(uint16_t address,
 
 //==================================================================================================
 uint16_t ROCCalorimeterInterface::readEmulatorRegister(
-	uint16_t address)  // not useful, broken by Luca
+    uint16_t address)  // not useful, broken by Luca
 {
 	__CFG_COUT__ << "emulator read" << __E__;
 
@@ -296,18 +296,18 @@ bool ROCCalorimeterInterface::emulatorWorkLoop(void)
 
 //==================================================================================================
 void ROCCalorimeterInterface::universalBlockRead(char*        address,
-												 char*        returnValue,
-												 unsigned int numberOfBytes)
+                                                 char*        returnValue,
+                                                 unsigned int numberOfBytes)
 {
 	std::vector<DTCLib::roc_data_t> data;
 	readROCBlock(data,
-				 *((DTCLib::roc_address_t*)address),
-				 numberOfBytes / 2,
-				 false /*incAddress*/);
+	             *((DTCLib::roc_address_t*)address),
+	             numberOfBytes / 2,
+	             false /*incAddress*/);
 	if(data.size() != numberOfBytes / 2)
 	{
 		__FE_SS__ << "Illegal number of bytes: " << data.size() << " not "
-				  << numberOfBytes / 2 << __E__;
+		          << numberOfBytes / 2 << __E__;
 		__FE_SS_THROW__;
 	}
 	memcpy(returnValue, &data[0], data.size() * 2);
@@ -365,13 +365,13 @@ void ROCCalorimeterInterface::ROCSlowControl(__ARGS__)
 
 	/*  std::vector<DTCLib::roc_data_t> data3;
 	  readROCBlock(data3,
-			   264,
-			   7,
-			   false);
+	           264,
+	           7,
+	           false);
 	  if(data3.size() != 7)	{
-		__FE_SS__ << "Illegal number of bytes: "  <<  data3.size() << " not " << 7 <<
+	    __FE_SS__ << "Illegal number of bytes: "  <<  data3.size() << " not " << 7 <<
 	  __E__;
-		__FE_SS_THROW__;
+	    __FE_SS_THROW__;
 	  }
 
 	  os << "Word " << 0 << ":  VTRX_REG_Control: 0x" << std::hex << data3[0] << " " <<
@@ -396,7 +396,7 @@ void ROCCalorimeterInterface::ROCSlowControl(__ARGS__)
 	if(data2.size() != 20)
 	{
 		__FE_SS__ << "Illegal number of bytes: " << data2.size() << " not " << 20 << "  !"
-				  << __E__;
+		          << __E__;
 		__FE_SS_THROW__;
 	}
 
@@ -412,7 +412,7 @@ void ROCCalorimeterInterface::ROCSlowControl(__ARGS__)
 void ROCCalorimeterInterface::ReadMBRegisters(__ARGS__)
 {
 	unsigned int nwords = __GET_ARG_IN__(
-		"Number of 16 bits words to read, Default := 20]", unsigned int, 20);
+	    "Number of 16 bits words to read, Default := 20]", unsigned int, 20);
 	int offset = __GET_ARG_IN__("Mezzanine Address, Default := 0]", int, 0);
 
 	std::vector<DTCLib::roc_data_t> data;
@@ -421,7 +421,7 @@ void ROCCalorimeterInterface::ReadMBRegisters(__ARGS__)
 	if(data.size() != nwords)
 	{
 		__FE_SS__ << "Illegal number of bytes: " << data.size() << " not " << nwords
-				  << "  !" << offset << __E__;
+		          << "  !" << offset << __E__;
 		__FE_SS_THROW__;
 	}
 
@@ -437,13 +437,13 @@ void ROCCalorimeterInterface::ReadMBRegisters(__ARGS__)
 
 //==================================================================================================
 void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data,
-										   DTCLib::roc_address_t            address,
-										   uint16_t                         wordCount,
-										   bool incrementAddress)
+                                           DTCLib::roc_address_t            address,
+                                           uint16_t                         wordCount,
+                                           bool incrementAddress)
 {
 	__FE_COUT__ << "Calling read ROC block: link number " << std::dec << linkID_
-				<< ", address = " << address << ", wordCount = " << wordCount
-				<< ", incrementAddress = " << incrementAddress << __E__;
+	            << ", address = " << address << ", wordCount = " << wordCount
+	            << ", incrementAddress = " << incrementAddress << __E__;
 
 	uint16_t u;
 	u = thisDTC_->ReadROCRegister(linkID_, 0, 100);
@@ -459,14 +459,14 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 		case 261:
 			// writeROCBlock({wordCount*2, 0}, address, false /* incrementAddress*/);
 			writeROCBlock({static_cast<unsigned short>(wordCount * 2), 0},
-						  address,
-						  false /* incrementAddress*/);
+			              address,
+			              false /* incrementAddress*/);
 			break;
 
 		case 260:
 			address = offsetof(EE_DATABUF_t, apdTemp_tag);
 			wordCount =
-				offsetof(EE_DATABUF_t, apdPwrs_tag) - offsetof(EE_DATABUF_t, apdTemp_tag);
+			    offsetof(EE_DATABUF_t, apdPwrs_tag) - offsetof(EE_DATABUF_t, apdTemp_tag);
 			writeROCBlock({wordCount, address}, 261, false /* incrementAddress*/);
 			wordCount = wordCount / 2;
 			break;
@@ -492,12 +492,12 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 		while((u = thisDTC_->ReadROCRegister(linkID_, 128, 100)) == 0)
 		{
 			/*			usleep(100);
-					  j++;
-					  if(j == 100)
-					  {
-					  __FE_SS__ << "ROC block failed at 128"  << __E__;
-					  __FE_SS_THROW__;
-					  }*/
+			          j++;
+			          if(j == 100)
+			          {
+			          __FE_SS__ << "ROC block failed at 128"  << __E__;
+			          __FE_SS_THROW__;
+			          }*/
 		}  // when the write operation ends the micropro
 		// cessor writes 0x8000 to register 0x128
 		__COUT__ << "r_128: 0x" << std::hex << u << __E__;
@@ -531,7 +531,7 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 	if(data.size() != (long unsigned int)u - 4)
 	{
 		__FE_SS__ << "ROC block read failed, expecting " << wordCount
-				  << " words, and read " << data.size() << " words." << __E__;
+		          << " words, and read " << data.size() << " words." << __E__;
 		__FE_SS_THROW__;
 	}
 
@@ -606,7 +606,7 @@ try
 	//	__COUTV__(linkID);
 
 	runSequenceOfCommands(
-		"ROCTypeLinkTable/LinkToConfigureSequence"); /*Run Configure Sequence Commands*/
+	    "ROCTypeLinkTable/LinkToConfigureSequence"); /*Run Configure Sequence Commands*/
 
 	//    int myTemp = GetTemperature(1);
 	// 	__COUTV__(myTemp);
@@ -702,7 +702,7 @@ int ROCCalorimeterInterface::GetTemperature(int idchannel)  // wrong address
 void ROCCalorimeterInterface::SetupForPatternFixedLengthDataTaking(__ARGS__)
 {
 	unsigned int numberOfWords = __GET_ARG_IN__(
-		"Fixed Length of Event [units of 16-bit words, Default := 8]", uint32_t, 8);
+	    "Fixed Length of Event [units of 16-bit words, Default := 8]", uint32_t, 8);
 
 	SetupForPatternFixedLengthDataTaking(numberOfWords);
 
@@ -710,7 +710,7 @@ void ROCCalorimeterInterface::SetupForPatternFixedLengthDataTaking(__ARGS__)
 
 //==================================================================================================
 void ROCCalorimeterInterface::SetupForPatternFixedLengthDataTaking(
-	unsigned int numberOfWords)
+    unsigned int numberOfWords)
 {
 	__COUT_INFO__ << "SetupForPatternFixedLengthDataTaking()" << __E__;
 
@@ -759,8 +759,8 @@ void ROCCalorimeterInterface::SendMzCommand(std::string command, float paramVect
 	if(cmd_code == SYNTAX_ERROR)
 	{
 		__FE_SS__ << "Wrong MZB command, please check the inserted string! " << __E__
-				  << command << __E__ << command.c_str() << __E__ << code_map[21].str
-				  << __E__;
+		          << command << __E__ << command.c_str() << __E__ << code_map[21].str
+		          << __E__;
 		__FE_SS_THROW__;
 	}
 
@@ -773,9 +773,9 @@ void ROCCalorimeterInterface::SendMzCommand(std::string command, float paramVect
 	for(std::size_t i = 0; i < MZ_BUFFER_SIZE; i += 2)
 	{
 		uint16_t value = (static_cast<uint16_t>(vectToWrite[i]) << 8) |
-						 (static_cast<uint16_t>(vectToWrite[i + 1]));
+		                 (static_cast<uint16_t>(vectToWrite[i + 1]));
 		__COUT_INFO__ << std::hex << std::setprecision(4) << std::setfill('0') << "0x"
-					  << value << __E__;
+		              << value << __E__;
 		input_data.push_back(value);
 	}
 
@@ -827,7 +827,7 @@ void ROCCalorimeterInterface::EnableAndPowerSiPMs(__ARGS__)
 void ROCCalorimeterInterface::SetBoardVoltages(__ARGS__)
 {
 	std::string conf =
-		__GET_ARG_IN__("configuration folder, Default:= nominal", std::string, "nominal");
+	    __GET_ARG_IN__("configuration folder, Default:= nominal", std::string, "nominal");
 
 	// boardID == L/R + 2*bordNum + 8* cratenum + 40*half + 80*disk
 
@@ -855,12 +855,12 @@ void ROCCalorimeterInterface::SetBoardVoltages(__ARGS__)
 void ROCCalorimeterInterface::ConfigureLink(__ARGS__)
 {
 	std::string conf =
-		__GET_ARG_IN__("Configuration folder, Default:= nominal", std::string, "nominal");
+	    __GET_ARG_IN__("Configuration folder, Default:= nominal", std::string, "nominal");
 	bool hvonoff = __GET_ARG_IN__("HV Enabled, Default := 0]", bool, 0);
 	bool doCalibration =
-		__GET_ARG_IN__("Upload MZB calibration parameters, Default := 0]", bool, 0);
+	    __GET_ARG_IN__("Upload MZB calibration parameters, Default := 0]", bool, 0);
 	bool setThresholds =
-		__GET_ARG_IN__("Upload DiRAC thresholds, Default := 0]", bool, 0);
+	    __GET_ARG_IN__("Upload DiRAC thresholds, Default := 0]", bool, 0);
 	int offset = __GET_ARG_IN__("Offset, Default := 0]", int, 0);
 
 	std::string confFile = "boardMap.config";
@@ -873,11 +873,11 @@ void ROCCalorimeterInterface::ConfigureLink(__ARGS__)
 //==================================================================================================
 
 void ROCCalorimeterInterface::ConfigureLink(std::string conf,
-											std::string confFile,
-											bool        hvonoff,
-											bool        doCalibration,
-											bool        setThresholds,
-											int         offset)
+                                            std::string confFile,
+                                            bool        hvonoff,
+                                            bool        doCalibration,
+                                            bool        setThresholds,
+                                            int         offset)
 {
 	DTCLib::roc_address_t address = 147;
 	DTCLib::roc_data_t    readVal;
@@ -923,7 +923,7 @@ void ROCCalorimeterInterface::ConfigureLink(std::string conf,
 	else
 	{
 		__FE_SS__ << "Cannot match board unique ID: readval is " << readVal
-				  << ", while boardid is " << boardid << __E__;
+		          << ", while boardid is " << boardid << __E__;
 		__FE_SS_THROW__;
 		;
 	}
@@ -953,7 +953,7 @@ void ROCCalorimeterInterface::CalibrateMZB(int boardID)
 
 	cet::filepath_lookup lookup_policy("MU2E_CALORIMETER_CONFIG_PATH");
 	auto                 filename = lookup_policy(std::string("mzbCalib/") +
-								  buff);  // FIXME! THIS NEEDS TO BE A VARIABLE
+                                  buff);  // FIXME! THIS NEEDS TO BE A VARIABLE
 
 	std::ifstream confFile(filename);
 	if(!confFile.is_open())
@@ -1021,7 +1021,7 @@ void ROCCalorimeterInterface::SetADCsThresholds(int boardID, int offset)
 
 	cet::filepath_lookup lookup_policy("MU2E_CALORIMETER_CONFIG_PATH");
 	auto                 filename = lookup_policy(std::string("diracCalib/") +
-								  buff);  // FIXME! THIS NEEDS TO BE A VARIABLE
+                                  buff);  // FIXME! THIS NEEDS TO BE A VARIABLE
 
 	std::ifstream confFile(filename);
 	if(!confFile.is_open())
@@ -1050,7 +1050,7 @@ void ROCCalorimeterInterface::SetADCsThresholds(int boardID, int offset)
 			confFile >> thr2set;
 
 			__COUT_INFO__ << chindex << "  " << baseline << "  " << sigma << "  "
-						  << thr2set + offset << __E__;
+			              << thr2set + offset << __E__;
 			writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ichan, thr2set + offset);
 		}
 
@@ -1064,8 +1064,8 @@ void ROCCalorimeterInterface::SetADCsThresholds(int boardID, int offset)
 //==================================================================================================
 
 void ROCCalorimeterInterface::SetBoardVoltages(bool        hvonoff,
-											   int         boardID,
-											   std::string conf)
+                                               int         boardID,
+                                               std::string conf)
 {
 	std::string command = "HVONOFF";
 	float       paramVect[9];
@@ -1275,7 +1275,7 @@ void ROCCalorimeterInterface::SetupForADCsDataTaking(__ARGS__)
 {
 	bool         setThr = __GET_ARG_IN__("Set Threshold? [bool, Default := 0]", bool, 0);
 	unsigned int threshold =
-		__GET_ARG_IN__("Threshold [units of adccounts, Default := 2300]", uint32_t, 2300);
+	    __GET_ARG_IN__("Threshold [units of adccounts, Default := 2300]", uint32_t, 2300);
 
 	SetupForADCsDataTaking(setThr, threshold);
 
@@ -1288,7 +1288,7 @@ void ROCCalorimeterInterface::SetupForADCsDataTaking(__ARGS__)
 void ROCCalorimeterInterface::SetupForNoiseTaking(__ARGS__)
 {
 	unsigned int numberOfsamples =
-		__GET_ARG_IN__("Number of noise samples per evt [Default := 20]", uint32_t, 20);
+	    __GET_ARG_IN__("Number of noise samples per evt [Default := 20]", uint32_t, 20);
 
 	SetupForNoiseTaking(numberOfsamples);
 
@@ -1416,7 +1416,7 @@ void ROCCalorimeterInterface::SetupForADCsDataTaking(bool setThr, unsigned int t
 void ROCCalorimeterInterface::ToggleMBBusy(__ARGS__)
 {
 	unsigned int busyonoff =
-		__GET_ARG_IN__("On/Off [Busy On/Off, Default := 1]", bool, 1);
+	    __GET_ARG_IN__("On/Off [Busy On/Off, Default := 1]", bool, 1);
 	ToggleMBBusy(busyonoff);
 
 }  // end ToggleMBBusy()
@@ -1453,8 +1453,8 @@ void ROCCalorimeterInterface::GetStatus(__ARGS__)
 	   << std::dec << readVal << ")" << __E__;
 	os << "\t\t"
 	   << "bit[9:8]=[enable_marker,enable_clock]"
-		  "\n\t\t bit[7:4]=[en_int_ewm,en_free_ewm,error_en,pattern_en]"
-		  "\n\t\t bit[3:0]=en_lanes[HV1,HV0,CAl1,CAL0]\n"
+	      "\n\t\t bit[7:4]=[en_int_ewm,en_free_ewm,error_en,pattern_en]"
+	      "\n\t\t bit[3:0]=en_lanes[HV1,HV0,CAl1,CAL0]\n"
 	   << __E__;
 
 	address = 18;
@@ -1464,8 +1464,8 @@ void ROCCalorimeterInterface::GetStatus(__ARGS__)
 	   << std::dec << readVal << ")" << __E__;
 	os << "\t\t"
 	   << "bit[9:8]=[enable_marker,enable_clock]"
-		  "\n\t\t bit[7:4]=[en_int_ewm,en_free_ewm,error_en,pattern_en]"
-		  "\n\t\t bit[3:0]=en_lanes[HV1,HV0,CAl1,CAL0]\n"
+	      "\n\t\t bit[7:4]=[en_int_ewm,en_free_ewm,error_en,pattern_en]"
+	      "\n\t\t bit[3:0]=en_lanes[HV1,HV0,CAl1,CAL0]\n"
 	   << __E__;
 
 	address = 72;
@@ -1499,26 +1499,26 @@ void ROCCalorimeterInterface::GetStatus(__ARGS__)
 	uint32_t doubleRegVal = 0;
 
 	std::vector<DTCLib::roc_address_t> doubleReads = {
-		23, 25, 64, 27, 29, 31, 33, 35, 37, 39, 41, 43, 45, 48, 51, 54, 57};
+	    23, 25, 64, 27, 29, 31, 33, 35, 37, 39, 41, 43, 45, 48, 51, 54, 57};
 
 	std::vector<std::string> doubleReadCaptions = {
-		"SIZE_FIFO_FULL[28]+STORE_POS[25:24]+STORE_CNT[19:0]",   // 23,
-		"SIZE_FIFO_EMPTY[28]+FETCH_POS[25:24]+FETCH_CNT[19:0]",  // 25,
-		"no. EVM seen",                                          // 64,
-		"no. HB seen",                                           // 27,
-		"no. null HB seen:",                                     // 29,
-		"no. HB on hold",                                        // 31,
-		"no. PREFETCH seen",                                     // 33,
-		"no. DATA REQ seen",                                     // 35,
-		"no. DATA REQ read from DDR",                            // 37,
-		"no. DATA REQ sent to DTC",                              // 39,
-		"no. DATA REQ with null data",                           // 41,
-		"last SPILL TAG",                                        // 43,
-		"last HB tag",                                           // 45,
-		"last PREFETCH tag",                                     // 48,
-		"last FETCHED tag",                                      // 51,
-		"last DATA REQ tag",                                     // 54,
-		"OFFSET tag",                                            // 57
+	    "SIZE_FIFO_FULL[28]+STORE_POS[25:24]+STORE_CNT[19:0]",   // 23,
+	    "SIZE_FIFO_EMPTY[28]+FETCH_POS[25:24]+FETCH_CNT[19:0]",  // 25,
+	    "no. EVM seen",                                          // 64,
+	    "no. HB seen",                                           // 27,
+	    "no. null HB seen:",                                     // 29,
+	    "no. HB on hold",                                        // 31,
+	    "no. PREFETCH seen",                                     // 33,
+	    "no. DATA REQ seen",                                     // 35,
+	    "no. DATA REQ read from DDR",                            // 37,
+	    "no. DATA REQ sent to DTC",                              // 39,
+	    "no. DATA REQ with null data",                           // 41,
+	    "last SPILL TAG",                                        // 43,
+	    "last HB tag",                                           // 45,
+	    "last PREFETCH tag",                                     // 48,
+	    "last FETCHED tag",                                      // 51,
+	    "last DATA REQ tag",                                     // 54,
+	    "OFFSET tag",                                            // 57
 	};
 
 	for(size_t i = 0; i < doubleReads.size(); ++i)
