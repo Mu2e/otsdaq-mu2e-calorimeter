@@ -1,4 +1,4 @@
-# -*- mode:tcl -*- 
+# -*- mode:tcl -*-
 #------------------------------------------------------------------------------
 # usage: artdaqDriver -c srcs/otsdaq_mu2e_calorimeter/test_CalorimeterVST_001.fcl
 # test_buffer
@@ -15,7 +15,7 @@ run_number         : 401
 #------------------------------------------------------------------------------
 fragment_receiver: {
     generator              : Mu2eCaloEventReceiver    # daq generator plug-in type (defines the shared lib to load)
-    fragment_ids                 : [ 0]       ## [ 0 , 11 ]      
+    fragment_ids                 : [ 0]       ## [ 0 , 11 ]
 }
 
 event_builder: {
@@ -34,7 +34,7 @@ source: {
     module_type: "ArtdaqInput"
 }
 
-services: { #@table::Services.Reco 
+services: { #@table::Services.Reco
     ArtdaqFragmentNamingServiceInterface: {
 	helper_plugin   : "Mu2e"
 	service_provider: "ArtdaqFragmentNamingService"
@@ -58,7 +58,7 @@ physics: {
             module_type: testFragments
         }
     }
-    
+
     t1 :[ a1]
     end_paths : [t1]
 
@@ -94,4 +94,3 @@ outputs: {
 #     }
 # }
 }
-

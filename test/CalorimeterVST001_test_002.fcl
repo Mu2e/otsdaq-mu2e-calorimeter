@@ -1,4 +1,4 @@
-# -*- mode:tcl -*- 
+# -*- mode:tcl -*-
 #------------------------------------------------------------------------------
 # usage: artdaqDriver -c driver_calorimeter_vst.fcl
 #------------------------------------------------------------------------------
@@ -13,7 +13,7 @@ source: {
     module_type: "ArtdaqInput"
 }
 
-services: { @table::Services.Reco 
+services: { @table::Services.Reco
 
     ArtdaqFragmentNamingServiceInterface: {
 	helper_plugin: "Mu2e"
@@ -49,8 +49,8 @@ services: { @table::Services.Reco
 fragment_receiver: {
     generator              : CalorimeterVST001  # daq generator plug-in type (defines the shared lib to load)
     fragment_type          : Mu2e           # generator data fragment type
-    nEvents                :  10            # 
-    nSkip                  :  1             # 
+    nEvents                :  10            #
+    nSkip                  :  1             #
 
     rawOutput              : false
     rawOutputFile          : "/tmp/CalorimeterVST001.bin"
@@ -131,5 +131,3 @@ outputs: {
 # 	}
 #     }
 # }
-
-

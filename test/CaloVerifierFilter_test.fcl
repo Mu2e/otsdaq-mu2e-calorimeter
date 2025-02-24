@@ -26,11 +26,11 @@ source : {
 }
 
 services : {
-  
+
   TimeTracker: {}
 
   ArtdaqSharedMemoryServiceInterface: {
-    service_provider: ArtdaqSharedMemoryService 
+    service_provider: ArtdaqSharedMemoryService
     waiting_time: 1
     resume_after_timeout: true
   }
@@ -39,7 +39,7 @@ services : {
     service_provider: ArtdaqFragmentNamingService
     helper_plugin: Mu2e
   }
-  
+
   GeometryService		:		{inputFile: "Offline/Mu2eG4/geom/geom_common.txt" bFieldFile: "Offline/Mu2eG4/geom/bfgeom_reco_v01.txt" simulatedDetector : {tool_type: "Mu2e"}}
   ConditionsService		:		{ conditionsfile : "Offline/ConditionsService/data/conditions_01.txt"}
   GlobalConstantsService		:		{inputFile : "Offline/GlobalConstantsService/data/globalConstants_01.txt"}
@@ -50,9 +50,9 @@ services : {
 
 physics: {
 
-    
+
   filters: {
-  
+
     caloVerifier : {
       module_type         : CaloDataVerifier
       verbosity           : 0
@@ -63,9 +63,9 @@ physics: {
       stopOnFailure       : false
       checkEWTs           : false
     }
-  
+
   }
-  
+
   producers : {
     genFrags : {
       module_type  : ArtFragmentsFromDTCEvents
@@ -110,10 +110,10 @@ physics: {
       dataType            : 1
     }
   }
-  
+
   t1 : [ caloVerifier ]#, makeCaloDigi ]#, makeCaloReco ]
   e1 : [ ]#caloAnalyzer ]#outfile ] # dump, outfile ]
-  
+
   trigger_paths  : [t1]
   end_paths      : [e1]
 }
@@ -135,4 +135,3 @@ outputs:  {
 services.TFileService.fileName : "CaloVerifierFilter_test.root"
 services.scheduler.wantSummary: true
 services.ArtdaqSharedMemoryServiceInterface: { service_provider: ArtdaqGlobalsService }
-

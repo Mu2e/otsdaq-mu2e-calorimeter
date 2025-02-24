@@ -36,8 +36,8 @@
 #define __COUT__ cout << __FILENAME__ << std::dec << " [" << __LINE__ << "]\t"
 
 // and use this to suppress
-//#define __PRINTF__ if(0) printf
-//#define __COUT__  if(0) cout
+// #define __PRINTF__ if(0) printf
+// #define __COUT__  if(0) cout
 
 using namespace std;
 
@@ -56,7 +56,7 @@ void* get_in_addr(struct sockaddr* sa)
 }
 
 //==============================================================================
-int makeSocket(const char* ip, int port, struct sockaddr_in &ai_addr)
+int makeSocket(const char* ip, int port, struct sockaddr_in& ai_addr)
 {
 	int             sockfd;
 	struct addrinfo hints, *servinfo, *p;
@@ -94,12 +94,12 @@ int makeSocket(const char* ip, int port, struct sockaddr_in &ai_addr)
 		__SS_THROW__;
 	}
 
-	//copy ai_addr, which is needed for sendto
+	// copy ai_addr, which is needed for sendto
 	memcpy(&ai_addr, p->ai_addr, sizeof(ai_addr));
 
 	freeaddrinfo(servinfo);
 	return sockfd;
-} //end makeSocket()
+}  // end makeSocket()
 
 int main(int argc, char** argv)
 {
@@ -164,7 +164,6 @@ int main(int argc, char** argv)
 	}
 
 	freeaddrinfo(servinfo);
-
 
 	struct sockaddr_in ai_addr;
 
@@ -396,8 +395,7 @@ int main(int argc, char** argv)
 							__COUT__ << ((led_register & (1 << (7 - l))) ? '*' : '-');
 						__COUT__ << "\n\n";
 						break;
-					case 0x0000000100000006:
-					{
+					case 0x0000000100000006: {
 						uint32_t           ip;
 						struct sockaddr_in socketAddress;
 						memcpy(
@@ -414,8 +412,7 @@ int main(int argc, char** argv)
 						__COUT__ << std::hex << ":::"
 						         << "Destination MAC address ignored!" << std::endl;
 						break;
-					case 0x0000000100000008:
-					{
+					case 0x0000000100000008: {
 						// unsigned int myport;
 						memcpy((void*)&streamToPort,
 						       (void*)&buff[handlerIndex + RX_DATA_OFFSET],
@@ -427,7 +424,8 @@ int main(int argc, char** argv)
 						if(sendSockfd != -1)
 							close(sendSockfd);
 						sendSockfd = -1;
-						sendSockfd = makeSocket(streamToIP.c_str(), streamToPort, ai_addr);//p);
+						sendSockfd =
+						    makeSocket(streamToIP.c_str(), streamToPort, ai_addr);  // p);
 						if(sendSockfd != -1)
 						{
 							__COUT__ << "************************************************"
