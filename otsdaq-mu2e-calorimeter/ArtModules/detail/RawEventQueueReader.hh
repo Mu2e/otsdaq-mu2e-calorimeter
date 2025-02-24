@@ -12,7 +12,7 @@ namespace detail
 {
 struct RawEventQueueReader : public artdaq::detail::RawEventQueueReader
 {
-	RawEventQueueReader(RawEventQueueReader const&) = delete;
+	RawEventQueueReader(RawEventQueueReader const&)            = delete;
 	RawEventQueueReader& operator=(RawEventQueueReader const&) = delete;
 
 	RawEventQueueReader(fhicl::ParameterSet const&  ps,

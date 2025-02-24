@@ -52,7 +52,7 @@ void* get_in_addr(struct sockaddr* sa)
 }
 
 //==============================================================================
-int makeSocket(const char* ip, int port, struct sockaddr_in &ai_addr)
+int makeSocket(const char* ip, int port, struct sockaddr_in& ai_addr)
 {
 	int             sockfd;
 	struct addrinfo hints, *servinfo, *p;
@@ -90,12 +90,12 @@ int makeSocket(const char* ip, int port, struct sockaddr_in &ai_addr)
 		__SS_THROW__;
 	}
 
-	//copy ai_addr, which is needed for sendto
+	// copy ai_addr, which is needed for sendto
 	memcpy(&ai_addr, p->ai_addr, sizeof(ai_addr));
 
 	freeaddrinfo(servinfo);
 	return sockfd;
-} //end makeSocket()
+}  // end makeSocket()
 
 int main(int argc, char* argv[])
 {
@@ -189,7 +189,12 @@ int main(int argc, char* argv[])
 			       8);  // increment each time
 		packetSz = RX_DATA_OFFSET + buff[1] * 8;
 
-		if((numbytes = sendto(sockfd, buff, packetSz, 0, (struct sockaddr*)&ai_addr, sizeof(ai_addr))) == //p->ai_addr, p->ai_addrlen)) ==
+		if((numbytes = sendto(sockfd,
+		                      buff,
+		                      packetSz,
+		                      0,
+		                      (struct sockaddr*)&ai_addr,
+		                      sizeof(ai_addr))) ==  // p->ai_addr, p->ai_addrlen)) ==
 		   -1)
 		{
 			perror("sw: sendto");
@@ -201,7 +206,12 @@ int main(int argc, char* argv[])
 		              // ///////////////////////////////////////////////////////////
 		packetSz = RX_DATA_OFFSET;
 
-		if((numbytes = sendto(sockfd, buff, packetSz, 0, (struct sockaddr*)&ai_addr, sizeof(ai_addr))) == //p->ai_addr, p->ai_addrlen)) ==
+		if((numbytes = sendto(sockfd,
+		                      buff,
+		                      packetSz,
+		                      0,
+		                      (struct sockaddr*)&ai_addr,
+		                      sizeof(ai_addr))) ==  // p->ai_addr, p->ai_addrlen)) ==
 		   -1)
 		{
 			perror("sw: sendto");
@@ -264,7 +274,12 @@ int main(int argc, char* argv[])
 		memset((void*)&buff[RX_DATA_OFFSET + 7], 1, 1);  // enable data
 		packetSz = RX_DATA_OFFSET + buff[1] * 8;
 
-		if((numbytes = sendto(sockfd, buff, packetSz, 0, (struct sockaddr*)&ai_addr, sizeof(ai_addr))) == //p->ai_addr, p->ai_addrlen)) ==
+		if((numbytes = sendto(sockfd,
+		                      buff,
+		                      packetSz,
+		                      0,
+		                      (struct sockaddr*)&ai_addr,
+		                      sizeof(ai_addr))) ==  // p->ai_addr, p->ai_addrlen)) ==
 		   -1)
 		{
 			perror("sw: sendto");
@@ -283,7 +298,12 @@ int main(int argc, char* argv[])
 		memcpy((void*)&buff[RX_DATA_OFFSET], (void*)&val, 8);
 		packetSz = RX_DATA_OFFSET + buff[1] * 8;
 
-		if((numbytes = sendto(sockfd, buff, packetSz, 0, (struct sockaddr*)&ai_addr, sizeof(ai_addr))) == //p->ai_addr, p->ai_addrlen)) ==
+		if((numbytes = sendto(sockfd,
+		                      buff,
+		                      packetSz,
+		                      0,
+		                      (struct sockaddr*)&ai_addr,
+		                      sizeof(ai_addr))) ==  // p->ai_addr, p->ai_addrlen)) ==
 		   -1)
 		{
 			perror("sw: sendto");
@@ -347,7 +367,12 @@ int main(int argc, char* argv[])
 		memset((void*)&buff[RX_DATA_OFFSET + 7], 0, 1);  // disable data
 		packetSz = RX_DATA_OFFSET + buff[1] * 8;
 
-		if((numbytes = sendto(sockfd, buff, packetSz, 0, (struct sockaddr*)&ai_addr, sizeof(ai_addr))) == //p->ai_addr, p->ai_addrlen)) ==
+		if((numbytes = sendto(sockfd,
+		                      buff,
+		                      packetSz,
+		                      0,
+		                      (struct sockaddr*)&ai_addr,
+		                      sizeof(ai_addr))) ==  // p->ai_addr, p->ai_addrlen)) ==
 		   -1)
 		{
 			perror("sw: sendto");

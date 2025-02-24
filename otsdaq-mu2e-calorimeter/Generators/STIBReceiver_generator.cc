@@ -1,7 +1,7 @@
-#include "otsdaq/Macros/CoutMacros.h"
 #include "otsdaq-demo/Generators/STIBReceiver.hh"
+#include "otsdaq/Macros/CoutMacros.h"
 
-//#include "art/Utilities/Exception.h"
+// #include "art/Utilities/Exception.h"
 #include "artdaq-core/Utilities/SimpleLookupPolicy.h"
 #include "artdaq/Application/GeneratorMacros.hh"
 #include "cetlib/exception.h"

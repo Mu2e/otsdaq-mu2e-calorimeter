@@ -8,9 +8,9 @@
 
 namespace ots
 {
-  class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
-  {
-    // clang-format off
+class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
+{
+	// clang-format off
   public:
     ROCCalorimeterInterface(const std::string&       rocUID,
 			    const ConfigurationTree& theXDAQContextConfigTree,
@@ -153,8 +153,8 @@ namespace ots
 
     static const std::set<DTCLib::roc_address_t>		SPECIAL_BLOCK_READ_ADDRS_;
 
-    // clang-format on
-  };
+	// clang-format on
+};
 
 }  // namespace ots
 

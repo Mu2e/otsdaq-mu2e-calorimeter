@@ -33,9 +33,9 @@
 
 using namespace std;
 
-//#define ZED_IP   "192.168.133.6"    // the ZED IP users will be connecting to
-//#define ZED_IP             "192.168.133.5"    // the ZED IP users will be
-// connecting to
+// #define ZED_IP   "192.168.133.6"    // the ZED IP users will be connecting to
+// #define ZED_IP             "192.168.133.5"    // the ZED IP users will be
+//  connecting to
 #define COMMUNICATION_PORT "2035"  // the port on ZedBoard for communicating with XDAQ
 #define STREAMING_PORT "2036"      // the port on ZedBoard for streaming to XDAQ
 #define DESTINATION_IP "192.168.133.5"  // the IP for the destination of the datastream
