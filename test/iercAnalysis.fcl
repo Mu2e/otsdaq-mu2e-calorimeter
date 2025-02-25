@@ -1,0 +1,33 @@
+#include "Offline/fcl/minimalMessageService.fcl"
+#include "Offline/fcl/standardServices.fcl"
+
+process_name : iercAnalysis
+
+source : {
+   module_type : RootInput
+   fileNames   : @nil
+   maxEvents   : -1
+}
+
+
+physics : {
+
+  analyzers  : {
+    pulseIERCAnalysis : {
+      module_type : CaloiercAnalyzer
+      caloDigiModuleLabel : "CaloDigiIERC"
+      caloDigiInstanceLabel : ""
+      verbosity : 0
+      splineFilename : "/home/mu2edaq/dev_calo/pgirotti_testing/srcs/otsdaq-mu2e-calorimeter/test/ierc_splines_gr4_106139.root"
+    }
+  }
+  
+  t1 : [ ]
+  e1 : [ pulseIERCAnalysis ]
+
+  trigger_paths  : []
+  end_paths      : [e1]
+}
+
+services.scheduler.wantSummary: true
+

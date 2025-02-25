@@ -1,0 +1,97 @@
+#include "Offline/fcl/minimalMessageService.fcl"
+#include "Offline/fcl/standardServices.fcl"
+
+process_name : FragmentToDigi
+
+source : {
+   module_type : RootInput
+   fileNames   : @nil
+   maxEvents   : -1
+}
+
+services : {
+  
+  #@local::Services.Reco
+  GeometryService		:		{inputFile: "Offline/Mu2eG4/geom/geom_common.txt" bFieldFile: "Offline/Mu2eG4/geom/bfgeom_reco_v01.txt" simulatedDetector : {tool_type: "Mu2e"}}
+  #ConditionsService		:		{ conditionsfile : "Offline/ConditionsService/data/conditions_01.txt"}
+  GlobalConstantsService		:		{inputFile : "Offline/GlobalConstantsService/data/globalConstants_01.txt"}
+  DbService		:		@local::DbEmpty
+  ProditionsService		:		@local::Proditions
+  TimeTracker: {}
+}
+
+physics : {
+
+  filters : {
+
+    caloVerifier : {
+      module_type         : CaloDataVerifier
+      verbosity           : 2
+      dataType            : 1
+      metricsLevel        : 2
+      subsystemOverride   : calo
+      produceCaloDecoders : true
+      stopOnFailure       : false
+      checkEWTs           : false
+    }
+  }
+
+  producers : {
+    genFrags : {
+      module_type  : ArtFragmentsFromDTCEvents
+      diagLevel    : 0
+      makeCaloFrag : 1
+      makeTrkFrag  : 0
+      makeCRVFrag  : 0
+      makeSTMFrag  : 0
+    }
+
+    CaloDigi : {
+      module_type : CaloDigiFromFragments
+      dataType : 1
+      diagLevel : 0
+      caloTag : "genFrags"
+      useOfflineID : true
+    }
+
+  }
+
+  analyzers  : {
+
+    caloAnalyzer : {
+      module_type         : CaloDataAnalyzer
+      unpackerModuleLabel   : "genFrags"
+      unpackerInstanceLabel : ""
+      verbosity           : 0
+      dataType            : 1
+    }
+
+  }
+  
+  t0 : [caloVerifier]
+  e0 : [ ]
+
+  t1 : [ genFrags , CaloDigi ]
+  e1 : [ outfile ]
+  
+  t2 : [ genFrags ]
+  e2 : [ caloAnalyzer ]
+
+  trigger_paths  : [t1]
+  end_paths      : [e1]
+}
+
+outputs:  {
+   outfile :  {
+      module_type   :   RootOutput
+      fileName      :   "digis_from_frags_debug.art"
+
+      outputCommands: [
+         "drop *_*_*_*",
+         "keep *_*_*_*"
+      ]
+   }
+}
+
+services.scheduler.wantSummary: true
+
