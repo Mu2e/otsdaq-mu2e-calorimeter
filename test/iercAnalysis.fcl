@@ -21,7 +21,7 @@ physics : {
       splineFilename : "/home/mu2edaq/dev_calo/pgirotti_testing/srcs/otsdaq-mu2e-calorimeter/test/ierc_splines_gr4_106139.root"
     }
   }
-  
+
   t1 : [ ]
   e1 : [ pulseIERCAnalysis ]
 
@@ -30,4 +30,3 @@ physics : {
 }
 
 services.scheduler.wantSummary: true
-
