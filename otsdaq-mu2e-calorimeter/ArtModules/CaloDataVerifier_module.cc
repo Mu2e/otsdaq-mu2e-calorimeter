@@ -32,33 +32,17 @@ namespace mu2e
 class CaloDataVerifier : public art::EDFilter
 {
   public:
-	struct Config
-	{
-		fhicl::Atom<int> verbosity{
-		    fhicl::Name("verbosity"), fhicl::Comment("Verbosity [0-2]"), 0};
-		fhicl::Atom<int> data_type{
-		    fhicl::Name("dataType"),
-		    fhicl::Comment("Data type (0:standard, 1:debug, 2:counters)"),
-		    0};
-		fhicl::Atom<int> metrics_level{
-		    fhicl::Name("metricsLevel"), fhicl::Comment("Metrics reporting level"), 1};
-		fhicl::Atom<bool> produce_calo_decoders{
-		    fhicl::Name("produceCaloDecoders"),
-		    fhicl::Comment("Produce calo decoders [default: true]"),
-		    true};
-		fhicl::Atom<bool> stop_on_failure{
-		    fhicl::Name("stopOnFailure"),
-		    fhicl::Comment("Throw exception if checks fail [default: false]"),
-		    false};
-		fhicl::Atom<bool> check_ewts{
-		    fhicl::Name("checkEWTs"),
-		    fhicl::Comment("Check for EWT continuity across events [default: false]"),
-		    false};
-		fhicl::Atom<std::string> subsystem_override{
-		    fhicl::Name("subsystemOverride"),
-		    fhicl::Comment("Override calo subsystem [\"calo\", \"tracker\"]"),
-		    "calo"};
-	};
+	// clang-format off
+    struct Config {
+      fhicl::Atom<int> verbosity {fhicl::Name("verbosity" ) , fhicl::Comment("Verbosity [0-2]"), 0};
+      fhicl::Atom<int> data_type {fhicl::Name("dataType" ) , fhicl::Comment("Data type (0:standard, 1:debug, 2:counters)"), 0};
+      fhicl::Atom<int> metrics_level {fhicl::Name("metricsLevel" ) , fhicl::Comment("Metrics reporting level"), 1};
+      fhicl::Atom<bool> produce_calo_decoders {fhicl::Name("produceCaloDecoders" ) , fhicl::Comment("Produce calo decoders [default: true]"), true};
+      fhicl::Atom<bool> stop_on_failure {fhicl::Name("stopOnFailure" ) , fhicl::Comment("Throw exception if checks fail [default: false]"), false};
+      fhicl::Atom<bool> check_ewts {fhicl::Name("checkEWTs" ) , fhicl::Comment("Check for EWT continuity across events [default: false]"), false};
+      fhicl::Atom<std::string> subsystem_override {fhicl::Name("subsystemOverride" ) , fhicl::Comment("Override calo subsystem [\"calo\", \"tracker\"]"), "calo"};
+    };
+	// clang-format on
 
 	explicit CaloDataVerifier(const art::EDFilter::Table<Config>& config);
 
@@ -611,7 +595,7 @@ void mu2e::CaloDataVerifier::processCaloData(
 		std::cout << "========== THIS EVENT HAS SOME FAILURES ===========\n";
 		std::cout << "===================================================\n";
 		std::cout << "\n----- Dumping previous event -----\n\n";
-		printEvent(*previousDTCEvent);
+		// printEvent(*previousDTCEvent);
 		std::cout << "\n----- Dumping current event -----\n\n";
 		printEvent(dtcevent);
 	}
@@ -767,7 +751,7 @@ void mu2e::CaloDataVerifier::printEvent(const DTCLib::DTC_Event& dtcevent)
 	std::vector<DTCLib::DTC_SubEvent> subevents = dtcevent.GetSubEvents();
 	for(uint idtc = 0; idtc < subevents.size(); idtc++)
 	{
-		std::cout << "-- DTC " << idtc << " --\n";
+		std::cout << "-- DTC " << int(subevents[idtc].GetDTCID()) << " --\n";
 		printSubEvent(subevents[idtc]);
 	}
 }
@@ -826,6 +810,17 @@ void mu2e::CaloDataVerifier::printROC(const DTCLib::DTC_DataBlock& dataBlock)
 		std::cout << std::hex << std::setw(4) << std::setfill('0') << dataPtr[word]
 		          << std::dec << " ";
 		if(word % 16 == 15)
+			std::cout << std::endl;
+	}
+	std::cout << "--- DECODED WORDS --- " << std::endl;
+	uint n12bitWords = 21 * (dataBlock.GetHeader()->GetPacketCount() / 2);
+	mu2e::CalorimeterDataDecoder::Data12bitReader reader(
+	    reinterpret_cast<uint16_t const*>(dataBlock.GetData()));
+	for(size_t word = 0; word < n12bitWords; word++)
+	{
+		std::cout << std::hex << std::setw(3) << std::setfill('0') << reader[word]
+		          << std::dec << " ";
+		if(word % 21 == 20)
 			std::cout << std::endl;
 	}
 	return;
