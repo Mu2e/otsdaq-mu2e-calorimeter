@@ -13,8 +13,7 @@
 */
 using namespace ots;
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
 	// Variables
 	const int          supervisorInstance_    = 1;
 	const unsigned int configurationKeyValue_ = 1;
@@ -49,8 +48,7 @@ int main(int argc, char** argv)
 	unsigned int second  = 1000;  // x1ms
 	unsigned int time    = 60 * 60 * second;
 	unsigned int counter = 0;
-	while(counter++ < time)
-	{
+	while(counter++ < time) {
 		theInterface_->running();  // There is a 1ms sleep inside the running
 		                           // std::cout << counter << std::endl;
 	}

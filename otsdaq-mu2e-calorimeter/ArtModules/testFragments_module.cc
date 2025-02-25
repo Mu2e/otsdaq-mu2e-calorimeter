@@ -21,13 +21,11 @@
 #include "TH1.h"
 #include "trace.h"
 
-namespace mu2e
-{
+namespace mu2e {
 class testFragments;
 }
 
-class mu2e::testFragments : public art::EDAnalyzer
-{
+class mu2e::testFragments : public art::EDAnalyzer {
   public:
 	explicit testFragments(fhicl::ParameterSet const& pset);
 	virtual void analyze(art::Event const& evt);
@@ -39,22 +37,19 @@ class mu2e::testFragments : public art::EDAnalyzer
 };
 
 mu2e::testFragments::testFragments(fhicl::ParameterSet const& pset)
-    : EDAnalyzer{pset}, caloFragmentsTag_{"calo"}
-{
+    : EDAnalyzer{pset}, caloFragmentsTag_{"calo"} {
 	art::ServiceHandle<art::TFileService> tfs;
 	// testTree  = tfs->make<TTree>("test", "test");
 	// testTree->Branch("nSize", &_nSize, "nSize/F");
 	testHist = tfs->make<TH1F>("test", "test", 100, 0., 500.);
 }
 
-void mu2e::testFragments::analyze(art::Event const& e)
-{
+void mu2e::testFragments::analyze(art::Event const& e) {
 	std::cout << " [testFragments] analyzer testing simulated events " << std::endl;
 	std::vector<art::Handle<artdaq::Fragments>> vah = e.getMany<artdaq::Fragments>();
 
 	std::cout << "[testFragments] size " << vah.size() << std::endl;
-	for(auto const& calFragments : vah)
-	{
+	for(auto const& calFragments : vah) {
 		const art::Provenance* prov = calFragments.provenance();
 
 		std::string fcn   = prov->friendlyClassName();
@@ -67,8 +62,7 @@ void mu2e::testFragments::analyze(art::Event const& e)
 
 		size_t totalSize = 0;
 
-		for(size_t idx = 0; idx < calFragments->size(); ++idx)
-		{
+		for(size_t idx = 0; idx < calFragments->size(); ++idx) {
 			auto size = ((*calFragments)[idx]).size() * sizeof(artdaq::RawDataType);
 			testHist->Fill(size);
 			totalSize += size;

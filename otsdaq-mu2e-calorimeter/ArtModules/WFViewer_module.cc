@@ -32,10 +32,8 @@
 #include <sstream>
 #include <vector>
 
-namespace ots
-{
-class WFViewer : public art::EDAnalyzer
-{
+namespace ots {
+class WFViewer : public art::EDAnalyzer {
   public:
 	explicit WFViewer(fhicl::ParameterSet const& p);
 	virtual ~WFViewer() = default;
@@ -80,15 +78,12 @@ ots::WFViewer::WFViewer(fhicl::ParameterSet const& ps)
     , graphs_(fragment_ids_.size())
     , histograms_(fragment_ids_.size())
     , outputFileName_(ps.get<std::string>("fileName", "otsdaqdemo_onmon.root"))
-    , writeOutput_(ps.get<bool>("write_to_file", false))
-{
+    , writeOutput_(ps.get<bool>("write_to_file", false)) {
 	__COUT__ << "WFViewer CONSTRUCTOR BEGIN!!!!" << std::endl;
 	prescale_ = 1;
 	if(num_x_plots_ == std::numeric_limits<std::size_t>::max() ||
-	   num_y_plots_ == std::numeric_limits<std::size_t>::max())
-	{
-		switch(fragment_ids_.size())
-		{
+	   num_y_plots_ == std::numeric_limits<std::size_t>::max()) {
+		switch(fragment_ids_.size()) {
 		case 1:
 			num_x_plots_ = num_y_plots_ = 1;
 			break;
@@ -120,8 +115,7 @@ ots::WFViewer::WFViewer(fhicl::ParameterSet const& ps)
 	// id_to_index_ will translate between a fragment's ID and where in
 	// the vector of graphs and histograms it's located
 
-	for(std::size_t i_f = 0; i_f < fragment_ids_.size(); ++i_f)
-	{
+	for(std::size_t i_f = 0; i_f < fragment_ids_.size(); ++i_f) {
 		id_to_index_[fragment_ids_[i_f]] = i_f;
 	}
 
@@ -141,14 +135,12 @@ ots::WFViewer::WFViewer(fhicl::ParameterSet const& ps)
 	std::cout << __COUT_HDR_FL__ << "WFViewer CONSTRUCTOR END" << std::endl;
 }
 
-double ots::WFViewer::calcmean(const float* data)
-{
+double ots::WFViewer::calcmean(const float* data) {
 	int    ii;
 	double mean = 0;
 	// uint32_t *lp;
 	// lp = (uint32_t *)data;
-	for(ii = 0; ii < 10; ii++)
-	{
+	for(ii = 0; ii < 10; ii++) {
 		// std::cout << __COUT_HDR_FL__ << " DJN+ " <<  data[ii] << std::endl;
 		mean += data[ii];
 	}
@@ -167,8 +159,7 @@ double ots::WFViewer::calcmean(const float* data)
 	return mean;
 }
 
-void ots::WFViewer::analyze(art::Event const& e)
-{
+void ots::WFViewer::analyze(art::Event const& e) {
 	std::cout << __COUT_HDR_FL__ << "WFViewer Analyzing event " << e.event() << std::endl;
 	static std::size_t evt_cntr = -1;
 	evt_cntr++;
@@ -180,8 +171,7 @@ void ots::WFViewer::analyze(art::Event const& e)
 
 	artdaq::Fragments fragments;
 
-	for(auto label : fragment_type_labels_)
-	{
+	for(auto label : fragment_type_labels_) {
 		art::Handle<artdaq::Fragments> fragments_with_label;
 
 		e.getByLabel("daq", label, fragments_with_label);
@@ -194,8 +184,7 @@ void ots::WFViewer::analyze(art::Event const& e)
 		// std::cout << __COUT_HDR_FL__ << "WFViewer: There are " <<
 		// (*fragments_with_label).size() << " fragments in this event" << std::endl;
 
-		for(auto frag : *fragments_with_label)
-		{
+		for(auto frag : *fragments_with_label) {
 			fragments.emplace_back(frag);
 		}
 	}
@@ -218,8 +207,7 @@ void ots::WFViewer::analyze(art::Event const& e)
 	    std::numeric_limits<artdaq::Fragment::sequence_id_t>::max();
 
 	//  for (std::size_t i = 0; i < fragments.size(); ++i) {
-	for(const auto& frag : fragments)
-	{
+	for(const auto& frag : fragments) {
 		// Pointers to the types of fragment overlays WFViewer can handle;
 		// only one will be used per fragment, of course
 
@@ -229,13 +217,11 @@ void ots::WFViewer::analyze(art::Event const& e)
 
 		//    if (i == 0)
 		if(expected_sequence_id ==
-		   std::numeric_limits<artdaq::Fragment::sequence_id_t>::max())
-		{
+		   std::numeric_limits<artdaq::Fragment::sequence_id_t>::max()) {
 			expected_sequence_id = frag.sequenceID();
 		}
 
-		if(expected_sequence_id != frag.sequenceID())
-		{
+		if(expected_sequence_id != frag.sequenceID()) {
 			TLOG(TLVL_WARNING, "WFViewer")
 			    << "Warning in WFViewer: expected fragment with sequence ID "
 			    << expected_sequence_id << ", received one with sequence ID "
@@ -253,8 +239,7 @@ void ots::WFViewer::analyze(art::Event const& e)
 		// quantity, this would need to be edited should these values
 		// change.
 
-		switch(fragtype)
-		{
+		switch(fragtype) {
 		case FragmentType::DataGen:
 			drPtr.reset(new DataGenFragment(frag));
 			break;
@@ -269,8 +254,7 @@ void ots::WFViewer::analyze(art::Event const& e)
 		// If a histogram doesn't exist for this board_id / fragment_id combo,
 		// create it
 
-		if(!histograms_[ind])
-		{
+		if(!histograms_[ind]) {
 			histograms_[ind] = std::unique_ptr<TH1D>(
 			    new TH1D(Form("Fragment_%d_hist", fragment_id),
 			             "Title Dennis",
@@ -288,8 +272,7 @@ void ots::WFViewer::analyze(art::Event const& e)
 		// Is there some way to templatize an ART module? If not, we're
 		// stuck with this switch code...
 
-		switch(fragtype)
-		{
+		switch(fragtype) {
 		case FragmentType::DataGen:
 			// for (auto val = drPtr->dataBegin(); val <= drPtr->dataEnd(); ++val )
 			{
@@ -309,8 +292,7 @@ void ots::WFViewer::analyze(art::Event const& e)
 			                     fragmentTypeToString(fragtype));
 		}
 
-		if(evt_cntr % prescale_ - 1 && prescale_ > 1)
-		{
+		if(evt_cntr % prescale_ - 1 && prescale_ > 1) {
 			continue;
 		}
 
@@ -322,22 +304,19 @@ void ots::WFViewer::analyze(art::Event const& e)
 		canvas_[0]->Modified();
 		canvas_[0]->Update();
 
-		if(writeOutput_)
-		{
+		if(writeOutput_) {
 			canvas_[0]->Write("wf0", TObject::kOverwrite);
 			fFile_->Write();
 		}
 	}
 }
 
-void ots::WFViewer::beginRun(art::Run const& e)
-{
+void ots::WFViewer::beginRun(art::Run const& e) {
 	if(e.run() == current_run_)
 		return;
 	current_run_ = e.run();
 
-	if(writeOutput_)
-	{
+	if(writeOutput_) {
 		fFile_ = new TFile(outputFileName_.c_str(), "RECREATE");
 		fFile_->cd();
 	}
@@ -349,8 +328,7 @@ void ots::WFViewer::beginRun(art::Run const& e)
 	for(auto& x : histograms_)
 		x = 0;
 
-	for(int i = 0; i < 1; i++)
-	{
+	for(int i = 0; i < 1; i++) {
 		canvas_[i] = std::unique_ptr<TCanvas>(new TCanvas(Form("wf%d", i)));
 		canvas_[i]->Divide(num_x_plots_, num_y_plots_);
 		canvas_[i]->Update();
@@ -359,8 +337,7 @@ void ots::WFViewer::beginRun(art::Run const& e)
 
 	canvas_[0]->SetTitle("ADC Value Distribution");
 
-	if(writeOutput_)
-	{
+	if(writeOutput_) {
 		canvas_[0]->Write();
 	}
 }

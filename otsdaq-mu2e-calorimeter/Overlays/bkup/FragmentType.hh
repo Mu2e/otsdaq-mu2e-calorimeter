@@ -2,12 +2,9 @@
 #define artdaq_ots_Overlays_FragmentType_hh
 #include "artdaq-core/Data/Fragment.hh"
 
-namespace ots
-{
-namespace detail
-{
-enum FragmentType : artdaq::Fragment::type_t
-{
+namespace ots {
+namespace detail {
+enum FragmentType : artdaq::Fragment::type_t {
 	MISSED = artdaq::Fragment::FirstUserFragmentType,
 	UDP,
 	STIB,

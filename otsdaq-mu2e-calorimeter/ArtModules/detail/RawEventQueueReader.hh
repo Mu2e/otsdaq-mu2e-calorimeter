@@ -6,12 +6,9 @@
 
 #include "artdaq/ArtModules/detail/RawEventQueueReader.hh"
 
-namespace ots
-{
-namespace detail
-{
-struct RawEventQueueReader : public artdaq::detail::RawEventQueueReader
-{
+namespace ots {
+namespace detail {
+struct RawEventQueueReader : public artdaq::detail::RawEventQueueReader {
 	RawEventQueueReader(RawEventQueueReader const&)            = delete;
 	RawEventQueueReader& operator=(RawEventQueueReader const&) = delete;
 
@@ -23,9 +20,7 @@ struct RawEventQueueReader : public artdaq::detail::RawEventQueueReader
 	                    art::ProductRegistryHelper& help,
 	                    art::SourceHelper const&    pm,
 	                    art::MasterProductRegistry&)
-	    : RawEventQueueReader(ps, help, pm)
-	{
-	}
+	    : RawEventQueueReader(ps, help, pm) {}
 };
 
 }  // namespace detail
@@ -33,11 +28,9 @@ struct RawEventQueueReader : public artdaq::detail::RawEventQueueReader
 
 // Specialize an art source trait to tell art that we don't care about
 // source.fileNames and don't want the files services to be used.
-namespace art
-{
+namespace art {
 template<>
-struct Source_generator<ots::detail::RawEventQueueReader>
-{
+struct Source_generator<ots::detail::RawEventQueueReader> {
 	static constexpr bool value = true;
 };
 }  // namespace art

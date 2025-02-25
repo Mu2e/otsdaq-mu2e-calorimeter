@@ -19,13 +19,11 @@
 
 #include <iostream>
 
-namespace ots
-{
+namespace ots {
 class STIBFragmentWriter;
 }
 
-class ots::STIBFragmentWriter : public ots::STIBFragment
-{
+class ots::STIBFragmentWriter : public ots::STIBFragment {
   public:
 	STIBFragmentWriter(artdaq::Fragment& f);
 
@@ -38,29 +36,24 @@ class ots::STIBFragmentWriter : public ots::STIBFragment
 	// We'll need to hide the const version of header in STIBFragment in
 	// order to be able to perform writes
 
-	Header* header_()
-	{
+	Header* header_() {
 		assert(artdaq_Fragment_.dataSizeBytes() >= sizeof(Header));
 		return reinterpret_cast<Header*>(artdaq_Fragment_.dataBeginBytes());
 	}
 
-	void set_hdr_bunch_counter(Header::counter_t counter)
-	{
+	void set_hdr_bunch_counter(Header::counter_t counter) {
 		header_()->bunch_counter = counter;
 	}
 
-	void set_hdr_trigger_counter(Header::counter_t counter)
-	{
+	void set_hdr_trigger_counter(Header::counter_t counter) {
 		header_()->trigger_counter = counter;
 	}
 
-	void set_hdr_trigger_input0(Header::counter_t input)
-	{
+	void set_hdr_trigger_input0(Header::counter_t input) {
 		header_()->trigger_input0 = input;
 	}
 
-	void set_hdr_trigger_input1(Header::counter_t input)
-	{
+	void set_hdr_trigger_input1(Header::counter_t input) {
 		header_()->trigger_input1 = input;
 	}
 
@@ -81,10 +74,8 @@ class ots::STIBFragmentWriter : public ots::STIBFragment
 // STIBFragment::Metadata object, otherwise it throws
 
 ots::STIBFragmentWriter::STIBFragmentWriter(artdaq::Fragment& f)
-    : STIBFragment(f), artdaq_Fragment_(f)
-{
-	if(!f.hasMetadata() || f.dataSizeBytes() > 0)
-	{
+    : STIBFragment(f), artdaq_Fragment_(f) {
+	if(!f.hasMetadata() || f.dataSizeBytes() > 0) {
 		throw cet::exception(
 		    "Error in STIBFragmentWriter: Raw artdaq::Fragment "
 		    "object does not appear to consist of (and only of) "
@@ -95,32 +86,27 @@ ots::STIBFragmentWriter::STIBFragmentWriter(artdaq::Fragment& f)
 	artdaq_Fragment_.resizeBytes(sizeof(Header));
 }
 
-inline uint8_t* ots::STIBFragmentWriter::dataBegin()
-{
+inline uint8_t* ots::STIBFragmentWriter::dataBegin() {
 	// Make sure there's data past the STIBFragment header
 	assert(artdaq_Fragment_.dataSizeBytes() >=
 	       sizeof(Header) + sizeof(artdaq::Fragment::value_type));
 	return reinterpret_cast<uint8_t*>(header_() + 1);
 }
 
-inline uint8_t* ots::STIBFragmentWriter::dataEnd()
-{
+inline uint8_t* ots::STIBFragmentWriter::dataEnd() {
 	return dataBegin() + stib_data_words();
 }
 
-inline void ots::STIBFragmentWriter::resize(size_t nBytes)
-{
+inline void ots::STIBFragmentWriter::resize(size_t nBytes) {
 	artdaq_Fragment_.resizeBytes(sizeof(Header::data_t) * calc_event_size_words_(nBytes));
 	header_()->event_size = calc_event_size_words_(nBytes);
 }
 
-inline size_t ots::STIBFragmentWriter::calc_event_size_words_(size_t nBytes)
-{
+inline size_t ots::STIBFragmentWriter::calc_event_size_words_(size_t nBytes) {
 	return bytes_to_words_(nBytes) + hdr_size_words();
 }
 
-inline size_t ots::STIBFragmentWriter::bytes_to_words_(size_t nBytes)
-{
+inline size_t ots::STIBFragmentWriter::bytes_to_words_(size_t nBytes) {
 	auto mod(nBytes % bytes_per_word_());
 	return (mod == 0) ? nBytes / bytes_per_word_() : nBytes / bytes_per_word_() + 1;
 }

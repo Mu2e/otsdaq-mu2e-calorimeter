@@ -34,10 +34,8 @@
 #include "TTree.h"
 #include "art_root_io/TFileService.h"
 
-namespace mu2e
-{
-class CaloDataAnalyzer : public art::EDAnalyzer
-{
+namespace mu2e {
+class CaloDataAnalyzer : public art::EDAnalyzer {
   public:
 	// clang-format off
     struct Config {
@@ -139,8 +137,7 @@ mu2e::CaloDataAnalyzer::CaloDataAnalyzer(const art::EDAnalyzer::Table<Config>& c
     , data_type_(config().data_type())
     , caloDAQUtil_("CaloDigiFromFragments")
     , maxEventNum_(config().maxEventNum())
-    , fillEmptyEvents_(config().fillEmptyEvents())
-{
+    , fillEmptyEvents_(config().fillEmptyEvents()) {
 	art::ServiceHandle<art::TFileService> tfs;
 
 	h1_t0 = tfs->make<TH1D>("h1_t0", "t0 distribution;t0", 2000, 0, 20000);
@@ -212,8 +209,7 @@ mu2e::CaloDataAnalyzer::CaloDataAnalyzer(const art::EDAnalyzer::Table<Config>& c
 	total_failedhits = 0;
 }
 
-void mu2e::CaloDataAnalyzer::analyze(art::Event const& event)
-{
+void mu2e::CaloDataAnalyzer::analyze(art::Event const& event) {
 	art::EventNumber_t eventNumber = event.event();
 	// TLOG(TLVL_INFO) << "mu2e::CaloDataAnalyzer::analyzer eventNumber= " <<
 	// (int)eventNumber << std::endl;
@@ -247,12 +243,10 @@ void mu2e::CaloDataAnalyzer::analyze(art::Event const& event)
 	        caloFragmentsTag_);
 
 	TLOG(TLVL_DEBUG + 6) << "Iterating through " << caloDecoderColl->size() << " DTCs\n";
-	for(auto caloDTC : *caloDecoderColl)
-	{
+	for(auto caloDTC : *caloDecoderColl) {
 		processCaloData(caloDTC);
 	}
-	if(fillEmptyEvents_ || t_nhits > 0)
-	{
+	if(fillEmptyEvents_ || t_nhits > 0) {
 		tree->Fill();  // Only fill if we have at least 1 hit
 	}
 	total_events++;
@@ -264,8 +258,7 @@ void mu2e::CaloDataAnalyzer::analyze(art::Event const& event)
 	TLOG(TLVL_DEBUG + 6) << "[CaloDataAnalyzer::analyzer] found " << t_nhits
 	                     << " calo hits in event " << (int)eventNumber;
 
-	if(nCaloEvents == 0)
-	{
+	if(nCaloEvents == 0) {
 		TLOG(TLVL_WARNING)
 		    << "[CaloDataAnalyzer::analyzer] found no calo subevents in event "
 		    << (int)eventNumber << "!";
@@ -276,8 +269,7 @@ void mu2e::CaloDataAnalyzer::analyze(art::Event const& event)
 }
 
 void mu2e::CaloDataAnalyzer::processCaloData(
-    mu2e::CalorimeterDataDecoder const& caloDecoder)
-{
+    mu2e::CalorimeterDataDecoder const& caloDecoder) {
 	auto&    this_subevent  = caloDecoder.event_;
 	long int thisDTCEWT     = this_subevent.GetEventWindowTag().GetEventWindowTag(true);
 	t_currentDTCEventWindow = thisDTCEWT;
@@ -289,25 +281,21 @@ void mu2e::CaloDataAnalyzer::processCaloData(
 	uint                               nROCs      = caloDecoder.block_count();
 	TLOG(TLVL_DEBUG + 6) << "Iterating through " << nROCs << " data blocks (ROCs)\n";
 	std::vector<int> roc_hits;
-	for(uint iroc = 0; iroc < nROCs; iroc++)
-	{
+	for(uint iroc = 0; iroc < nROCs; iroc++) {
 		long int thisROCEWT =
 		    dataBlocks[iroc].GetHeader().get()->GetEventWindowTag().GetEventWindowTag(
 		        true);
 		g_eventEWT->AddPoint(this_eventNumber, thisROCEWT);
-		if(data_type_ == 0)
-		{  /////// STANDARD HITS ///////
+		if(data_type_ == 0) {  /////// STANDARD HITS ///////
 
 			auto caloHits = caloDecoder.GetCalorimeterHitData(iroc);
 			uint nHits    = caloHits->size();
 			roc_hits.push_back(nHits);
-			for(uint ihit = 0; ihit < nHits; ihit++)
-			{
+			for(uint ihit = 0; ihit < nHits; ihit++) {
 				mu2e::CalorimeterDataDecoder::CalorimeterHitDataPacket hit =
 				    caloHits->at(ihit).first;
 				std::vector<uint16_t> hit_waveform = caloHits->at(ihit).second;
-				if(hit_waveform.size() == 0)
-				{
+				if(hit_waveform.size() == 0) {
 					TLOG(TLVL_WARNING)
 					    << "[CaloDataAnalyzer::analyzer] found empty waveform! DTC "
 					    << dtcID << " ROC " << iroc << " hit " << ihit << " BoardID "
@@ -315,29 +303,24 @@ void mu2e::CaloDataAnalyzer::processCaloData(
 				}
 				nCaloHits++;
 			}
-		}
-		else if(data_type_ == 1)
-		{  /////// DEBUG HITS ///////
+		} else if(data_type_ == 1) {  /////// DEBUG HITS ///////
 			auto caloHits = caloDecoder.GetCalorimeterHitTestData(iroc);
 			// auto caloHits = caloDecoder.GetCalorimeterHitTestDataNoPointer(iroc);
 			uint nHits = caloHits->size();
 			roc_hits.push_back(nHits);
 
 			total_hits += nHits;
-			for(uint ihit = 0; ihit < nHits; ihit++)
-			{
+			for(uint ihit = 0; ihit < nHits; ihit++) {
 				mu2e::CalorimeterDataDecoder::CalorimeterHitTestDataPacket hit =
 				    caloHits->at(ihit).first;
 				std::vector<uint16_t> hit_waveform = caloHits->at(ihit).second;
 
 				// Check that the hit is good
 				auto errorCode = caloDAQUtil_.isHitGood(caloHits->at(ihit));
-				if(errorCode)
-				{
+				if(errorCode) {
 					event_failedhits++;
 					total_failedhits++;
-					if(verbosity_ > 0)
-					{
+					if(verbosity_ > 0) {
 						std::cout << "[CaloDataAnalyzer] BAD calo hit! DTC: " << dtcID
 						          << ", ROC: " << iroc << ", hit number: " << ihit
 						          << " [failure code: " << errorCode << "]" << std::endl;
@@ -357,8 +340,7 @@ void mu2e::CaloDataAnalyzer::processCaloData(
 				h1_maxIndex->Fill(hit.IndexOfMaxDigitizerSample);
 				h1_nSamples->Fill(hit.NumberOfSamples);
 
-				for(uint wfi = 0; wfi < hit_waveform.size(); wfi++)
-				{
+				for(uint wfi = 0; wfi < hit_waveform.size(); wfi++) {
 					h2_waveforms->Fill(wfi, hit_waveform[wfi]);
 				}
 
@@ -376,21 +358,17 @@ void mu2e::CaloDataAnalyzer::processCaloData(
 				t_peakval[t_nhits - 1]     = hit_waveform[hit.IndexOfMaxDigitizerSample];
 				t_nofsamples[t_nhits - 1]  = hit.NumberOfSamples;
 				t_firstsample[t_nhits - 1] = t_nsamples;
-				for(auto adc : hit_waveform)
-				{
+				for(auto adc : hit_waveform) {
 					t_ADC[t_nsamples] = adc;
 					t_nsamples++;
 				}
 				t_ADC_hit->push_back(hit_waveform);
 			}
-		}
-		else if(data_type_ == 2)
-		{  /////// COUNTERS ///////
+		} else if(data_type_ == 2) {  /////// COUNTERS ///////
 			auto caloHits = caloDecoder.GetCalorimeterCountersData(iroc);
 			uint nHits    = caloHits->size();
 			roc_hits.push_back(nHits);
-			for(uint ihit = 0; ihit < nHits; ihit++)
-			{
+			for(uint ihit = 0; ihit < nHits; ihit++) {
 				mu2e::CalorimeterDataDecoder::CalorimeterCountersDataPacket hit =
 				    caloHits->at(ihit).first;
 				std::vector<uint32_t> hit_counters = caloHits->at(ihit).second;
@@ -400,8 +378,7 @@ void mu2e::CaloDataAnalyzer::processCaloData(
 				tH_linkID     = iroc;
 				tH_nofsamples = hit.numberOfCounters;
 				tH_ADC->clear();
-				for(auto adc : hit_counters)
-				{
+				for(auto adc : hit_counters) {
 					tH_ADC->push_back(adc);
 				}
 				treeHits->Fill();
@@ -411,8 +388,7 @@ void mu2e::CaloDataAnalyzer::processCaloData(
 	}  // loop over ROCs
 }
 
-void mu2e::CaloDataAnalyzer::endJob()
-{
+void mu2e::CaloDataAnalyzer::endJob() {
 	std::cout << "\n ----- [CaloDataAnalyzer] Decoding errors summary ----- "
 	          << std::endl;
 	std::cout << "Total events: " << total_events << "\n";

@@ -17,8 +17,7 @@ DemoDQMHistos::DemoDQMHistos(void) {}
 DemoDQMHistos::~DemoDQMHistos(void) {}
 
 //========================================================================================================================
-void DemoDQMHistos::book(TFile* rootFile)
-{
+void DemoDQMHistos::book(TFile* rootFile) {
 	std::cout << "Booking start!" << std::endl;
 	TDirectory* currentDir = rootFile->mkdir("General", "General");
 	currentDir->cd();
@@ -28,8 +27,7 @@ void DemoDQMHistos::book(TFile* rootFile)
 }
 
 //========================================================================================================================
-void DemoDQMHistos::fill(std::string& buffer, std::map<std::string, std::string> header)
-{
+void DemoDQMHistos::fill(std::string& buffer, std::map<std::string, std::string> header) {
 	std::stringstream  ss;
 	unsigned long long dataQW = *((unsigned long long*)&((buffer)[2]));
 	{  // print
@@ -53,8 +51,7 @@ void DemoDQMHistos::fill(std::string& buffer, std::map<std::string, std::string>
 }
 
 //========================================================================================================================
-void DemoDQMHistos::load(std::string fileName)
-{
+void DemoDQMHistos::load(std::string fileName) {
 	/*LORE 2016 MUST BE FIXED THIS MONDAY
 	      DQMHistosBase::openFile (fileName);
 	      numberOfTriggers_ = (TH1I*)theFile_->Get("General/NumberOfTriggers");

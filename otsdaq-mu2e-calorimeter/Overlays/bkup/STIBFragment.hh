@@ -9,16 +9,14 @@
 
 // Implementation of "STIBFragment", an artdaq::Fragment overlay class
 
-namespace ots
-{
+namespace ots {
 class STIBFragment;
 
 // Let the "<<" operator dump the STIBFragment's data to stdout
 std::ostream& operator<<(std::ostream&, STIBFragment const&);
 }  // namespace ots
 
-class ots::STIBFragment
-{
+class ots::STIBFragment {
   public:
 	// The "Metadata" struct is used to store info primarily related to
 	// the upstream hardware environment from where the fragment came
@@ -28,8 +26,7 @@ class ots::STIBFragment
 	// its size via the static "size_words" variable (
 	// STIBFragment::Metadata::size_words )
 
-	struct Metadata
-	{
+	struct Metadata {
 		typedef uint64_t data_t;
 
 		data_t port : 16;
@@ -57,8 +54,7 @@ class ots::STIBFragment
 	// that you can't represent a fragment larger than 2**28 units of
 	// data_t, or 1,073,741,824 bytes
 
-	struct Header
-	{
+	struct Header {
 		typedef uint32_t data_t;
 
 		typedef uint32_t event_size_t;
@@ -100,8 +96,7 @@ class ots::STIBFragment
 	size_t stib_data_words() const { return hdr_event_size() - hdr_size_words(); }
 
 	// Start of the STIB data, returned as a pointer
-	uint32_t const* dataBegin() const
-	{
+	uint32_t const* dataBegin() const {
 		return reinterpret_cast<uint32_t const*>(header_() + 1);
 	}
 
@@ -113,8 +108,7 @@ class ots::STIBFragment
 	// this fragment overlay's concept of a unit of data (i.e.,
 	// Header::data_t).
 
-	static constexpr size_t bytes_per_word_()
-	{
+	static constexpr size_t bytes_per_word_() {
 		return sizeof(Header::data_t) / sizeof(uint8_t);
 	}
 
@@ -122,8 +116,7 @@ class ots::STIBFragment
 	// data (i.e., where the STIBFragment::Header object begins) and
 	// casts it as a pointer to STIBFragment::Header
 
-	Header const* header_() const
-	{
+	Header const* header_() const {
 		return reinterpret_cast<STIBFragment::Header const*>(
 		    artdaq_Fragment_.dataBeginBytes());
 	}
