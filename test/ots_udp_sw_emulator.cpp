@@ -41,10 +41,8 @@ using namespace std;
 #define MAXBUFLEN 1492
 
 // get sockaddr, IPv4 or IPv6:
-void* get_in_addr(struct sockaddr* sa)
-{
-	if(sa->sa_family == AF_INET)
-	{
+void* get_in_addr(struct sockaddr* sa) {
+	if(sa->sa_family == AF_INET) {
 		return &(((struct sockaddr_in*)sa)->sin_addr);
 	}
 
@@ -52,8 +50,7 @@ void* get_in_addr(struct sockaddr* sa)
 }
 
 //==============================================================================
-int makeSocket(const char* ip, int port, struct sockaddr_in& ai_addr)
-{
+int makeSocket(const char* ip, int port, struct sockaddr_in& ai_addr) {
 	int             sockfd;
 	struct addrinfo hints, *servinfo, *p;
 	int             rv;
@@ -66,17 +63,14 @@ int makeSocket(const char* ip, int port, struct sockaddr_in& ai_addr)
 	hints.ai_family   = AF_UNSPEC;
 	hints.ai_socktype = SOCK_DGRAM;
 
-	if((rv = getaddrinfo(ip, std::to_string(port).c_str(), &hints, &servinfo)) != 0)
-	{
+	if((rv = getaddrinfo(ip, std::to_string(port).c_str(), &hints, &servinfo)) != 0) {
 		__SS__ << "getaddrinfo: " << gai_strerror(rv) << __E__;
 		__SS_THROW__;
 	}
 
 	// loop through all the results and make a socket
-	for(p = servinfo; p != NULL; p = p->ai_next)
-	{
-		if((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
-		{
+	for(p = servinfo; p != NULL; p = p->ai_next) {
+		if((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
 			__COUT_WARN__ << "sw: socket failed, trying other address..." << __E__;
 			continue;
 		}
@@ -84,8 +78,7 @@ int makeSocket(const char* ip, int port, struct sockaddr_in& ai_addr)
 		break;
 	}
 
-	if(p == NULL)
-	{
+	if(p == NULL) {
 		__SS__ << "sw: failed to create socket" << __E__;
 		__SS_THROW__;
 	}
@@ -97,8 +90,7 @@ int makeSocket(const char* ip, int port, struct sockaddr_in& ai_addr)
 	return sockfd;
 }  // end makeSocket()
 
-int main(int argc, char* argv[])
-{
+int main(int argc, char* argv[]) {
 	// 2 types of tests defined:
 	//	1. write and read
 	//	2. burst data read test
@@ -111,8 +103,7 @@ int main(int argc, char* argv[])
 	socklen_t               addr_len;
 	char                    s[INET6_ADDRSTRLEN];
 
-	if(argc != 3)
-	{
+	if(argc != 3) {
 		fprintf(stderr, "usage: sw hostname type-of-test\n");
 		exit(1);
 	}
@@ -121,17 +112,14 @@ int main(int argc, char* argv[])
 	hints.ai_family   = AF_UNSPEC;
 	hints.ai_socktype = SOCK_DGRAM;
 
-	if((rv = getaddrinfo(argv[1], HWPORT, &hints, &servinfo)) != 0)
-	{
+	if((rv = getaddrinfo(argv[1], HWPORT, &hints, &servinfo)) != 0) {
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
 		return 1;
 	}
 
 	// loop through all the results and make a socket
-	for(p = servinfo; p != NULL; p = p->ai_next)
-	{
-		if((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
-		{
+	for(p = servinfo; p != NULL; p = p->ai_next) {
+		if((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
 			perror("sw: socket");
 			continue;
 		}
@@ -139,8 +127,7 @@ int main(int argc, char* argv[])
 		break;
 	}
 
-	if(p == NULL)
-	{
+	if(p == NULL) {
 		fprintf(stderr, "sw: failed to create socket\n");
 		return 2;
 	}
@@ -170,8 +157,7 @@ int main(int argc, char* argv[])
 	const unsigned int RX_DATA_OFFSET = 10;
 	const unsigned int TX_DATA_OFFSET = 2;
 
-	switch(type)
-	{
+	switch(type) {
 	case 1:
 		// write and read
 
@@ -195,8 +181,7 @@ int main(int argc, char* argv[])
 		                      0,
 		                      (struct sockaddr*)&ai_addr,
 		                      sizeof(ai_addr))) ==  // p->ai_addr, p->ai_addrlen)) ==
-		   -1)
-		{
+		   -1) {
 			perror("sw: sendto");
 			exit(1);
 		}
@@ -212,16 +197,14 @@ int main(int argc, char* argv[])
 		                      0,
 		                      (struct sockaddr*)&ai_addr,
 		                      sizeof(ai_addr))) ==  // p->ai_addr, p->ai_addrlen)) ==
-		   -1)
-		{
+		   -1) {
 			perror("sw: sendto");
 			exit(1);
 		}
 		printf("sw: sent %d bytes to %s\n", numbytes, argv[1]);
 		printf("sent packet contents: ");
 
-		for(int i = 0; i < numbytes; ++i)
-		{
+		for(int i = 0; i < numbytes; ++i) {
 			printf("%2.2X", (unsigned char)buff[i]);
 			if(i % 8 == 7)
 				printf("\n");
@@ -234,8 +217,7 @@ int main(int argc, char* argv[])
 		                        MAXBUFLEN - 1,
 		                        0,
 		                        (struct sockaddr*)&their_addr,
-		                        &addr_len)) == -1)
-		{
+		                        &addr_len)) == -1) {
 			perror("recvfrom");
 			exit(1);
 		}
@@ -248,8 +230,7 @@ int main(int argc, char* argv[])
 		printf("sw: packet is %d bytes long\n", numbytes);
 		printf("recv packet contents: ");
 
-		for(int i = 0; i < numbytes; ++i)
-		{
+		for(int i = 0; i < numbytes; ++i) {
 			printf("%2.2X", (unsigned char)buff[i]);
 			if(i % 8 == 7)
 				printf("\n");
@@ -280,8 +261,7 @@ int main(int argc, char* argv[])
 		                      0,
 		                      (struct sockaddr*)&ai_addr,
 		                      sizeof(ai_addr))) ==  // p->ai_addr, p->ai_addrlen)) ==
-		   -1)
-		{
+		   -1) {
 			perror("sw: sendto");
 			exit(1);
 		}
@@ -304,8 +284,7 @@ int main(int argc, char* argv[])
 		                      0,
 		                      (struct sockaddr*)&ai_addr,
 		                      sizeof(ai_addr))) ==  // p->ai_addr, p->ai_addrlen)) ==
-		   -1)
-		{
+		   -1) {
 			perror("sw: sendto");
 			exit(1);
 		}
@@ -317,8 +296,7 @@ int main(int argc, char* argv[])
 			int sz = val;  // get from read in TYPE 1
 			cout << "sw: Line " << __LINE__ << ":::"
 			     << "Number of packets expecting: " << sz << endl;
-			for(int i = 0; i < sz; ++i)
-			{
+			for(int i = 0; i < sz; ++i) {
 				cout << "sw: Line " << __LINE__ << ":::"
 				     << "Waiting for data packet: " << i << endl;
 
@@ -329,8 +307,7 @@ int main(int argc, char* argv[])
 				                        MAXBUFLEN - 1,
 				                        0,
 				                        (struct sockaddr*)&their_addr,
-				                        &addr_len)) == -1)
-				{
+				                        &addr_len)) == -1) {
 					perror("recvfrom");
 					exit(1);
 				}
@@ -343,8 +320,7 @@ int main(int argc, char* argv[])
 				printf("sw: packet is %d bytes long\n", numbytes);
 				printf("recv packet contents: ");
 
-				for(int i = 0; i < numbytes; ++i)
-				{
+				for(int i = 0; i < numbytes; ++i) {
 					printf("%2.2X", (unsigned char)buff[i]);
 					if(i % 8 == 7)
 						printf("\n");
@@ -373,8 +349,7 @@ int main(int argc, char* argv[])
 		                      0,
 		                      (struct sockaddr*)&ai_addr,
 		                      sizeof(ai_addr))) ==  // p->ai_addr, p->ai_addrlen)) ==
-		   -1)
-		{
+		   -1) {
 			perror("sw: sendto");
 			exit(1);
 		}
@@ -386,8 +361,7 @@ int main(int argc, char* argv[])
 		                        MAXBUFLEN - 1,
 		                        0,
 		                        (struct sockaddr*)&their_addr,
-		                        &addr_len)) == -1)
-		{
+		                        &addr_len)) == -1) {
 			perror("recvfrom");
 			exit(1);
 		}
@@ -400,8 +374,7 @@ int main(int argc, char* argv[])
 		printf("sw: packet is %d bytes long\n", numbytes);
 		printf("recv packet contents: ");
 
-		for(int i = 0; i < numbytes; ++i)
-		{
+		for(int i = 0; i < numbytes; ++i) {
 			printf("%2.2X", (unsigned char)buff[i]);
 			if(i % 8 == 7)
 				printf("\n");

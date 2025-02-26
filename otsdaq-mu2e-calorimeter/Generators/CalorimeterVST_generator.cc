@@ -34,15 +34,9 @@
 
 using namespace DTCLib;
 
-namespace mu2e
-{
-class CalorimeterVST : public artdaq::CommandableFragmentGenerator
-{
-	enum
-	{
-		kReadDigis   = 0,
-		kReadPattern = 1
-	};
+namespace mu2e {
+class CalorimeterVST : public artdaq::CommandableFragmentGenerator {
+	enum { kReadDigis = 0, kReadPattern = 1 };
 	//-----------------------------------------------------------------------------
 	// FHiCL-configurable variables.
 	// C++ variable names are the FHiCL parameter names prepended with a "_"
@@ -138,8 +132,7 @@ class CalorimeterVST : public artdaq::CommandableFragmentGenerator
 	// the fragment_id_ variable declared in the parent
 	// CommandableFragmentGenerator class)
 
-	double _timeSinceLastSend()
-	{
+	double _timeSinceLastSend() {
 		auto now = std::chrono::steady_clock::now();
 		auto deltaw =
 		    std::chrono::duration_cast<std::chrono::duration<double, std::ratio<1>>>(
@@ -161,8 +154,7 @@ class CalorimeterVST : public artdaq::CommandableFragmentGenerator
 	std::vector<uint16_t>         fragmentIDs_() { return _fragment_ids; }
 	virtual std::vector<uint16_t> fragmentIDs() override;
 
-	double _getProcTimerCount()
-	{
+	double _getProcTimerCount() {
 		auto now = std::chrono::steady_clock::now();
 		auto deltaw =
 		    std::chrono::duration_cast<std::chrono::duration<double, std::ratio<1>>>(
@@ -176,8 +168,7 @@ class CalorimeterVST : public artdaq::CommandableFragmentGenerator
 //-----------------------------------------------------------------------------
 // define allowed fragment types( = ID's)
 //-----------------------------------------------------------------------------
-std::vector<uint16_t> mu2e::CalorimeterVST::fragmentIDs()
-{
+std::vector<uint16_t> mu2e::CalorimeterVST::fragmentIDs() {
 	std::vector<uint16_t> v;
 	v.push_back(0);
 	if(_saveDTCRegisters)
@@ -232,8 +223,7 @@ mu2e::CalorimeterVST::CalorimeterVST(fhicl::ParameterSet const& ps)
 	//-----------------------------------------------------------------------------
 	_nActiveLinks = _activeLinks.size();
 	_rocMask      = 0;
-	for(int i = 0; i < _nActiveLinks; i++)
-	{
+	for(int i = 0; i < _nActiveLinks; i++) {
 		int link = _activeLinks[i];
 		_rocMask |= (1 << 4 * link);
 	}
@@ -279,21 +269,17 @@ mu2e::CalorimeterVST::CalorimeterVST(fhicl::ParameterSet const& ps)
 	//-----------------------------------------------------------------------------
 	// not sure I fully understand the logic below
 	//-----------------------------------------------------------------------------
-	if(_loadSimFile)
-	{
+	if(_loadSimFile) {
 		_dtc->SetDetectorEmulatorInUse();
 		_dtc->ResetDDR();
 		_dtc->SoftReset();
 
-		if(_simFileName.size() > 0)
-		{
+		if(_simFileName.size() > 0) {
 			simFileRead_ = false;
 			std::thread reader(&mu2e::CalorimeterVST::readSimFile_, this, _simFileName);
 			reader.detach();
 		}
-	}
-	else
-	{
+	} else {
 		_dtc->ClearDetectorEmulatorInUse();  // Needed if we're doing ROC Emulator...
 		                                     // make sure Detector Emulation is disabled
 		simFileRead_ = true;
@@ -311,8 +297,7 @@ mu2e::CalorimeterVST::CalorimeterVST(fhicl::ParameterSet const& ps)
 	// _dtc->GetDevice()->write_register(0x9100,100,0x00008000);
 	// std::this_thread::sleep_for(std::chrono::microseconds(_sleepTimeDTC));
 
-	for(int i = 0; i < _nActiveLinks; i++)
-	{
+	for(int i = 0; i < _nActiveLinks; i++) {
 		monica_digi_clear(_dtc, _activeLinks[i]);
 
 		if(_readoutMode == kReadDigis)
@@ -445,8 +430,7 @@ mu2e::CalorimeterVST::CalorimeterVST(fhicl::ParameterSet const& ps)
 
 	_nreg = 0;
 	int i = 0;
-	do
-	{
+	do {
 		ushort r    = reg[2 * i];
 		int    flag = reg[2 * i + 1];
 		//-----------------------------------------------------------------------------
@@ -464,8 +448,7 @@ mu2e::CalorimeterVST::CalorimeterVST(fhicl::ParameterSet const& ps)
 }
 
 //-----------------------------------------------------------------------------
-void mu2e::CalorimeterVST::readSimFile_(std::string sim_file)
-{
+void mu2e::CalorimeterVST::readSimFile_(std::string sim_file) {
 	TLOG(TLVL_INFO) << "Starting read of simulation file " << sim_file << "."
 	                << " Please wait to start the run until finished.";
 
@@ -475,23 +458,20 @@ void mu2e::CalorimeterVST::readSimFile_(std::string sim_file)
 }
 
 //-----------------------------------------------------------------------------
-mu2e::CalorimeterVST::~CalorimeterVST()
-{
+mu2e::CalorimeterVST::~CalorimeterVST() {
 	rawOutputStream_.close();
 	delete _cfo;
 	delete _dtc;
 }
 
 //-----------------------------------------------------------------------------
-void mu2e::CalorimeterVST::stop()
-{
+void mu2e::CalorimeterVST::stop() {
 	_dtc->DisableDetectorEmulator();
 	_dtc->DisableCFOEmulation();
 }
 
 //-----------------------------------------------------------------------------
-void mu2e::CalorimeterVST::print_dtc_registers(DTC* Dtc, const char* Header)
-{
+void mu2e::CalorimeterVST::print_dtc_registers(DTC* Dtc, const char* Header) {
 	printf("---------------------- %s : DTC status :\n", Header);
 	uint32_t res;
 	int      rc;
@@ -502,8 +482,7 @@ void mu2e::CalorimeterVST::print_dtc_registers(DTC* Dtc, const char* Header)
 }
 
 //-----------------------------------------------------------------------------
-void mu2e::CalorimeterVST::monica_digi_clear(DTCLib::DTC* Dtc, int Link)
-{
+void mu2e::CalorimeterVST::monica_digi_clear(DTCLib::DTC* Dtc, int Link) {
 	//-----------------------------------------------------------------------------
 	//  Monica's digi_clear
 	//  this will proceed in 3 steps each for HV and CAL DIGIs:
@@ -538,8 +517,7 @@ void mu2e::CalorimeterVST::monica_digi_clear(DTCLib::DTC* Dtc, int Link)
 }
 
 //-----------------------------------------------------------------------------
-void mu2e::CalorimeterVST::monica_var_link_config(DTCLib::DTC* Dtc, int Link)
-{
+void mu2e::CalorimeterVST::monica_var_link_config(DTCLib::DTC* Dtc, int Link) {
 	mu2edev* dev = Dtc->GetDevice();
 
 	dev->write_register(0x91a8, 100, 0);  // disable event window marker - set deltaT = 0
@@ -570,8 +548,7 @@ void mu2e::CalorimeterVST::monica_var_link_config(DTCLib::DTC* Dtc, int Link)
 }
 
 //-----------------------------------------------------------------------------
-void mu2e::CalorimeterVST::monica_var_pattern_config(DTC* Dtc, int Link)
-{
+void mu2e::CalorimeterVST::monica_var_pattern_config(DTC* Dtc, int Link) {
 	TLOG(TLVL_DEBUG)
 	    << "---------------------------------- operation \"var_patern_config\""
 	    << std::endl;
@@ -608,14 +585,12 @@ void mu2e::CalorimeterVST::monica_var_pattern_config(DTC* Dtc, int Link)
 // print 16 bytes per line
 // size - number of bytes to print, even
 //-----------------------------------------------------------------------------
-void mu2e::CalorimeterVST::printBuffer(const void* ptr, int sz)
-{
+void mu2e::CalorimeterVST::printBuffer(const void* ptr, int sz) {
 	int     nw  = sz / 2;
 	ushort* p16 = (ushort*)ptr;
 	int     n   = 0;
 
-	for(int i = 0; i < nw; i++)
-	{
+	for(int i = 0; i < nw; i++) {
 		if(n == 0)
 			printf(" 0x%08x: ", i * 2);
 
@@ -623,8 +598,7 @@ void mu2e::CalorimeterVST::printBuffer(const void* ptr, int sz)
 		printf("0x%04x ", word);
 
 		n += 1;
-		if(n == 8)
-		{
+		if(n == 8) {
 			printf("\n");
 			n = 0;
 		}
@@ -641,22 +615,17 @@ void mu2e::CalorimeterVST::printBuffer(const void* ptr, int sz)
 //-----------------------------------------------------------------------------
 int mu2e::CalorimeterVST::readDTCRegisters(artdaq::Fragment* Frag,
                                            uint16_t*         Reg,
-                                           int               NReg)
-{
+                                           int               NReg) {
 	int rc(0);
 
 	Frag->resizeBytes(NReg * sizeof(TrkDtcFragment::RegEntry));
 	uint* f2d = (uint*)Frag->dataBegin();
 
-	for(int i = 0; i < NReg; i++)
-	{
+	for(int i = 0; i < NReg; i++) {
 		f2d[2 * i] = Reg[i];
-		try
-		{
+		try {
 			rc = _dtc->GetDevice()->read_register(Reg[i], 100, f2d + 2 * i + 1);
-		}
-		catch(...)
-		{
+		} catch(...) {
 			TLOG(TLVL_ERROR) << "event: " << ev_counter()
 			                 << "readDTCRegisters ERROR, register : " << Reg[i];
 			break;
@@ -667,8 +636,7 @@ int mu2e::CalorimeterVST::readDTCRegisters(artdaq::Fragment* Frag,
 }
 
 //-----------------------------------------------------------------------------
-int mu2e::CalorimeterVST::readData(artdaq::Fragment* Frag)
-{
+int mu2e::CalorimeterVST::readData(artdaq::Fragment* Frag) {
 	//-----------------------------------------------------------------------------
 	// the body of the readDTCBuffer
 	//-----------------------------------------------------------------------------
@@ -682,8 +650,7 @@ int mu2e::CalorimeterVST::readData(artdaq::Fragment* Frag)
         DTC_DMA_Engine_DAQ, reinterpret_cast<void**>(&buffer), tmo_ms);
 	std::this_thread::sleep_for(std::chrono::microseconds(_sleepTimeDTC));
 
-	if(nbytes > 0)
-	{
+	if(nbytes > 0) {
 		readSuccess      = true;
 		void*    readPtr = &buffer[0];
 		uint16_t bufSize = static_cast<uint16_t>(*static_cast<uint64_t*>(readPtr));
@@ -694,8 +661,7 @@ int mu2e::CalorimeterVST::readData(artdaq::Fragment* Frag)
 
 		timeout = false;
 
-		if(nbytes > sizeof(DTC_EventHeader) + sizeof(DTC_SubEventHeader) + 8)
-		{
+		if(nbytes > sizeof(DTC_EventHeader) + sizeof(DTC_SubEventHeader) + 8) {
 			//-----------------------------------------------------------------------------
 			// I suspect this is a check of any useful data being present. although not
 			// sure what 8 stands for. Also not sure about the meaning of the checks
@@ -704,8 +670,7 @@ int mu2e::CalorimeterVST::readData(artdaq::Fragment* Frag)
 			readPtr = static_cast<uint8_t*>(readPtr) + sizeof(DTC_EventHeader) +
 			          sizeof(DTC_SubEventHeader);
 			std::vector<size_t> wordsToCheck{1, 2, 3, 7, 8};
-			for(auto& word : wordsToCheck)
-			{
+			for(auto& word : wordsToCheck) {
 				auto wordPtr = static_cast<uint16_t*>(readPtr) + (word - 1);
 				TLOG(TLVL_DEBUG) << word
 				                 << (word == 1   ? "st"
@@ -714,8 +679,7 @@ int mu2e::CalorimeterVST::readData(artdaq::Fragment* Frag)
 				                                 : "th")
 				                 << " *wordPtr: 0x" << std::hex << *wordPtr;
 
-				if(*wordPtr == 0xcafe || *wordPtr == 0xdead)
-				{
+				if(*wordPtr == 0xcafe || *wordPtr == 0xdead) {
 					TLOG(TLVL_WARNING) << "Buffer Timeout detected! " << word
 					                   << (word == 1   ? "st"
 					                       : word == 2 ? "nd"
@@ -731,8 +695,7 @@ int mu2e::CalorimeterVST::readData(artdaq::Fragment* Frag)
 	}
 
 	int print_event = (ev_counter() % _printFreq) == 0;
-	if(print_event)
-	{
+	if(print_event) {
 		printf(" event: %10lu readSuccess : %1i timeout: %1i nbytes: %10lu\n",
 		       ev_counter(),
 		       readSuccess,
@@ -740,8 +703,7 @@ int mu2e::CalorimeterVST::readData(artdaq::Fragment* Frag)
 		       nbytes);
 	}
 
-	if((_debugLevel > 0) and (ev_counter() < _nEventsDbg))
-	{
+	if((_debugLevel > 0) and (ev_counter() < _nEventsDbg)) {
 		// print_roc_registers(&dtc,link,"002 [after readDTCBuffer]");
 		DTCLib::Utilities::PrintBuffer(buffer, nbytes, 0);
 	}
@@ -763,13 +725,11 @@ int mu2e::CalorimeterVST::readData(artdaq::Fragment* Frag)
 	// artdaq fragment starts from the data header packet
 	// do we still need to set version ? ADC bit ordering ?
 	//-----------------------------------------------------------------------------
-	if(nbytes >= 0x50)
-	{
+	if(nbytes >= 0x50) {
 		//-----------------------------------------------------------------------------
 		// copy data and patch format version - set it to 1
 		//-----------------------------------------------------------------------------
-		struct DataHeaderPacket_t
-		{
+		struct DataHeaderPacket_t {
 			uint16_t nBytes;
 			uint16_t w2;
 			uint16_t nPackets;
@@ -783,9 +743,7 @@ int mu2e::CalorimeterVST::readData(artdaq::Fragment* Frag)
 
 		DataHeaderPacket_t* dhp = (DataHeaderPacket_t*)((char*)afd + 0x40);
 		dhp->setVersion(1);
-	}
-	else
-	{
+	} else {
 		//-----------------------------------------------------------------------------
 		// ERROR: data size < (event_header+subevent_header+data_packet_header)
 		// generate diagnostics
@@ -797,17 +755,14 @@ int mu2e::CalorimeterVST::readData(artdaq::Fragment* Frag)
 }
 
 //-----------------------------------------------------------------------------
-bool mu2e::CalorimeterVST::readEvent(artdaq::FragmentPtrs& Frags)
-{
+bool mu2e::CalorimeterVST::readEvent(artdaq::FragmentPtrs& Frags) {
 	//-----------------------------------------------------------------------------
 	// read data
 	// Monica's way of resetting the DTC and the ROC - so far, assume just one ROC
 	// having reset the ROC, go back to the requested time window
 	//-----------------------------------------------------------------------------
-	if(_resetROC)
-	{
-		for(int i = 0; i < _nActiveLinks; i++)
-		{
+	if(_resetROC) {
+		for(int i = 0; i < _nActiveLinks; i++) {
 			monica_digi_clear(_dtc, _activeLinks[i]);
 			// monica_var_link_config(_dtc,_activeLinks[i]);
 		}
@@ -840,8 +795,7 @@ bool mu2e::CalorimeterVST::readEvent(artdaq::FragmentPtrs& Frags)
 	//-----------------------------------------------------------------------------
 	int print_event = (ev_counter() % _printFreq) == 0;
 
-	if(print_event)
-	{
+	if(print_event) {
 		// print_roc_registers(&_dtc,link,"001 [after cfo.SendRequestForRange]");
 		printf(" ------------------------------ reading event %li\n", ev_counter());
 	}
@@ -851,15 +805,12 @@ bool mu2e::CalorimeterVST::readEvent(artdaq::FragmentPtrs& Frags)
 	double            tstamp = ev_counter();
 	artdaq::Fragment* f1 =
 	    new artdaq::Fragment(ev_counter(), _fragment_ids[0], FragmentType::CAL, tstamp);
-	if(_readData)
-	{
+	if(_readData) {
 		//-----------------------------------------------------------------------------
 		// read data
 		//-----------------------------------------------------------------------------
 		readData(f1);
-	}
-	else
-	{
+	} else {
 		//-----------------------------------------------------------------------------
 		// fake reading
 		//-----------------------------------------------------------------------------
@@ -879,11 +830,9 @@ bool mu2e::CalorimeterVST::readEvent(artdaq::FragmentPtrs& Frags)
 	    ev_counter(), _fragment_ids[1], FragmentType::TRKDTC, tstamp);
 	auto metadata = TrkDtcFragment::create_metadata();
 	f2->setMetadata(metadata);
-	if(_saveDTCRegisters)
-	{
+	if(_saveDTCRegisters) {
 		readDTCRegisters(f2, _reg, _nreg);
-		if((_debugLevel > 0) and (ev_counter() < _nEventsDbg))
-		{
+		if((_debugLevel > 0) and (ev_counter() < _nEventsDbg)) {
 			printf("%s: DTC registers\n", __func__);
 			int nb_dtc = 4 + 8 * _nreg;
 			printBuffer(f2->dataBegin(), nb_dtc);
@@ -895,13 +844,11 @@ bool mu2e::CalorimeterVST::readEvent(artdaq::FragmentPtrs& Frags)
 	//-----------------------------------------------------------------------------
 	_dtc->GetDevice()->read_release(DTC_DMA_Engine_DAQ, 1);
 
-	if(_sleepTimeDMA > 0)
-	{
+	if(_sleepTimeDMA > 0) {
 		std::this_thread::sleep_for(std::chrono::microseconds(_sleepTimeDMA));
 	}
 
-	if((_debugLevel > 0) and (ev_counter() < _nEventsDbg))
-	{
+	if((_debugLevel > 0) and (ev_counter() < _nEventsDbg)) {
 		int      rc;
 		uint32_t res;
 		rc = _dtc->GetDevice()->read_register(0x9100, 100, &res);
@@ -915,8 +862,7 @@ bool mu2e::CalorimeterVST::readEvent(artdaq::FragmentPtrs& Frags)
 }
 
 //-----------------------------------------------------------------------------
-bool mu2e::CalorimeterVST::simulateEvent(artdaq::FragmentPtrs& Frags)
-{
+bool mu2e::CalorimeterVST::simulateEvent(artdaq::FragmentPtrs& Frags) {
 	double            tstamp = ev_counter();
 	artdaq::Fragment* frag =
 	    new artdaq::Fragment(ev_counter(), _fragment_ids[0], FragmentType::CAL, tstamp);
@@ -969,8 +915,7 @@ bool mu2e::CalorimeterVST::simulateEvent(artdaq::FragmentPtrs& Frags)
 //-----------------------------------------------------------------------------
 // a virtual function called from the outside world
 //-----------------------------------------------------------------------------
-bool mu2e::CalorimeterVST::getNext_(artdaq::FragmentPtrs& Frags)
-{
+bool mu2e::CalorimeterVST::getNext_(artdaq::FragmentPtrs& Frags) {
 	//  const char* oname = "mu2e::CalorimeterVST::getNext_: ";
 	bool rc(true);
 
@@ -982,12 +927,9 @@ bool mu2e::CalorimeterVST::getNext_(artdaq::FragmentPtrs& Frags)
 	_startProcTimer();
 
 	TLOG(TLVL_DEBUG) << "event: " << ev_counter() << "after startProcTimer";
-	if(_readoutMode < 100)
-	{
+	if(_readoutMode < 100) {
 		rc = readEvent(Frags);
-	}
-	else
-	{
+	} else {
 		//-----------------------------------------------------------------------------
 		// increment number of generated events
 		//-----------------------------------------------------------------------------
@@ -1002,8 +944,7 @@ bool mu2e::CalorimeterVST::getNext_(artdaq::FragmentPtrs& Frags)
 	//-----------------------------------------------------------------------------
 	// increment the subrun number, if needed
 	//-----------------------------------------------------------------------------
-	if((ev_counter() % _maxEventsPerSubrun) == 0)
-	{
+	if((ev_counter() % _maxEventsPerSubrun) == 0) {
 		artdaq::Fragment* esf = new artdaq::Fragment(1);
 
 		esf->setSystemType(artdaq::Fragment::EndOfSubrunFragmentType);
@@ -1017,8 +958,7 @@ bool mu2e::CalorimeterVST::getNext_(artdaq::FragmentPtrs& Frags)
 }
 
 //-----------------------------------------------------------------------------
-bool mu2e::CalorimeterVST::sendEmpty_(artdaq::FragmentPtrs& Frags)
-{
+bool mu2e::CalorimeterVST::sendEmpty_(artdaq::FragmentPtrs& Frags) {
 	Frags.emplace_back(new artdaq::Fragment());
 	Frags.back()->setSystemType(artdaq::Fragment::EmptyFragmentType);
 	Frags.back()->setSequenceID(ev_counter());

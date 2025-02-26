@@ -6,11 +6,9 @@
 ots::detail::RawEventQueueReader::RawEventQueueReader(fhicl::ParameterSet const&  ps,
                                                       art::ProductRegistryHelper& help,
                                                       art::SourceHelper const&    pm)
-    : artdaq::detail::RawEventQueueReader(ps, help, pm)
-{
+    : artdaq::detail::RawEventQueueReader(ps, help, pm) {
 	TLOG(TLVL_INFO, "RawEventQueueReader") << "OtsInput Constructor!";
-	for(auto& name : names)
-	{
+	for(auto& name : names) {
 		TLOG(TLVL_INFO, "RawEventQueueReader")
 		    << "Adding fragment type " << name
 		    << " to fragment_type_map, and registering with the "

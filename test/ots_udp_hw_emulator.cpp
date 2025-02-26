@@ -45,10 +45,8 @@ using namespace std;
 #define EMULATOR_PORT "4950"  // Can be also passed as first argument
 
 // get sockaddr, IPv4 or IPv6:
-void* get_in_addr(struct sockaddr* sa)
-{
-	if(sa->sa_family == AF_INET)
-	{
+void* get_in_addr(struct sockaddr* sa) {
+	if(sa->sa_family == AF_INET) {
 		return &(((struct sockaddr_in*)sa)->sin_addr);
 	}
 
@@ -56,8 +54,7 @@ void* get_in_addr(struct sockaddr* sa)
 }
 
 //==============================================================================
-int makeSocket(const char* ip, int port, struct sockaddr_in& ai_addr)
-{
+int makeSocket(const char* ip, int port, struct sockaddr_in& ai_addr) {
 	int             sockfd;
 	struct addrinfo hints, *servinfo, *p;
 	int             rv;
@@ -70,17 +67,14 @@ int makeSocket(const char* ip, int port, struct sockaddr_in& ai_addr)
 	hints.ai_family   = AF_UNSPEC;
 	hints.ai_socktype = SOCK_DGRAM;
 
-	if((rv = getaddrinfo(ip, std::to_string(port).c_str(), &hints, &servinfo)) != 0)
-	{
+	if((rv = getaddrinfo(ip, std::to_string(port).c_str(), &hints, &servinfo)) != 0) {
 		__SS__ << "getaddrinfo: " << gai_strerror(rv) << __E__;
 		__SS_THROW__;
 	}
 
 	// loop through all the results and make a socket
-	for(p = servinfo; p != NULL; p = p->ai_next)
-	{
-		if((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
-		{
+	for(p = servinfo; p != NULL; p = p->ai_next) {
+		if((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
 			__COUT_WARN__ << "sw: socket failed, trying other address..." << __E__;
 			continue;
 		}
@@ -88,8 +82,7 @@ int makeSocket(const char* ip, int port, struct sockaddr_in& ai_addr)
 		break;
 	}
 
-	if(p == NULL)
-	{
+	if(p == NULL) {
 		__SS__ << "sw: failed to create socket" << __E__;
 		__SS_THROW__;
 	}
@@ -101,8 +94,7 @@ int makeSocket(const char* ip, int port, struct sockaddr_in& ai_addr)
 	return sockfd;
 }  // end makeSocket()
 
-int main(int argc, char** argv)
-{
+int main(int argc, char** argv) {
 	std::string emulatorPort(EMULATOR_PORT);
 	if(argc == 2)
 		emulatorPort = argv[1];
@@ -129,23 +121,19 @@ int main(int argc, char** argv)
 	hints.ai_socktype = SOCK_DGRAM;
 	hints.ai_flags    = AI_PASSIVE;  // use my IP
 
-	if((rv = getaddrinfo(NULL, emulatorPort.c_str(), &hints, &servinfo)) != 0)
-	{
+	if((rv = getaddrinfo(NULL, emulatorPort.c_str(), &hints, &servinfo)) != 0) {
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
 		return 1;
 	}
 
 	// loop through all the results and bind to the first we can
-	for(p = servinfo; p != NULL; p = p->ai_next)
-	{
-		if((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
-		{
+	for(p = servinfo; p != NULL; p = p->ai_next) {
+		if((sockfd = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
 			perror("listener: socket");
 			continue;
 		}
 
-		if(bind(sockfd, p->ai_addr, p->ai_addrlen) == -1)
-		{
+		if(bind(sockfd, p->ai_addr, p->ai_addrlen) == -1) {
 			close(sockfd);
 			perror("listener: bind");
 			continue;
@@ -154,8 +142,7 @@ int main(int argc, char** argv)
 		break;
 	}
 
-	if(p == NULL)
-	{
+	if(p == NULL) {
 		fprintf(stderr, "listener: failed to bind socket\n");
 
 		__COUT__ << "\n\nYou can try a different port by passing an argument.\n\n";
@@ -212,16 +199,14 @@ int main(int argc, char** argv)
 	int handlerIndex;
 	int totalNumberOfBytes;
 
-	while(1)
-	{
+	while(1) {
 		usleep(3000);  // sleep 3ms to free up processor (downfall is less
 		               // responsive, but likely not noticeable)
 
 		readfds = masterfds;  // copy to reset timeout select
 		select(sockfd + 1, &readfds, NULL, NULL, &tv);
 
-		if(FD_ISSET(sockfd, &readfds))
-		{
+		if(FD_ISSET(sockfd, &readfds)) {
 			// packet received
 			__COUT__ << std::hex << ":::"
 			         << "Packet Received!" << std::endl;
@@ -232,8 +217,7 @@ int main(int argc, char** argv)
 			                                  MAXBUFLEN - 1,
 			                                  0,
 			                                  (struct sockaddr*)&their_addr,
-			                                  &addr_len)) == -1)
-			{
+			                                  &addr_len)) == -1) {
 				perror("recvfrom");
 				exit(1);
 			}
@@ -266,16 +250,14 @@ int main(int argc, char** argv)
 			      (numberOfBytes = (buff[handlerIndex + 0]
 			                            ? 18
 			                            : 10)) &&  // assume write is 18 and read is 10
-			      handlerIndex + numberOfBytes <= totalNumberOfBytes)
-			{
+			      handlerIndex + numberOfBytes <= totalNumberOfBytes) {
 				__COUT__ << ":::"
 				         << "hw: packet byte index " << handlerIndex << std::endl;
 				__COUT__ << ":::"
 				         << "hw: packet is " << numberOfBytes << " bytes long"
 				         << std::endl;
 
-				for(int i = 0; i < numberOfBytes; i++)
-				{
+				for(int i = 0; i < numberOfBytes; i++) {
 					if((i - RX_ADDR_OFFSET) % 8 == 0)
 						__PRINTF__("\n");
 					__PRINTF__("%2.2X", (unsigned char)buff[handlerIndex + i]);
@@ -344,19 +326,17 @@ int main(int argc, char** argv)
 					                           packetSz,
 					                           0,
 					                           (struct sockaddr*)&their_addr,
-					                           sizeof(struct sockaddr_storage))) == -1)
-					{
+					                           sizeof(struct sockaddr_storage))) == -1) {
 						perror("hw: sendto");
 						exit(1);
 					}
 					__PRINTF__("hw: sent %d bytes back. sequence=%d\n",
 					           numberOfBytes,
 					           (unsigned char)buff[handlerIndex + 1]);
-				}
-				else if(numberOfBytes >= 18 &&
-				        (numberOfBytes - 2) % 8 ==
-				            0 &&  // size is valid (multiple of 8 data)
-				        buff[handlerIndex + 0] == 1)  // write
+				} else if(numberOfBytes >= 18 &&
+				          (numberOfBytes - 2) % 8 ==
+				              0 &&  // size is valid (multiple of 8 data)
+				          buff[handlerIndex + 0] == 1)  // write
 				{
 					uint64_t addr;
 					memcpy((void*)&addr, (void*)&buff[handlerIndex + RX_ADDR_OFFSET], 8);
@@ -406,8 +386,7 @@ int main(int argc, char** argv)
 						__COUT__ << std::hex << ":::"
 						         << "Stream destination IP: " << streamToIP << std::endl;
 						__COUT__ << streamToIP << std::endl;
-					}
-					break;
+					} break;
 					case 0x0000000100000007:
 						__COUT__ << std::hex << ":::"
 						         << "Destination MAC address ignored!" << std::endl;
@@ -426,8 +405,7 @@ int main(int argc, char** argv)
 						sendSockfd = -1;
 						sendSockfd =
 						    makeSocket(streamToIP.c_str(), streamToPort, ai_addr);  // p);
-						if(sendSockfd != -1)
-						{
+						if(sendSockfd != -1) {
 							__COUT__ << "************************************************"
 							            "********"
 							         << endl;
@@ -443,8 +421,7 @@ int main(int argc, char** argv)
 							__COUT__ << "************************************************"
 							            "********"
 							         << endl;
-						}
-						else
+						} else
 							__COUT__ << std::hex << ":::"
 							         << "Failed to create streaming socket to ip: "
 							         << streamToIP << " port: 0x" << streamToPort << endl;
@@ -463,8 +440,7 @@ int main(int argc, char** argv)
 						__COUT__ << std::hex << ":::"
 						         << "Unknown write address received." << endl;
 					}
-				}
-				else
+				} else
 					__COUT__ << std::hex << ":::"
 					         << "ERROR: The formatting of the string received is wrong! "
 					            "Number of bytes: "
@@ -479,14 +455,12 @@ int main(int argc, char** argv)
 			         << addressSpaceSS.str() << "\n\n";
 
 		}  // end packet received if
-		else
-		{
+		else {
 			// no packet received (timeout)
 
 			//__COUT__ << "[" << __LINE__ << "]Is burst enabled? " << (int)dataEnabled
 			//<< endl;
-			if((int)dataEnabled)
-			{
+			if((int)dataEnabled) {
 				// generate data
 				//__COUT__ << "[" << __LINE__ << "]Count? " << count << " rate: " <<
 				// data_gen_rate << " counter: " << data_gen_cnt << endl;
@@ -534,8 +508,7 @@ int main(int argc, char** argv)
 				}
 
 				wasDataEnable = true;
-			}
-			else if(wasDataEnable)  // send last in burst packet
+			} else if(wasDataEnable)  // send last in burst packet
 			{
 				wasDataEnable = false;
 				__COUT__ << std::hex << ":::"
@@ -549,8 +522,7 @@ int main(int argc, char** argv)
 
 				packetSz = TX_DATA_OFFSET + 8;  // only response with 1 QW
 
-				if(sendSockfd != -1)
-				{
+				if(sendSockfd != -1) {
 					if((numberOfBytes = sendto(
 					        sendSockfd, buff, packetSz, 0, (struct sockaddr*)&ai_addr, sizeof(ai_addr)) == //p->ai_addr, p->ai_addrlen)) ==
 					   -1)
@@ -561,8 +533,7 @@ int main(int argc, char** argv)
 					__PRINTF__("hw: sent %d bytes back. sequence=%d\n",
 					           numberOfBytes,
 					           (unsigned char)buff[1]);
-				}
-				else
+				} else
 					__COUT__ << std::hex << ":::"
 					         << "Send socket not defined." << endl;
 			}

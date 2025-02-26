@@ -28,8 +28,7 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(
     const std::string&       rocUID,
     const ConfigurationTree& theXDAQContextConfigTree,
     const std::string&       theConfigurationPath)
-    : ROCPolarFireCoreInterface(rocUID, theXDAQContextConfigTree, theConfigurationPath)
-{
+    : ROCPolarFireCoreInterface(rocUID, theXDAQContextConfigTree, theConfigurationPath) {
 	INIT_MF("." /*directory used is USER_DATA/LOG/.*/);
 
 	__CFG_COUT__ << "Constructor..." << __E__;
@@ -37,12 +36,9 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(
 	__CFG_COUT_INFO__ << "ROCPolarFireCoreInterface instantiated with link: " << linkID_
 	                  << " and EventWindowDelayOffset = " << delay_ << __E__;
 
-	try
-	{
+	try {
 		inputTemp_ = getSelfNode().getNode("inputTemperature").getValue<double>();
-	}
-	catch(...)
-	{
+	} catch(...) {
 		__CFG_COUT__ << "inputTemperature field not defined. Defaulting..." << __E__;
 		inputTemp_ = 15.;
 	}
@@ -232,8 +228,7 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(
 }  // end constructor()
 
 //==========================================================================================
-ROCCalorimeterInterface::~ROCCalorimeterInterface(void)
-{
+ROCCalorimeterInterface::~ROCCalorimeterInterface(void) {
 	// NOTE:: be careful not to call __FE_COUT__ decoration because it uses the
 	// tree and it may already be destructed partially
 	__COUT__ << FEVInterface::interfaceUID_ << "Destructed." << __E__;
@@ -241,8 +236,7 @@ ROCCalorimeterInterface::~ROCCalorimeterInterface(void)
 
 //==================================================================================================
 void ROCCalorimeterInterface::writeEmulatorRegister(uint16_t address,
-                                                    uint16_t data_to_write)
-{
+                                                    uint16_t data_to_write) {
 	__CFG_COUT__ << "emulator write" << __E__;
 
 	return;
@@ -259,20 +253,17 @@ uint16_t ROCCalorimeterInterface::readEmulatorRegister(
 		return ROCPolarFireCoreInterface::readEmulatorRegister(address);
 	if(address == ROC_ADDRESS_EW_LENGHT)
 		return 0x5;
-	else if(address == ROC_ADDRESS_EW_BLIND)
-	{
+	else if(address == ROC_ADDRESS_EW_BLIND) {
 		temp1_.noiseTemp(temp1_.GetBoardTempC());
 		return temp1_.GetBoardTempC() * 256;
-	}
-	else
+	} else
 		return 0xBAAD;
 
 }  // end readRegister()
 
 //==================================================================================================
 // return false to stop workloop thread
-bool ROCCalorimeterInterface::emulatorWorkLoop(void)
-{
+bool ROCCalorimeterInterface::emulatorWorkLoop(void) {
 	__COUT__ << FEVInterface::interfaceUID_ << "emulator working..." << __E__;
 
 	temp1_.noiseTemp(inputTemp_);
@@ -297,15 +288,13 @@ bool ROCCalorimeterInterface::emulatorWorkLoop(void)
 //==================================================================================================
 void ROCCalorimeterInterface::universalBlockRead(char*        address,
                                                  char*        returnValue,
-                                                 unsigned int numberOfBytes)
-{
+                                                 unsigned int numberOfBytes) {
 	std::vector<DTCLib::roc_data_t> data;
 	readROCBlock(data,
 	             *((DTCLib::roc_address_t*)address),
 	             numberOfBytes / 2,
 	             false /*incAddress*/);
-	if(data.size() != numberOfBytes / 2)
-	{
+	if(data.size() != numberOfBytes / 2) {
 		__FE_SS__ << "Illegal number of bytes: " << data.size() << " not "
 		          << numberOfBytes / 2 << __E__;
 		__FE_SS_THROW__;
@@ -314,8 +303,7 @@ void ROCCalorimeterInterface::universalBlockRead(char*        address,
 }
 
 //==================================================================================================
-void ROCCalorimeterInterface::ROCSlowControl(__ARGS__)
-{
+void ROCCalorimeterInterface::ROCSlowControl(__ARGS__) {
 	std::stringstream os;
 	os << __E__;
 
@@ -331,8 +319,7 @@ void ROCCalorimeterInterface::ROCSlowControl(__ARGS__)
 
 	std::vector<DTCLib::roc_data_t> data;
 	readROCBlock(data, 263, 12, false /*incAddress*/);
-	if(data.size() != 12)
-	{
+	if(data.size() != 12) {
 		__FE_SS__ << "Illegal number of bytes: " << data.size() << " not " << 12 << __E__;
 		__FE_SS_THROW__;
 	}
@@ -393,15 +380,13 @@ void ROCCalorimeterInterface::ROCSlowControl(__ARGS__)
 	std::vector<DTCLib::roc_data_t> data2;
 	readROCBlock(data2, 261, 20, false /*incAddress*/);
 
-	if(data2.size() != 20)
-	{
+	if(data2.size() != 20) {
 		__FE_SS__ << "Illegal number of bytes: " << data2.size() << " not " << 20 << "  !"
 		          << __E__;
 		__FE_SS_THROW__;
 	}
 
-	for(size_t i = 0; i < data2.size(); i++)
-	{
+	for(size_t i = 0; i < data2.size(); i++) {
 		os << "Word " << i << ": 0x" << std::hex << data2[i] << __E__;
 	}
 
@@ -409,8 +394,7 @@ void ROCCalorimeterInterface::ROCSlowControl(__ARGS__)
 }
 
 //==================================================================================================
-void ROCCalorimeterInterface::ReadMBRegisters(__ARGS__)
-{
+void ROCCalorimeterInterface::ReadMBRegisters(__ARGS__) {
 	unsigned int nwords = __GET_ARG_IN__(
 	    "Number of 16 bits words to read, Default := 20]", unsigned int, 20);
 	int offset = __GET_ARG_IN__("Mezzanine Address, Default := 0]", int, 0);
@@ -418,8 +402,7 @@ void ROCCalorimeterInterface::ReadMBRegisters(__ARGS__)
 	std::vector<DTCLib::roc_data_t> data;
 	readROCBlock(data, 261, nwords, false /*incAddress*/);
 
-	if(data.size() != nwords)
-	{
+	if(data.size() != nwords) {
 		__FE_SS__ << "Illegal number of bytes: " << data.size() << " not " << nwords
 		          << "  !" << offset << __E__;
 		__FE_SS_THROW__;
@@ -427,8 +410,7 @@ void ROCCalorimeterInterface::ReadMBRegisters(__ARGS__)
 
 	std::stringstream os;
 
-	for(size_t i = 0; i < data.size(); i++)
-	{
+	for(size_t i = 0; i < data.size(); i++) {
 		os << "Word " << i << ": 0x" << std::hex << data[i] << __E__;
 	}
 
@@ -439,8 +421,7 @@ void ROCCalorimeterInterface::ReadMBRegisters(__ARGS__)
 void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data,
                                            DTCLib::roc_address_t            address,
                                            uint16_t                         wordCount,
-                                           bool incrementAddress)
-{
+                                           bool incrementAddress) {
 	__FE_COUT__ << "Calling read ROC block: link number " << std::dec << linkID_
 	            << ", address = " << address << ", wordCount = " << wordCount
 	            << ", incrementAddress = " << incrementAddress << __E__;
@@ -450,12 +431,10 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 
 	// check if special Block Write required
 	if(ROCCalorimeterInterface::SPECIAL_BLOCK_READ_ADDRS_.find(address) !=
-	   ROCCalorimeterInterface::SPECIAL_BLOCK_READ_ADDRS_.end())
-	{
+	   ROCCalorimeterInterface::SPECIAL_BLOCK_READ_ADDRS_.end()) {
 		__FE_COUT__ << "Doing special block write!" << __E__;
 
-		switch(address)
-		{
+		switch(address) {
 		case 261:
 			// writeROCBlock({wordCount*2, 0}, address, false /* incrementAddress*/);
 			writeROCBlock({static_cast<unsigned short>(wordCount * 2), 0},
@@ -489,8 +468,7 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 		}
 
 		// uint16_t j = 0;
-		while((u = thisDTC_->ReadROCRegister(linkID_, 128, 100)) == 0)
-		{
+		while((u = thisDTC_->ReadROCRegister(linkID_, 128, 100)) == 0) {
 			/*			usleep(100);
 			          j++;
 			          if(j == 100)
@@ -504,8 +482,7 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 		usleep(1000);
 
 		// j = 0;
-		while((u = thisDTC_->ReadROCRegister(linkID_, 129, 100)) == 0)
-		{
+		while((u = thisDTC_->ReadROCRegister(linkID_, 129, 100)) == 0) {
 			/*usleep(100);
 			  j++;
 			  if(j == 100)
@@ -528,8 +505,7 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 	while(data.size() > wordCount)
 		data.pop_back();
 
-	if(data.size() != (long unsigned int)u - 4)
-	{
+	if(data.size() != (long unsigned int)u - 4) {
 		__FE_SS__ << "ROC block read failed, expecting " << wordCount
 		          << " words, and read " << data.size() << " words." << __E__;
 		__FE_SS_THROW__;
@@ -594,9 +570,7 @@ __FE_COUT__ << "Calling read MZB block: link number " << std::dec << linkID_
 
 //======================================================================================================
 
-void ROCCalorimeterInterface::configure(void)
-try
-{
+void ROCCalorimeterInterface::configure(void) try {
 	ROCPolarFireCoreInterface::configure();
 
 	// consider that we know all the init files
@@ -613,32 +587,22 @@ try
 	// 	__COUT__<<"my temp"<<myTemp<<__E__;
 	//     __COUTV__(myTemp);
 	//     __MCOUTV__(myTemp);
-}
-catch(const std::runtime_error& e)
-{
+} catch(const std::runtime_error& e) {
 	__FE_COUT__ << "Error caught: " << e.what() << __E__;
 	throw;
-}
-catch(...)
-{
+} catch(...) {
 	__FE_SS__ << "Unknown error caught. Check printouts!" << __E__;
-	try
-	{
+	try {
 		throw;
 	}  // one more try to printout extra info
-	catch(const std::exception& e)
-	{
+	catch(const std::exception& e) {
 		ss << "Exception message: " << e.what();
-	}
-	catch(...)
-	{
-	}
+	} catch(...) {}
 	__FE_SS_THROW__;
 }
 
 //==================================================================================================
-bool ROCCalorimeterInterface::running(void)
-{
+bool ROCCalorimeterInterface::running(void) {
 	// SetupForPatternFixedLengthDataTaking(40);
 	SetupForADCsDataTaking(0, 2300);
 
@@ -646,27 +610,23 @@ bool ROCCalorimeterInterface::running(void)
 }
 
 //==================================================================================================
-void ROCCalorimeterInterface::Configure(__ARGS__)
-{
+void ROCCalorimeterInterface::Configure(__ARGS__) {
 	__COUT_INFO__ << "Configure called" << __E__;
 	configure();
 }
 
 //==================================================================================================
-void ROCCalorimeterInterface::SetVoltageChannel(__ARGS__)
-{
+void ROCCalorimeterInterface::SetVoltageChannel(__ARGS__) {
 	__COUT_INFO__ << "Set called" << __E__;
 }
 
 //==================================================================================================
-void ROCCalorimeterInterface::GetVoltageChannel(__ARGS__)
-{
+void ROCCalorimeterInterface::GetVoltageChannel(__ARGS__) {
 	__COUT_INFO__ << "Get called" << __E__;
 	__SET_ARG_OUT__("readValue", 12);
 }
 //==================================================================================================
-void ROCCalorimeterInterface::GetTempChannel(__ARGS__)
-{
+void ROCCalorimeterInterface::GetTempChannel(__ARGS__) {
 	__COUT_INFO__ << "Temp is" << __E__;
 	int channelnumber = __GET_ARG_IN__("channelNumber", int);
 	__SET_ARG_OUT__("readValue", GetTemperature(channelnumber));
@@ -699,8 +659,7 @@ int ROCCalorimeterInterface::GetTemperature(int idchannel)  // wrong address
 // } //end SetupForPatternDataTaking()
 
 //==================================================================================================
-void ROCCalorimeterInterface::SetupForPatternFixedLengthDataTaking(__ARGS__)
-{
+void ROCCalorimeterInterface::SetupForPatternFixedLengthDataTaking(__ARGS__) {
 	unsigned int numberOfWords = __GET_ARG_IN__(
 	    "Fixed Length of Event [units of 16-bit words, Default := 8]", uint32_t, 8);
 
@@ -710,8 +669,7 @@ void ROCCalorimeterInterface::SetupForPatternFixedLengthDataTaking(__ARGS__)
 
 //==================================================================================================
 void ROCCalorimeterInterface::SetupForPatternFixedLengthDataTaking(
-    unsigned int numberOfWords)
-{
+    unsigned int numberOfWords) {
 	__COUT_INFO__ << "SetupForPatternFixedLengthDataTaking()" << __E__;
 
 	writeRegister(ROC_ADDRESS_MASK_A, 0);
@@ -735,8 +693,7 @@ void ROCCalorimeterInterface::SetupForPatternFixedLengthDataTaking(
 //==================================================================================================
 
 //==================================================================================================
-void ROCCalorimeterInterface::SendMzCommand(std::string command, float paramVect[])
-{
+void ROCCalorimeterInterface::SendMzCommand(std::string command, float paramVect[]) {
 	__COUT_INFO__ << "SendMzCommand()" << __E__;
 
 	uint8_t* vectToWrite;
@@ -746,18 +703,15 @@ void ROCCalorimeterInterface::SendMzCommand(std::string command, float paramVect
 	// MZB_OSCMDCODE_t cmd_code = mz_string_to_enum(command.c_str());
 	MZB_OSCMDCODE_t cmd_code = SYNTAX_ERROR;
 
-	for(size_t i = 0; i < sizeof(code_map) / sizeof(code_map[0]); i++)
-	{
+	for(size_t i = 0; i < sizeof(code_map) / sizeof(code_map[0]); i++) {
 		// if (code_map[i].str == command.c_str()) {
-		if(strcmp(code_map[i].str, command.c_str()) == 0)
-		{
+		if(strcmp(code_map[i].str, command.c_str()) == 0) {
 			cmd_code = code_map[i].code;
 			break;
 		}
 	}
 
-	if(cmd_code == SYNTAX_ERROR)
-	{
+	if(cmd_code == SYNTAX_ERROR) {
 		__FE_SS__ << "Wrong MZB command, please check the inserted string! " << __E__
 		          << command << __E__ << command.c_str() << __E__ << code_map[21].str
 		          << __E__;
@@ -770,8 +724,7 @@ void ROCCalorimeterInterface::SendMzCommand(std::string command, float paramVect
 	//__COUT_INFO__ << "Mz debug ****" << __E__;
 
 	std::vector<uint16_t> input_data;
-	for(std::size_t i = 0; i < MZ_BUFFER_SIZE; i += 2)
-	{
+	for(std::size_t i = 0; i < MZ_BUFFER_SIZE; i += 2) {
 		uint16_t value = (static_cast<uint16_t>(vectToWrite[i]) << 8) |
 		                 (static_cast<uint16_t>(vectToWrite[i + 1]));
 		__COUT_INFO__ << std::hex << std::setprecision(4) << std::setfill('0') << "0x"
@@ -790,8 +743,7 @@ void ROCCalorimeterInterface::SendMzCommand(std::string command, float paramVect
 
 //==================================================================================================
 
-void ROCCalorimeterInterface::SendMzCommand(__ARGS__)
-{
+void ROCCalorimeterInterface::SendMzCommand(__ARGS__) {
 	std::string command = __GET_ARG_IN__("command tag from mz manual", std::string, "");
 	float       paramVect[9];
 
@@ -813,8 +765,7 @@ void ROCCalorimeterInterface::SendMzCommand(__ARGS__)
 
 //==================================================================================================
 
-void ROCCalorimeterInterface::EnableAndPowerSiPMs(__ARGS__)
-{
+void ROCCalorimeterInterface::EnableAndPowerSiPMs(__ARGS__) {
 	bool  hvonoff = __GET_ARG_IN__("HV Enabled, Default := 0]", bool, 0);
 	float vbias   = __GET_ARG_IN__("Bias voltage to set, Default := 0]", float, 0);
 
@@ -824,8 +775,7 @@ void ROCCalorimeterInterface::EnableAndPowerSiPMs(__ARGS__)
 
 //==================================================================================================
 
-void ROCCalorimeterInterface::SetBoardVoltages(__ARGS__)
-{
+void ROCCalorimeterInterface::SetBoardVoltages(__ARGS__) {
 	std::string conf =
 	    __GET_ARG_IN__("configuration folder, Default:= nominal", std::string, "nominal");
 
@@ -852,8 +802,7 @@ void ROCCalorimeterInterface::SetBoardVoltages(__ARGS__)
 
 //==================================================================================================
 
-void ROCCalorimeterInterface::ConfigureLink(__ARGS__)
-{
+void ROCCalorimeterInterface::ConfigureLink(__ARGS__) {
 	std::string conf =
 	    __GET_ARG_IN__("Configuration folder, Default:= nominal", std::string, "nominal");
 	bool hvonoff = __GET_ARG_IN__("HV Enabled, Default := 0]", bool, 0);
@@ -877,8 +826,7 @@ void ROCCalorimeterInterface::ConfigureLink(std::string conf,
                                             bool        hvonoff,
                                             bool        doCalibration,
                                             bool        setThresholds,
-                                            int         offset)
-{
+                                            int         offset) {
 	DTCLib::roc_address_t address = 147;
 	DTCLib::roc_data_t    readVal;
 	readVal = readRegister(address);
@@ -887,8 +835,7 @@ void ROCCalorimeterInterface::ConfigureLink(std::string conf,
 	auto                 filename = lookup_policy(confFile);
 
 	std::ifstream confMap(filename);
-	if(!confMap.is_open())
-	{
+	if(!confMap.is_open()) {
 		__FE_SS__ << "Could not open file: " << filename << __E__;
 		__FE_SS_THROW__;
 		;
@@ -896,32 +843,27 @@ void ROCCalorimeterInterface::ConfigureLink(std::string conf,
 
 	int boardid = -1;
 
-	for(int iboard = 0; iboard < 161; iboard++)
-	{
+	for(int iboard = 0; iboard < 161; iboard++) {
 		int nboard;
 		int notused;
 		int buid;
 
 		confMap >> nboard >> notused >> buid;
-		if(readVal == buid)
-		{
+		if(readVal == buid) {
 			boardid = nboard;
 			break;
 		}
 	}
 	confMap.close();
 
-	if(boardid != -1)
-	{
+	if(boardid != -1) {
 		if(doCalibration)
 			CalibrateMZB(boardid);
 		if(setThresholds)
 			SetADCsThresholds(boardid, offset);
 		SetBoardVoltages(hvonoff, boardid, conf);
 		writeRegister(ROC_ADDRESS_BOARD_ID, boardid);
-	}
-	else
-	{
+	} else {
 		__FE_SS__ << "Cannot match board unique ID: readval is " << readVal
 		          << ", while boardid is " << boardid << __E__;
 		__FE_SS_THROW__;
@@ -934,8 +876,7 @@ void ROCCalorimeterInterface::ConfigureLink(std::string conf,
 
 //==================================================================================================
 
-void ROCCalorimeterInterface::CalibrateMZB(__ARGS__)
-{
+void ROCCalorimeterInterface::CalibrateMZB(__ARGS__) {
 	int boardID = __GET_ARG_IN__("BoardID, Default := -1]", int, -1);
 
 	CalibrateMZB(boardID);
@@ -946,8 +887,7 @@ void ROCCalorimeterInterface::CalibrateMZB(__ARGS__)
 
 //==================================================================================================
 
-void ROCCalorimeterInterface::CalibrateMZB(int boardID)
-{
+void ROCCalorimeterInterface::CalibrateMZB(int boardID) {
 	char buff[50];
 	sprintf(buff, "mzb%03d.config", boardID);
 
@@ -956,8 +896,7 @@ void ROCCalorimeterInterface::CalibrateMZB(int boardID)
                                   buff);  // FIXME! THIS NEEDS TO BE A VARIABLE
 
 	std::ifstream confFile(filename);
-	if(!confFile.is_open())
-	{
+	if(!confFile.is_open()) {
 		__FE_SS__ << "Could not open file: " << filename << __E__;
 		__FE_SS_THROW__;
 		;
@@ -965,8 +904,7 @@ void ROCCalorimeterInterface::CalibrateMZB(int boardID)
 
 	__COUT_INFO__ << "Opening file: " << filename << __E__;
 
-	for(int ichan = 0; ichan < 20; ichan++)
-	{
+	for(int ichan = 0; ichan < 20; ichan++) {
 		int   chindex;
 		float slope;
 		float offset;
@@ -977,8 +915,7 @@ void ROCCalorimeterInterface::CalibrateMZB(int boardID)
 		confFile >> chindex;
 		paramVect[0] = chindex + 1;
 
-		for(int icalib = 0; icalib < 4; icalib++)
-		{
+		for(int icalib = 0; icalib < 4; icalib++) {
 			confFile >> slope >> offset;
 			paramVect[(icalib * 2) + 1] = slope;
 			paramVect[(icalib * 2) + 2] = offset;
@@ -1000,21 +937,18 @@ void ROCCalorimeterInterface::CalibrateMZB(int boardID)
 
 //==================================================================================================
 
-void ROCCalorimeterInterface::SetADCsThresholds(__ARGS__)
-{
+void ROCCalorimeterInterface::SetADCsThresholds(__ARGS__) {
 	int boardID = __GET_ARG_IN__("BoardID, Default := -1]", int, -1);
 	int offset  = __GET_ARG_IN__("offset, Default := 0]", int, 0);
 
 	SetADCsThresholds(boardID, offset);
 }  // end ConfigureLink()
 
-void ROCCalorimeterInterface::SetADCsThresholds(int boardID, int offset)
-{
+void ROCCalorimeterInterface::SetADCsThresholds(int boardID, int offset) {
 	char buff[50];
 	sprintf(buff, "dirac%03d.baseline", boardID);
 
-	if(boardID >= 160)
-	{
+	if(boardID >= 160) {
 		__COUT_INFO__ << "Skipping setting thresholds to board " << boardID << __E__;
 		return;
 	}
@@ -1024,21 +958,16 @@ void ROCCalorimeterInterface::SetADCsThresholds(int boardID, int offset)
                                   buff);  // FIXME! THIS NEEDS TO BE A VARIABLE
 
 	std::ifstream confFile(filename);
-	if(!confFile.is_open())
-	{
+	if(!confFile.is_open()) {
 		__FE_SS__ << "Could not open file: " << filename << __E__;
 
-		for(int ichan = 0; ichan < 20; ichan++)
-		{
+		for(int ichan = 0; ichan < 20; ichan++) {
 			writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ichan, 2300);
 		}
-	}
-	else
-	{
+	} else {
 		__COUT_INFO__ << "Opening file: " << filename << __E__;
 
-		for(int ichan = 0; ichan < 20; ichan++)
-		{
+		for(int ichan = 0; ichan < 20; ichan++) {
 			int   chindex;
 			float baseline;
 			float sigma;
@@ -1065,8 +994,7 @@ void ROCCalorimeterInterface::SetADCsThresholds(int boardID, int offset)
 
 void ROCCalorimeterInterface::SetBoardVoltages(bool        hvonoff,
                                                int         boardID,
-                                               std::string conf)
-{
+                                               std::string conf) {
 	std::string command = "HVONOFF";
 	float       paramVect[9];
 	paramVect[0] = hvonoff;
@@ -1113,8 +1041,7 @@ void ROCCalorimeterInterface::SetBoardVoltages(bool        hvonoff,
 
 	usleep(100000);
 
-	if(hvonoff == 1)
-	{
+	if(hvonoff == 1) {
 		char buff[50];
 		sprintf(buff, "board%03d.config", boardID);
 
@@ -1122,8 +1049,7 @@ void ROCCalorimeterInterface::SetBoardVoltages(bool        hvonoff,
 		auto                 filename = lookup_policy(conf + "/" + buff);
 
 		std::ifstream confFile(filename);
-		if(!confFile.is_open())
-		{
+		if(!confFile.is_open()) {
 			__FE_SS__ << "Could not open file: " << filename << __E__;
 			__FE_SS_THROW__;
 			;
@@ -1133,8 +1059,7 @@ void ROCCalorimeterInterface::SetBoardVoltages(bool        hvonoff,
 
 		float vbias[20];
 
-		for(int ichan = 0; ichan < 20; ichan++)
-		{
+		for(int ichan = 0; ichan < 20; ichan++) {
 			int         chindex;
 			std::string type;
 
@@ -1189,8 +1114,7 @@ void ROCCalorimeterInterface::SetBoardVoltages(bool        hvonoff,
 
 //==================================================================================================
 
-void ROCCalorimeterInterface::EnableAndPowerSiPMs(bool hvonoff, float vbias)
-{
+void ROCCalorimeterInterface::EnableAndPowerSiPMs(bool hvonoff, float vbias) {
 	std::string command = "HVONOFF";  // the dalays have a random value
 	float       paramVect[9];
 	paramVect[0] = hvonoff;
@@ -1242,8 +1166,7 @@ void ROCCalorimeterInterface::EnableAndPowerSiPMs(bool hvonoff, float vbias)
 //==================================================================================================
 
 //==================================================================================================
-void ROCCalorimeterInterface::ReadROCErrorCounter(__ARGS__)
-{
+void ROCCalorimeterInterface::ReadROCErrorCounter(__ARGS__) {
 	__COUT_INFO__ << "ReadROCErrorCounter()" << __E__;
 
 	unsigned int errAddr = __GET_ARG_IN__("Address to read, Default := 0]", uint16_t, 0);
@@ -1271,8 +1194,7 @@ void ROCCalorimeterInterface::ReadROCErrorCounter(__ARGS__)
 
 //==================================================================================================
 
-void ROCCalorimeterInterface::SetupForADCsDataTaking(__ARGS__)
-{
+void ROCCalorimeterInterface::SetupForADCsDataTaking(__ARGS__) {
 	bool         setThr = __GET_ARG_IN__("Set Threshold? [bool, Default := 0]", bool, 0);
 	unsigned int threshold =
 	    __GET_ARG_IN__("Threshold [units of adccounts, Default := 2300]", uint32_t, 2300);
@@ -1285,8 +1207,7 @@ void ROCCalorimeterInterface::SetupForADCsDataTaking(__ARGS__)
 
 //==================================================================================================
 
-void ROCCalorimeterInterface::SetupForNoiseTaking(__ARGS__)
-{
+void ROCCalorimeterInterface::SetupForNoiseTaking(__ARGS__) {
 	unsigned int numberOfsamples =
 	    __GET_ARG_IN__("Number of noise samples per evt [Default := 20]", uint32_t, 20);
 
@@ -1298,8 +1219,7 @@ void ROCCalorimeterInterface::SetupForNoiseTaking(__ARGS__)
 
 //==================================================================================================
 
-void ROCCalorimeterInterface::SetupForNoiseTaking(unsigned int numberOfsamples)
-{
+void ROCCalorimeterInterface::SetupForNoiseTaking(unsigned int numberOfsamples) {
 	__COUT_INFO__ << "SetupForNoiseTaking()" << __E__;
 
 	writeRegister(ROC_ADDRESS_MASK_A, 1023);
@@ -1326,8 +1246,8 @@ void ROCCalorimeterInterface::SetupForNoiseTaking(unsigned int numberOfsamples)
 
 //==================================================================================================
 
-void ROCCalorimeterInterface::SetupForADCsDataTaking(bool setThr, unsigned int threshold)
-{
+void ROCCalorimeterInterface::SetupForADCsDataTaking(bool         setThr,
+                                                     unsigned int threshold) {
 	__COUT_INFO__ << "SetupForADCsDataTaking()" << __E__;
 
 	__FE_COUTV__(threshold);
@@ -1388,10 +1308,8 @@ void ROCCalorimeterInterface::SetupForADCsDataTaking(bool setThr, unsigned int t
 	writeRegister(ROC_ADDRESS_ANALOGRESET, 0);
 
 	// Write Roc thrsholds using
-	if(setThr)
-	{
-		for(int ich = 0; ich < 20; ich++)
-		{
+	if(setThr) {
+		for(int ich = 0; ich < 20; ich++) {
 			// writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ich,
 			// std::stoi(csvRows[0][ich+1]));
 			writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ich, threshold);
@@ -1413,16 +1331,14 @@ void ROCCalorimeterInterface::SetupForADCsDataTaking(bool setThr, unsigned int t
 
 //==================================================================================================
 
-void ROCCalorimeterInterface::ToggleMBBusy(__ARGS__)
-{
+void ROCCalorimeterInterface::ToggleMBBusy(__ARGS__) {
 	unsigned int busyonoff =
 	    __GET_ARG_IN__("On/Off [Busy On/Off, Default := 1]", bool, 1);
 	ToggleMBBusy(busyonoff);
 
 }  // end ToggleMBBusy()
 
-void ROCCalorimeterInterface::ToggleMBBusy(bool busyonoff)
-{
+void ROCCalorimeterInterface::ToggleMBBusy(bool busyonoff) {
 	writeRegister(ROC_ADDRESS_MZB_BUSY, busyonoff);
 
 }  // end ToggleMBBusy()
@@ -1430,8 +1346,7 @@ void ROCCalorimeterInterface::ToggleMBBusy(bool busyonoff)
 //==================================================================================================
 
 //==================================================================================================
-void ROCCalorimeterInterface::GetStatus(__ARGS__)
-{
+void ROCCalorimeterInterface::GetStatus(__ARGS__) {
 	// copied from Monica's va_read_all.sh
 
 	DTCLib::roc_data_t readVal;
@@ -1521,8 +1436,7 @@ void ROCCalorimeterInterface::GetStatus(__ARGS__)
 	    "OFFSET tag",                                            // 57
 	};
 
-	for(size_t i = 0; i < doubleReads.size(); ++i)
-	{
+	for(size_t i = 0; i < doubleReads.size(); ++i) {
 		address      = doubleReads[i];
 		readVal      = readRegister(address);
 		doubleRegVal = readVal;
@@ -1599,14 +1513,11 @@ void ROCCalorimeterInterface::GetStatus(__ARGS__)
 
   } */
 
-void ROCCalorimeterInterface::RMZB_writeAllSiPMbias(float* hv)
-{
-	struct __attribute__((packed, aligned(4)))
-	{
+void ROCCalorimeterInterface::RMZB_writeAllSiPMbias(float* hv) {
+	struct __attribute__((packed, aligned(4))) {
 		short dummy;
 		short adr;
-		struct __attribute__((packed))
-		{
+		struct __attribute__((packed)) {
 			short          biasVreq_tag;  // 'HV'
 			short          reserved;
 			unsigned short biasVreq[FEE_NUM];
@@ -1625,8 +1536,7 @@ void ROCCalorimeterInterface::RMZB_writeAllSiPMbias(float* hv)
 
 	input_data.push_back(0x00);
 
-	for(int ch = 0; ch < FEE_NUM; ch++)
-	{
+	for(int ch = 0; ch < FEE_NUM; ch++) {
 		float hvset          = hv[ch] * 10. + .49999;
 		bm.bias.biasVreq[ch] = hvset;
 		bm.bias.biasVreq[ch] |= 0x8000;
@@ -1637,8 +1547,7 @@ void ROCCalorimeterInterface::RMZB_writeAllSiPMbias(float* hv)
 	input_data.push_back((uint16_t)(bm.chksum >> 16));
 	input_data.push_back((uint16_t)(bm.chksum & 0xFFFF));
 
-	for(auto& value : input_data)
-	{
+	for(auto& value : input_data) {
 		value = (value >> 8) | (value << 8);  // Scambia i due byte
 	}
 

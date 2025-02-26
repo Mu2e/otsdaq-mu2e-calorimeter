@@ -12,8 +12,7 @@ XDAQ_INSTANTIATOR_IMPL(TemplateSupervisor)
 
 //========================================================================================================================
 TemplateSupervisor::TemplateSupervisor(xdaq::ApplicationStub* s)
-    : xdaq::Application(s), SOAPMessenger(this)
-{
+    : xdaq::Application(s), SOAPMessenger(this) {
 	INIT_MF("TemplateSupervisor");
 	xgi::bind(this, &TemplateSupervisor::Default, "Default");
 	init();
@@ -22,20 +21,17 @@ TemplateSupervisor::TemplateSupervisor(xdaq::ApplicationStub* s)
 //========================================================================================================================
 TemplateSupervisor::~TemplateSupervisor(void) { destroy(); }
 //========================================================================================================================
-void TemplateSupervisor::init(ConfigurationManager* configManager)
-{
+void TemplateSupervisor::init(ConfigurationManager* configManager) {
 	// called by constructor
 }
 
 //========================================================================================================================
-void TemplateSupervisor::destroy(void)
-{
+void TemplateSupervisor::destroy(void) {
 	// called by destructor
 }
 
 //========================================================================================================================
-void TemplateSupervisor::Default(xgi::Input* in, xgi::Output* out)
-{
+void TemplateSupervisor::Default(xgi::Input* in, xgi::Output* out) {
 	*out << "<!DOCTYPE HTML><html lang='en'><frameset col='100%' "
 	        "row='100%'><frame src='/WebPath/html/Chat.html?urn="
 	     << this->getApplicationDescriptor()->getLocalId() << "'></frameset></html>";
