@@ -43,41 +43,37 @@ class CaloEventFilter : public art::EDFilter {
 
   private:
 	DTCLib::DTC_Subsystem subsystem_;
-
 };
 }  // namespace mu2e
 
 mu2e::CaloEventFilter::CaloEventFilter(const art::EDFilter::Table<Config>& config)
     : art::EDFilter{config} {
-
 	if(config().subsystem_override() == "calo") {
 		subsystem_ = DTCLib::DTC_Subsystem::DTC_Subsystem_Calorimeter;
 	} else if(config().subsystem_override() == "tracker") {
 		subsystem_ = DTCLib::DTC_Subsystem::DTC_Subsystem_Tracker;
 	}
-
 }
 
 bool mu2e::CaloEventFilter::filter(art::Event& event) {
-
 	artdaq::Fragments fragments = getFragments(event);
 	for(const auto& frag : fragments) {
 		mu2e::DTCEventFragment eventFragment(frag);
-		const auto& caloSubEvents = eventFragment.getSubsystemData(subsystem_);
-		//Loop over calo DTCs
+		const auto&            caloSubEvents = eventFragment.getSubsystemData(subsystem_);
+		// Loop over calo DTCs
 		for(const auto& subevent : caloSubEvents) {
-			//Loop over ROCs
-			for(const auto& dataBlock : subevent.GetDataBlocks()){
+			// Loop over ROCs
+			for(const auto& dataBlock : subevent.GetDataBlocks()) {
 				int nPackets = dataBlock.GetHeader()->GetPacketCount();
-				if (nPackets > 0){
-					//We have data!
+				if(nPackets > 0) {
+					// We have data!
 					return true;
 				}
 			}
 		}
 	}
 
-	//Didn't find anything
+	// Didn't find anything
 	return false;
 }
 
