@@ -11,15 +11,12 @@ ifstream filein;
 ofstream fileheader;
 ofstream filepayload;
 
-int read_header()
-{
+int read_header() {
 	int           nlines;
 	char          data[16];
 	unsigned int* data_int = (unsigned int*)data;
-	for(int i = 0; i < 9; i++)
-	{
-		for(int j = 0; j < 2; j++)
-		{
+	for(int i = 0; i < 9; i++) {
+		for(int j = 0; j < 2; j++) {
 			filein.read(data, 4);
 			cout << data << endl;
 			if(filein.eof())
@@ -33,17 +30,14 @@ int read_header()
 	return nlines;
 }
 
-void read_event(int nlines)
-{
+void read_event(int nlines) {
 	filepayload << "E" << dec << nlines << endl;
 
 	char          data[16];
 	unsigned int* data_int = (unsigned int*)data;
-	for(int i = 0; i < nlines; i++)
-	{
+	for(int i = 0; i < nlines; i++) {
 		string b = "";
-		for(int j = 0; j < 8; j++)
-		{
+		for(int j = 0; j < 8; j++) {
 			filein.read(data, 4);
 			filepayload << setfill('0') << setw(8) << hex << data_int[0];
 		}
@@ -54,8 +48,7 @@ void read_event(int nlines)
 	return;
 }
 
-int converter(string run_num)
-{
+int converter(string run_num) {
 	string filetype = "macroOutput";
 
 	string file_in = filetype + "_" + run_num + ".bin";
@@ -70,8 +63,7 @@ int converter(string run_num)
 	    std::string(getenv("OTSDAQ_DATA")) + "/" + "payload_" + run_num + ".txt";
 	filepayload.open(file_payload.c_str());
 
-	while(true)
-	{
+	while(true) {
 		int nlines = read_header();
 		if(nlines == -1)
 			break;

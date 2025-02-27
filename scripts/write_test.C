@@ -10,14 +10,12 @@ using namespace DTCLib;
 // print 16 bytes per line
 // size - number of bytes to print, even
 //-----------------------------------------------------------------------------
-void print_buffer(const void* ptr, int nw)
-{
+void print_buffer(const void* ptr, int nw) {
 	// int     nw  = nbytes/2;
 	ushort* p16 = (ushort*)ptr;
 	int     n   = 0;
 
-	for(int i = 0; i < nw; i++)
-	{
+	for(int i = 0; i < nw; i++) {
 		if(n == 0)
 			printf(" 0x%08x: ", i * 2);
 
@@ -25,8 +23,7 @@ void print_buffer(const void* ptr, int nw)
 		printf("0x%04x ", word);
 
 		n += 1;
-		if(n == 8)
-		{
+		if(n == 8) {
 			printf("\n");
 			n = 0;
 		}
@@ -39,8 +36,7 @@ void print_buffer(const void* ptr, int nw)
 //-----------------------------------------------------------------------------
 //
 //-----------------------------------------------------------------------------
-void write_testfranco(int Link, int ROCSleepTime = 5000)
-{
+void write_testfranco(int Link, int ROCSleepTime = 5000) {
 	auto link = DTC_Link_ID(Link);
 
 	uint32_t roc_mask = 0x1 << 4 * Link;
@@ -92,8 +88,7 @@ void write_testfranco(int Link, int ROCSleepTime = 5000)
 //-----------------------------------------------------------------------------
 // an example of cloning a function
 //-----------------------------------------------------------------------------
-void write_roc_1()
-{
+void write_roc_1() {
 	DTC dtc(DTC_SimMode_NoCFO, -1, 0x1, "");
 	std::this_thread::sleep_for(std::chrono::milliseconds(500));
 

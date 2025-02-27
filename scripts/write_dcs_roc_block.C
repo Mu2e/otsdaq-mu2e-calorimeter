@@ -14,8 +14,7 @@ using namespace DTCLib;
 //-----------------------------------------------------------------------------
 // float_to_uint16_1st_part
 //-----------------------------------------------------------------------------
-uint16_t float_to_uint16_1st_part(float float_value)
-{
+uint16_t float_to_uint16_1st_part(float float_value) {
 	// Use a pointer to point to the float variable
 	uint32_t* float_bits = (uint32_t*)&float_value;
 
@@ -29,8 +28,7 @@ uint16_t float_to_uint16_1st_part(float float_value)
 //-----------------------------------------------------------------------------
 // float_to_uint16_2nd_part
 //-----------------------------------------------------------------------------
-uint16_t float_to_uint16_2nd_part(float float_value)
-{
+uint16_t float_to_uint16_2nd_part(float float_value) {
 	// Use a pointer to point to the float variable
 	uint32_t* float_bits = (uint32_t*)&float_value;
 
@@ -44,8 +42,7 @@ uint16_t float_to_uint16_2nd_part(float float_value)
 //-----------------------------------------------------------------------------
 // uint32_to_uint16_1st_part
 //-----------------------------------------------------------------------------
-uint16_t uint32_to_uint16_1st_part(uint32_t* uint32_value)
-{
+uint16_t uint32_to_uint16_1st_part(uint32_t* uint32_value) {
 	// Extract first 16 bits for the first uint16
 	uint16_t uint16_1 = (*uint32_value) & 0xFFFF;
 	cout << "uint32_value " << uint32_value << " First uint16: " << uint16_1 << " "
@@ -56,8 +53,7 @@ uint16_t uint32_to_uint16_1st_part(uint32_t* uint32_value)
 //-----------------------------------------------------------------------------
 // uint32_to_uint16_2nd_part
 //-----------------------------------------------------------------------------
-uint16_t uint32_to_uint16_2nd_part(uint32_t* uint32_value)
-{
+uint16_t uint32_to_uint16_2nd_part(uint32_t* uint32_value) {
 	// Extract second 16 bits for the second uint16
 	uint16_t uint16_2 = (*uint32_value) & 0xFFFF;
 	cout << "uint32_value " << uint32_value << " Second uint16: " << uint16_2 << " "
@@ -68,8 +64,7 @@ uint16_t uint32_to_uint16_2nd_part(uint32_t* uint32_value)
 //-----------------------------------------------------------------------------
 // uint32_to_float
 //-----------------------------------------------------------------------------
-float uint32_to_float(uint32_t value)
-{  //"9" test
+float uint32_to_float(uint32_t value) {  //"9" test
 	// Use a pointer to point to the float variable
 	float* float_bits = (float*)&value;
 	return *float_bits;
@@ -84,14 +79,12 @@ float uint32_to_float(uint32_t value)
  * @param len length of the buffer (it can be any number)
  * @return Checksum value
  */
-unsigned APP_chksum(const void* ptr, int len)
-{
+unsigned APP_chksum(const void* ptr, int len) {
 	unsigned* src = (unsigned*)ptr;
 	unsigned  sum;
 	for(sum = 0; len >= 4; len -= 4)
 		sum += *src++;
-	if(len)
-	{
+	if(len) {
 		unsigned tmp = 0;
 		memcpy(&tmp, src, len);
 		sum += tmp;
@@ -103,14 +96,12 @@ unsigned APP_chksum(const void* ptr, int len)
 // print 16 bytes per line
 // size - number of bytes to print, even
 //-----------------------------------------------------------------------------
-void print_buffer(const void* ptr, int nw)
-{
+void print_buffer(const void* ptr, int nw) {
 	// int     nw  = nbytes/2;
 	ushort* p16 = (ushort*)ptr;
 	int     n   = 0;
 
-	for(int i = 0; i < nw; i++)
-	{
+	for(int i = 0; i < nw; i++) {
 		if(n == 0)
 			printf(" 0x%08x: ", i * 2);
 
@@ -118,8 +109,7 @@ void print_buffer(const void* ptr, int nw)
 		printf("0x%04x ", word);
 
 		n += 1;
-		if(n == 8)
-		{
+		if(n == 8) {
 			printf("\n");
 			n = 0;
 		}
@@ -132,8 +122,7 @@ void print_buffer(const void* ptr, int nw)
 //-----------------------------------------------------------------------------
 // fill_uint16_vector
 //-----------------------------------------------------------------------------
-void fill_uint16_vector(std::vector<uint16_t>& input_data)
-{
+void fill_uint16_vector(std::vector<uint16_t>& input_data) {
 	float    float_variable = 123.456;
 	uint16_t uint16_1, uint16_2;
 
@@ -203,8 +192,7 @@ void fill_uint16_vector(std::vector<uint16_t>& input_data)
 //-----------------------------------------------------------------------------
 // root main function
 //-----------------------------------------------------------------------------
-void write_dcs_roc_block(int Link, int ROCSleepTime = 5000)
-{
+void write_dcs_roc_block(int Link, int ROCSleepTime = 5000) {
 	std::vector<uint16_t> input_data;
 	fill_uint16_vector(input_data);
 
@@ -243,8 +231,7 @@ void write_dcs_roc_block(int Link, int ROCSleepTime = 5000)
 //-----------------------------------------------------------------------------
 // an example of cloning a function
 //-----------------------------------------------------------------------------
-void write_roc_1()
-{
+void write_roc_1() {
 	DTC dtc(DTC_SimMode_NoCFO, -1, 0x1, "");
 	std::this_thread::sleep_for(std::chrono::milliseconds(500));
 

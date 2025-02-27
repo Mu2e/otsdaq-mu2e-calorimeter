@@ -15,8 +15,7 @@
 
 using namespace std;
 
-int validate_pattern(int ievtno, string file_name)
-{
+int validate_pattern(int ievtno, string file_name) {
 	// file names & locations
 	// string file_in = "/sudaq/DAQData/TriggerData/MactrisData/l1_rawdata_run" + run +
 	// ".bin";
@@ -26,14 +25,11 @@ int validate_pattern(int ievtno, string file_name)
 	ifstream fin(file_in.c_str(), ofstream::binary);
 	ofstream fout(file_out.c_str());
 
-	if(!fin.is_open())
-	{
+	if(!fin.is_open()) {
 		cout << "ERROR - cannot open input file" << endl;
 		return -1;
-	}
-	else
-	{  // BINARY data file found: define&initialize all variables and start WHILE loop
-	   // until end of file is found
+	} else {  // BINARY data file found: define&initialize all variables and start WHILE
+		      // loop until end of file is found
 		cout << "******************************************************" << endl;
 		cout << "Opening input file " << file_in.c_str() << endl << endl;
 		cout << "Errors saved in file " << file_out.c_str() << endl << endl;
@@ -128,8 +124,7 @@ int validate_pattern(int ievtno, string file_name)
 		int is_payload_error   = 0;
 
 		// process entire contents of file
-		while(!fin.eof())
-		{
+		while(!fin.eof()) {
 			// reads in 32 bits (or 4 bytes) at a time:
 			//   16 LSB are first in dump, 16 MSB are secnd in dump
 			fin.read(data, 4);
@@ -148,8 +143,7 @@ int validate_pattern(int ievtno, string file_name)
 			if(hexcount < SKIP)
 				continue;
 
-			if(evt_start)
-			{
+			if(evt_start) {
 				// cout << "inside evt_start  at hexcount = 0x"<<hex<<hexcount<<dec<<endl;
 				// exit when the word is not updating
 				if(data_int[0] == last_data)
@@ -167,8 +161,7 @@ int validate_pattern(int ievtno, string file_name)
 				// if ((evtcount-1)>=3135 && (evtcount-1)<3136) DEBUG = 1;
 				// else DEBUG = 0;
 
-				if(DEBUG)
-				{
+				if(DEBUG) {
 					cout << endl
 					     << " At evtcount " << evtcount
 					     << " payload_size=" << payload_size << " link_size=" << link_size
@@ -196,8 +189,7 @@ int validate_pattern(int ievtno, string file_name)
 			if(check_payload == 0 && ilink < (LINK_NO + EMPTY_LINKS))
 				check_header = 1;
 
-			if(check_header)
-			{
+			if(check_header) {
 				link_head_counter++;
 
 				// cout<<endl<<" Checking header word "<<link_head_counter<<" for link
@@ -206,8 +198,7 @@ int validate_pattern(int ievtno, string file_name)
 				// find trigger number to use for each link in the event
 				if(ilink == 0 && link_head_counter == 2)
 					trg_no = msb_word;
-				if(ilink == 0 && link_head_counter == 3)
-				{
+				if(ilink == 0 && link_head_counter == 3) {
 					trg_no = trg_no + (lsb_word << 16);
 					if(DEBUG)
 						cout << "  Event " << evtcount << " has timestamp 0x" << hex
@@ -216,25 +207,19 @@ int validate_pattern(int ievtno, string file_name)
 
 				// first DATA HEADER WORD contains VALID word + overall LINK SIZE in units
 				// of bites
-				if(link_head_counter == 1)
-				{
+				if(link_head_counter == 1) {
 					if(DEBUG)
 						cout << "  starting link header check for ilink " << ilink
 						     << " of event " << evtcount << dec << endl;
 
-					if(ilink < LINK_NO)
-					{
+					if(ilink < LINK_NO) {
 						low_word = link_size * 4;
 						// high_word = (0x8050 + 0x800 + ilink*0x100);
 						high_word = (0x8050 + ilink * 0x100);
-					}
-					else if(ilink <= 2)
-					{
+					} else if(ilink <= 2) {
 						low_word  = LINK_HEAD_SIZE * 4;
 						high_word = (0x8050 + 0x1000 + ilink * 0x100);
-					}
-					else
-					{
+					} else {
 						low_word  = LINK_HEAD_SIZE * 4;
 						high_word = (0x8050 + ilink * 0x100);
 					}
@@ -243,14 +228,10 @@ int validate_pattern(int ievtno, string file_name)
 
 				// second DATA HEADER WORD contains TRIGGER number[15:0] + no. of DTC
 				// packets (= number of hits*4)
-				if(link_head_counter == 2)
-				{
-					if(ilink < LINK_NO)
-					{
+				if(link_head_counter == 2) {
+					if(ilink < LINK_NO) {
 						low_word = payload_size / 4;
-					}
-					else
-					{
+					} else {
 						low_word = 0;
 					}
 
@@ -258,15 +239,13 @@ int validate_pattern(int ievtno, string file_name)
 				}
 
 				// third DATA HEADER WORD contains TRIGGER number[47:32]
-				if(link_head_counter == 3)
-				{
+				if(link_head_counter == 3) {
 					low_word  = (trg_no >> 16) & 0xFFFF;
 					high_word = 0;
 				}
 
 				// fourth DATA HEADER WORD contains STATUS BITS
-				if(link_head_counter == 4)
-				{
+				if(link_head_counter == 4) {
 					if(ilink == 0)
 						low_word = DEF_STATUS;
 					else if(ilink == 1)
@@ -287,8 +266,7 @@ int validate_pattern(int ievtno, string file_name)
 				}
 
 				// report errors
-				if(lsb_word != low_word)
-				{
+				if(lsb_word != low_word) {
 					if(DEBUG)
 						cout << " ==> link " << ilink
 						     << " has error for LSB-data of header word "
@@ -305,8 +283,7 @@ int validate_pattern(int ievtno, string file_name)
 						     << setfill('0') << setw(8) << hexcount << dec << endl;
 				}
 
-				if(msb_word != high_word)
-				{
+				if(msb_word != high_word) {
 					if(DEBUG)
 						cout << " ==> link " << ilink
 						     << " has error for MSB-data of header word "
@@ -325,21 +302,16 @@ int validate_pattern(int ievtno, string file_name)
 			}  // end of check_header
 
 			// chech payload content
-			if(check_payload)
-			{
+			if(check_payload) {
 				// remember last pattern data with non null payload
-				if(payload_counter == 0)
-				{
-					if(ilink == FIRST_LINK)
-					{
+				if(payload_counter == 0) {
+					if(ilink == FIRST_LINK) {
 						start_prev_data = prev_data;
 						if(DEBUG)
 							cout << "  ilink is " << ilink
 							     << " ==> set start_prev_data as 0x" << hex
 							     << start_prev_data << dec << endl;
-					}
-					else if(ilink < (FIRST_LINK + LINK_NO))
-					{
+					} else if(ilink < (FIRST_LINK + LINK_NO)) {
 						prev_data = start_prev_data;
 						if(DEBUG)
 							cout << "  ilink is " << ilink
@@ -354,35 +326,29 @@ int validate_pattern(int ievtno, string file_name)
 					cout << "  payload_counter = " << payload_counter
 					     << " has data_int = 0x" << hex << data_int[0] << dec << endl;
 
-				if(prev_data == -1)
-				{  // this is the very first payload word (expected to be zero)
+				if(prev_data ==
+				   -1) {  // this is the very first payload word (expected to be zero)
 					prev_data = data_int[0];
 					if(DEBUG || prev_data != 0)
 						cout << "   at evtcount " << evtcount
 						     << ": UNUSUAL starting counter of 0x" << hex << data_int[0]
 						     << dec << endl;
-				}
-				else
-				{  // prev_data has been set to previous payload counter
+				} else {  // prev_data has been set to previous payload counter
 					if(DEBUG)
 						cout << "  previous prev_data at evtcount " << evtcount
 						     << ": data_int = 0x" << hex << data_int[0] << dec
 						     << " and prev_data = 0x" << hex << prev_data << dec << endl;
-					if(data_int[0] != prev_data + 1)
-					{
+					if(data_int[0] != prev_data + 1) {
 						is_payload_error = 1;
 						prev_data        = prev_data + 1;
-					}
-					else
+					} else
 						prev_data = data_int[0];
 				}
 
 				// report payload_error BEFORE updating "prev_data"!!
-				if(is_payload_error)
-				{
+				if(is_payload_error) {
 					is_payload_error = 0;
-					if(DEBUG)
-					{
+					if(DEBUG) {
 						cout << "  bad payload word 0x" << hex << data_int[0] << dec
 						     << " at word count " << payload_counter << " of "
 						     << word_in_payload << " for event " << evtcount - 1
@@ -405,16 +371,14 @@ int validate_pattern(int ievtno, string file_name)
 
 			// we finished header checks: enable payload checks on the next word for links
 			// with payload
-			if(link_head_counter == 4)
-			{
+			if(link_head_counter == 4) {
 				link_head_counter = 0;
 				check_header      = 0;
 				check_payload     = 1;
 			}
 
 			// we finished payload checks: enable header checks on next word
-			if(check_payload == 1 && payload_counter == payload_size)
-			{
+			if(check_payload == 1 && payload_counter == payload_size) {
 				payload_counter = 0;
 				check_payload   = 0;
 				check_header    = 1;
@@ -431,10 +395,8 @@ int validate_pattern(int ievtno, string file_name)
 			}
 
 			// check on number of 32-bit words to decide if we reached end of event
-			if(word_counter == evt_size)
-			{
-				if(DEBUG)
-				{
+			if(word_counter == evt_size) {
+				if(DEBUG) {
 					cout << " => end of event " << evtcount;
 					cout << " with data_int[0] = 0x" << hex << data_int[0];
 					cout << " at hexcount = 0x" << hex << hexcount << dec << endl;
