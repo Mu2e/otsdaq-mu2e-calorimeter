@@ -44,9 +44,9 @@ cet_build_plugin(CaloiercAnalyzer art::module
 cet_build_plugin(CaloEventFilter art::module
     REG_SOURCE CaloEventFilter_module.cc
     LIBRARIES REG
-      artdaq_core_mu2e::artdaq-core-mu2e_Data
-      artdaq_core_mu2e::artdaq-core-mu2e_Data_dict
-      artdaq_core_mu2e::artdaq-core-mu2e_Overlays
+      artdaq-core-mu2e::Data
+      artdaq-core-mu2e::Data_dict
+      artdaq-core-mu2e::Overlays
       artdaq::DAQdata
 )
 

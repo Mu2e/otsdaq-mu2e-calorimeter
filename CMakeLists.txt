@@ -30,7 +30,7 @@ cet_set_compiler_flags(DIAGS VIGILANT
 #cet_report_compiler_flags()
 
 # these are minimum required versions, not the actual product versions
-find_package(otsdaq_mu2e 1.02.00 REQUIRED)
+find_package(otsdaq-mu2e 1.02.00 REQUIRED)
 
  # XDAQ Extra setup
  include_directories($ENV{XDAQ_ROOT}/include/linux $ENV{XDAQ_ROOT}/include)
