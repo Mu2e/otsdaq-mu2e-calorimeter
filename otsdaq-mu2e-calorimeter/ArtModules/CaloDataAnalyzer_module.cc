@@ -80,8 +80,8 @@ class CaloDataAnalyzer : public art::EDAnalyzer {
 	TGraph* g_eventHits;
 	TGraph* g_eventEWT;
 
-	static const int MAXNHITS    = 1348; //1 hit per sipm
-	static const int MAXNSAMPLES = 67400; //50 samples per hit (max!)
+	static const int MAXNHITS    = 1348;   // 1 hit per sipm
+	static const int MAXNSAMPLES = 67400;  // 50 samples per hit (max!)
 
 	int                                 t_run;
 	int                                 t_subrun;
@@ -344,12 +344,14 @@ void mu2e::CaloDataAnalyzer::processCaloData(
 				}
 
 				// Fill trees
-				if (t_nhits >= MAXNHITS){
-					std::cout << "ERROR! This event has more than " << MAXNHITS << " hits (MAXNHITS)\n";
+				if(t_nhits >= MAXNHITS) {
+					std::cout << "ERROR! This event has more than " << MAXNHITS
+					          << " hits (MAXNHITS)\n";
 					continue;
 				}
-				if (t_nsamples + hit_waveform.size() >= MAXNSAMPLES){
-					std::cout << "ERROR! This event has more than " << MAXNSAMPLES << " waveform samples (MAXNSAMPLES)\n";
+				if(t_nsamples + hit_waveform.size() >= MAXNSAMPLES) {
+					std::cout << "ERROR! This event has more than " << MAXNSAMPLES
+					          << " waveform samples (MAXNSAMPLES)\n";
 					continue;
 				}
 
