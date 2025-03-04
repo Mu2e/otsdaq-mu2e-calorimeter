@@ -12,34 +12,33 @@
 #include "Offline/RecoDataProducts/inc/CaloDigi.hh"
 #include "art_root_io/TFileService.h"
 
-#include <iostream>
-#include <fstream>
-#include <sstream>
-#include <iomanip>
-#include <vector>
-#include <map>
-#include <cmath>
 #include <algorithm>
+#include <cmath>
+#include <fstream>
+#include <iomanip>
+#include <iostream>
+#include <map>
+#include <sstream>
+#include <vector>
 
+#include "TCanvas.h"
 #include "TDirectory.h"
+#include "TF1.h"
 #include "TFile.h"
-#include "TKey.h"
+#include "TFitResult.h"
 #include "TGraph.h"
 #include "TGraphErrors.h"
-#include "TH1F.h"
-#include "TH2F.h"
-#include "TMath.h"
 #include "TH1.h"
+#include "TH1F.h"
 #include "TH2.h"
-#include "TCanvas.h"
-#include "TF1.h"
+#include "TH2F.h"
+#include "TKey.h"
 #include "TLine.h"
+#include "TMath.h"
 #include "TProfile.h"
 #include "TSpline.h"
 #include "TTree.h"
 #include "TVirtualFitter.h"
-#include "TFitResult.h"
-
 
 namespace mu2e {
 class CaloiercAnalyzer : public art::EDAnalyzer {
@@ -63,10 +62,9 @@ class CaloiercAnalyzer : public art::EDAnalyzer {
 		    false};
 		fhicl::Atom<int> skipAfterN{
 		    fhicl::Name("skipAfterN"), fhicl::Comment("Don't fit after N hits"), -1};
-		fhicl::Atom<bool> produceTree{
-		    fhicl::Name("produceTree"),
-		    fhicl::Comment("Produce tree with fit results"),
-		    true};
+		fhicl::Atom<bool> produceTree{fhicl::Name("produceTree"),
+		                              fhicl::Comment("Produce tree with fit results"),
+		                              true};
 	};
 
 	explicit CaloiercAnalyzer(const art::EDAnalyzer::Table<Config>& config);
@@ -74,9 +72,8 @@ class CaloiercAnalyzer : public art::EDAnalyzer {
 	void endJob() override;
 
   private:
-	int load_templates();
+	int           load_templates();
 	TFitResultPtr fit_waveform(TGraph* graph, int sipm_id);
-
 
 	std::string caloDigiModuleLabel_;
 	std::string caloDigiInstanceLabel_;
@@ -86,10 +83,10 @@ class CaloiercAnalyzer : public art::EDAnalyzer {
 	int         skipAfterN_;
 	bool        produceTree_;
 
-	std::map<int, std::vector<int>>       digiMap;
-	std::map<int, std::vector<float>>     timeMap;
-	std::map<int, std::vector<float>>     chi2Map;
-	std::map<int, std::vector<float>>     chi2rMap;
+	std::map<int, std::vector<int>>         digiMap;
+	std::map<int, std::vector<float>>       timeMap;
+	std::map<int, std::vector<float>>       chi2Map;
+	std::map<int, std::vector<float>>       chi2rMap;
 	std::map<int, std::map<int, TSpline3*>> templateMap;
 
 	int total_events;
@@ -99,9 +96,9 @@ class CaloiercAnalyzer : public art::EDAnalyzer {
 	int total_badfits;
 
 	// Fit parameters
-	const static int FITSCALE    = 3850.;
-	const static int FITOFF      = 0.;
-	const static int FITPED      = 0.;
+	const static int FITSCALE = 3850.;
+	const static int FITOFF   = 0.;
+	const static int FITPED   = 0.;
 
 	art::ServiceHandle<art::TFileService> tfs;
 
@@ -114,13 +111,11 @@ class CaloiercAnalyzer : public art::EDAnalyzer {
 	std::map<int, TH1F*>   map_h1_dt_diffboard;
 	std::map<int, TGraph*> map_g_dtevt_diffboard;
 
-
-	TTree* tree;
-	long int t_ewt;
-	std::vector<int>* t_SiPMID = 0;
-	std::vector<std::vector<float>>* t_times = 0;
+	TTree*                           tree;
+	long int                         t_ewt;
+	std::vector<int>*                t_SiPMID  = 0;
+	std::vector<std::vector<float>>* t_times   = 0;
 	std::vector<std::vector<float>>* t_chi2ndf = 0;
-
 };
 }  // namespace mu2e
 
@@ -133,7 +128,6 @@ mu2e::CaloiercAnalyzer::CaloiercAnalyzer(const art::EDAnalyzer::Table<Config>& c
     , uset0_(config().uset0())
     , skipAfterN_(config().skipAfterN())
     , produceTree_(config().produceTree()) {
-
 	load_templates();
 
 	total_events   = 0;
@@ -142,12 +136,12 @@ mu2e::CaloiercAnalyzer::CaloiercAnalyzer(const art::EDAnalyzer::Table<Config>& c
 	total_badfits  = 0;
 	// TVirtualFitter::SetDefaultFitter("Minuit");
 
-	if (produceTree_){
-		tree = tfs->make<TTree>("tree","Event tree with timing fit results");
-		tree->Branch("ewt",&t_ewt,"t_ewt/L");
-		tree->Branch("SiPMID",&t_SiPMID);
-		tree->Branch("times",&t_times);
-		tree->Branch("chi2ndf",&t_chi2ndf);
+	if(produceTree_) {
+		tree = tfs->make<TTree>("tree", "Event tree with timing fit results");
+		tree->Branch("ewt", &t_ewt, "t_ewt/L");
+		tree->Branch("SiPMID", &t_SiPMID);
+		tree->Branch("times", &t_times);
+		tree->Branch("chi2ndf", &t_chi2ndf);
 	}
 }
 
@@ -161,21 +155,22 @@ int mu2e::CaloiercAnalyzer::load_templates() {
 	}
 
 	TIter nextkey(template_file.GetListOfKeys());
-	while (auto key = (TKey *)nextkey()) {
+	while(auto key = (TKey*)nextkey()) {
 		std::string templateName = key->GetName();
-		int board, channel;
-		if (sscanf(templateName.c_str(), "spline_%d_%d", &board, &channel) == 2) {
-
-			//HARDCODED HACK TO MATCH FILE NAMES
-			if (board == 2){
+		int         board, channel;
+		if(sscanf(templateName.c_str(), "spline_%d_%d", &board, &channel) == 2) {
+			// HARDCODED HACK TO MATCH FILE NAMES
+			if(board == 2) {
 				board = 1;
-			} else if (board == 1){
+			} else if(board == 1) {
 				board = 2;
 			}
 			//
 
-			templateMap[board][channel] = (TSpline3*)template_file.Get(templateName.c_str());
-			std::cout << "Loaded template for Board " << board << " channel " << channel << "\n";
+			templateMap[board][channel] =
+			    (TSpline3*)template_file.Get(templateName.c_str());
+			std::cout << "Loaded template for Board " << board << " channel " << channel
+			          << "\n";
 		}
 	}
 
@@ -183,43 +178,50 @@ int mu2e::CaloiercAnalyzer::load_templates() {
 }
 
 TFitResultPtr mu2e::CaloiercAnalyzer::fit_waveform(TGraph* graph, int sipm_id) {
-	int board = (sipm_id/20)%6;
-	int channel = sipm_id%20;
+	int       board   = (sipm_id / 20) % 6;
+	int       channel = sipm_id % 20;
 	TSpline3* thisSpline;
-	if (templateMap.find(board) == templateMap.end()){
-		//No templates for this board! Using the first available...
-		if (!templateMap.empty()) { 
-			auto board_pair = templateMap.begin();
+	if(templateMap.find(board) == templateMap.end()) {
+		// No templates for this board! Using the first available...
+		if(!templateMap.empty()) {
+			auto board_pair   = templateMap.begin();
 			auto channel_pair = board_pair->second.begin();
-			std::cout << "No available template for Board " << board << " channel " << channel <<"!\n";
-			std::cout << "Using the one of Board " << board_pair->first << " channel " << channel_pair->first << " instead!\n";
+			std::cout << "No available template for Board " << board << " channel "
+			          << channel << "!\n";
+			std::cout << "Using the one of Board " << board_pair->first << " channel "
+			          << channel_pair->first << " instead!\n";
 			thisSpline = channel_pair->second;
 		} else {
 			std::cout << "No templates? Skipping fit...\n";
 			return -1;
 		}
-	} else if (templateMap[board].find(channel) == templateMap[board].end()){
-		//No template for this channel -- but board is known
-		if (!templateMap[board].empty()) { 
+	} else if(templateMap[board].find(channel) == templateMap[board].end()) {
+		// No template for this channel -- but board is known
+		if(!templateMap[board].empty()) {
 			auto channel_pair = templateMap[board].begin();
-			std::cout << "No available template for Board " << board << " channel " << channel <<"!\n";
-			std::cout << "Using the one of Board " << board << " channel " << channel_pair->first << " instead!\n";
+			std::cout << "No available template for Board " << board << " channel "
+			          << channel << "!\n";
+			std::cout << "Using the one of Board " << board << " channel "
+			          << channel_pair->first << " instead!\n";
 			thisSpline = channel_pair->second;
 		} else {
 			std::cout << "No templates for board " << board << "?? Skipping fit...\n";
 			return -1;
 		}
-	} else { // all good!
+	} else {  // all good!
 		thisSpline = templateMap[board][channel];
 	}
 
-	double xmin = thisSpline->GetXmin();
-	double xmax = thisSpline->GetXmax();
-	TF1* f_spline = new TF1("f_spline",
-		[&](double* x, double* par) {
-			return par[0] * thisSpline->Eval(x[0] - par[1]) + par[2];
-		},
-		0.,19.,3);
+	double xmin     = thisSpline->GetXmin();
+	double xmax     = thisSpline->GetXmax();
+	TF1*   f_spline = new TF1(
+        "f_spline",
+        [&](double* x, double* par) {
+            return par[0] * thisSpline->Eval(x[0] - par[1]) + par[2];
+        },
+        0.,
+        19.,
+        3);
 	f_spline->SetParNames("scale", "tpeak offset", "ped offset", "roc", "chan");
 	f_spline->SetNpx(10000);
 	f_spline->SetRange(xmin, xmax);
@@ -238,13 +240,13 @@ void mu2e::CaloiercAnalyzer::analyze(art::Event const& event) {
 	total_events++;
 	last_event = this_eventNumber;
 
-	const auto& caloDigis = *event.getValidHandle(consumes<mu2e::CaloDigiCollection>(caloDigiModuleLabel_));
+	const auto& caloDigis =
+	    *event.getValidHandle(consumes<mu2e::CaloDigiCollection>(caloDigiModuleLabel_));
 
-	if (caloDigis.size() == 0){
-		//std::cout << "No calodigis!\n";
+	if(caloDigis.size() == 0) {
+		// std::cout << "No calodigis!\n";
 		return;
 	}
-
 
 	// Fill time-ordered map for each sipm
 	digiMap.clear();
@@ -318,7 +320,8 @@ void mu2e::CaloiercAnalyzer::analyze(art::Event const& event) {
 					gadc->SetPoint(gi, gi, this_waveform[gi]);
 					// gadc->SetPointError(gi, 0., 1.);
 				}
-				TFitResultPtr fitResult = fit_waveform(gadc, caloDigis[idx].SiPMID());  // FIT!
+				TFitResultPtr fitResult =
+				    fit_waveform(gadc, caloDigis[idx].SiPMID());  // FIT!
 				if(fitResult >= 0) {
 					// std::cout<<"fitResult: "<<fitResult<<", ped:
 					// "<<fitResult->Parameter(2)<<", time:
@@ -329,8 +332,7 @@ void mu2e::CaloiercAnalyzer::analyze(art::Event const& event) {
 					timeMap[pair.first].push_back(
 					    5. * (caloDigis[idx].t0() + fitResult->Parameter(1)));
 					chi2Map[pair.first].push_back(fitResult->Chi2());
-					chi2rMap[pair.first].push_back(fitResult->Chi2() /
-					                               fitResult->Ndf());
+					chi2rMap[pair.first].push_back(fitResult->Chi2() / fitResult->Ndf());
 				} else {  // if bad fit, don't fill at all
 					std::cout << "Bad fit status: " << fitResult << " for sipmid "
 					          << pair.first << " hit " << idx << "\n";
@@ -364,7 +366,7 @@ void mu2e::CaloiercAnalyzer::analyze(art::Event const& event) {
 	}
 
 	//------- Fill the tree
-	if (produceTree_){
+	if(produceTree_) {
 		t_ewt = this_eventNumber;
 		t_SiPMID->clear();
 		t_times->clear();
