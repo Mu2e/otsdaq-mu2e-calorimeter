@@ -44,10 +44,8 @@ using namespace std;
 
 //========================================================================================================================
 // get sockaddr, IPv4 or IPv6:
-void* get_in_addr(struct sockaddr* sa)
-{
-	if(sa->sa_family == AF_INET)
-	{
+void* get_in_addr(struct sockaddr* sa) {
+	if(sa->sa_family == AF_INET) {
 		return &(((struct sockaddr_in*)sa)->sin_addr);
 	}
 
@@ -55,8 +53,7 @@ void* get_in_addr(struct sockaddr* sa)
 }
 
 //========================================================================================================================
-int makeSocket(const char* ip, const char* port, struct addrinfo*& addressInfo)
-{
+int makeSocket(const char* ip, const char* port, struct addrinfo*& addressInfo) {
 	int                     socketId = 0;
 	struct addrinfo         hints, *servinfo, *p;
 	int                     sendSockfd = 0;
@@ -74,23 +71,19 @@ int makeSocket(const char* ip, const char* port, struct addrinfo*& addressInfo)
 	if(ip == NULL)
 		hints.ai_flags = AI_PASSIVE;  // use my IP
 
-	if((rv = getaddrinfo(ip, port, &hints, &servinfo)) != 0)
-	{
+	if((rv = getaddrinfo(ip, port, &hints, &servinfo)) != 0) {
 		fprintf(stderr, "getaddrinfo: %s\n", gai_strerror(rv));
 		return 1;
 	}
 
 	// loop through all the results and bind to the first we can
-	for(p = servinfo; p != NULL; p = p->ai_next)
-	{
-		if((socketId = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1)
-		{
+	for(p = servinfo; p != NULL; p = p->ai_next) {
+		if((socketId = socket(p->ai_family, p->ai_socktype, p->ai_protocol)) == -1) {
 			perror("listener: socket");
 			continue;
 		}
 
-		if(bind(socketId, p->ai_addr, p->ai_addrlen) == -1)
-		{
+		if(bind(socketId, p->ai_addr, p->ai_addrlen) == -1) {
 			close(socketId);
 			perror("listener: bind");
 			continue;
@@ -99,8 +92,7 @@ int makeSocket(const char* ip, const char* port, struct addrinfo*& addressInfo)
 		break;
 	}
 
-	if(p == NULL)
-	{
+	if(p == NULL) {
 		fprintf(stderr, "listener: failed to bind socket\n");
 		return 2;
 	}
@@ -109,16 +101,14 @@ int makeSocket(const char* ip, const char* port, struct addrinfo*& addressInfo)
 }
 
 //========================================================================================================================
-struct sockaddr_in setupSocketAddress(const char* ip, unsigned int port)
-{
+struct sockaddr_in setupSocketAddress(const char* ip, unsigned int port) {
 	// std::cout << __PRETTY_FUNCTION__ << std::endl;
 	// network stuff
 	struct sockaddr_in socketAddress;
 	socketAddress.sin_family = AF_INET;      // use IPv4 host byte order
 	socketAddress.sin_port   = htons(port);  // short, network byte order
 
-	if(inet_aton(ip, &socketAddress.sin_addr) == 0)
-	{
+	if(inet_aton(ip, &socketAddress.sin_addr) == 0) {
 		std::cout << "FATAL: Invalid IP address " << ip << std::endl;
 		exit(0);
 	}
@@ -128,8 +118,7 @@ struct sockaddr_in setupSocketAddress(const char* ip, unsigned int port)
 }
 
 //========================================================================================================================
-int send(int toSocket, struct sockaddr_in& toAddress, const std::string& buffer)
-{
+int send(int toSocket, struct sockaddr_in& toAddress, const std::string& buffer) {
 	std::cout << "Socket Descriptor #: " << toSocket << " ip: " << std::hex
 	          << toAddress.sin_addr.s_addr << std::dec
 	          << " port: " << ntohs(toAddress.sin_port) << std::endl;
@@ -138,8 +127,7 @@ int send(int toSocket, struct sockaddr_in& toAddress, const std::string& buffer)
 	          buffer.size(),
 	          0,
 	          (struct sockaddr*)&(toAddress),
-	          sizeof(sockaddr_in)) < (int)(buffer.size()))
-	{
+	          sizeof(sockaddr_in)) < (int)(buffer.size())) {
 		std::cout << "Error writing buffer" << std::endl;
 		return -1;
 	}
@@ -147,8 +135,7 @@ int send(int toSocket, struct sockaddr_in& toAddress, const std::string& buffer)
 }
 
 //========================================================================================================================
-int receive(int fromSocket, struct sockaddr_in& fromAddress, std::string& buffer)
-{
+int receive(int fromSocket, struct sockaddr_in& fromAddress, std::string& buffer) {
 	struct timeval tv;
 	tv.tv_sec  = 1;
 	tv.tv_usec = 0;         // set timeout period for select()
@@ -157,8 +144,7 @@ int receive(int fromSocket, struct sockaddr_in& fromAddress, std::string& buffer
 	FD_SET(fromSocket, &fileDescriptor);
 	select(fromSocket + 1, &fileDescriptor, 0, 0, &tv);
 
-	if(FD_ISSET(fromSocket, &fileDescriptor))
-	{
+	if(FD_ISSET(fromSocket, &fileDescriptor)) {
 		std::string bufferS;
 		// struct sockaddr_in fromAddress;
 		socklen_t addressLength = sizeof(fromAddress);
@@ -180,16 +166,14 @@ int receive(int fromSocket, struct sockaddr_in& fromAddress, std::string& buffer
 		// INET_ADDRSTRLEN); 		unsigned long  fromIPAddress =
 		// fromAddress.sin_addr.s_addr; 		unsigned short fromPort      =
 		// fromAddress.sin_port;
-	}
-	else
+	} else
 		return -1;
 
 	return 0;
 }
 
 //========================================================================================================================
-int main(void)
-{
+int main(void) {
 	/////////////////////
 	// Bind UDP socket //
 	/////////////////////
@@ -214,28 +198,22 @@ int main(void)
 	bool           triggered = false;
 	const unsigned ndata     = 2 * 64;
 	unsigned       count     = 0;
-	while(1)
-	{
+	while(1) {
 		// cout << time(NULL)%60 << endl;
-		if(receive(communicationSocket, messageSender, communicationBuffer) >= 0)
-		{
+		if(receive(communicationSocket, messageSender, communicationBuffer) >= 0) {
 			cout << "Message received!!!" << endl;
 			cout << communicationBuffer << endl;
 
-			if(communicationBuffer == "START")
-			{
+			if(communicationBuffer == "START") {
 				triggered = true;
-			}
-			else if(communicationBuffer == "STOP")
-			{
+			} else if(communicationBuffer == "STOP") {
 				cout << 4 * 66 * count << endl;
 				triggered = false;
 				count     = 0;
 			}
 		}
 
-		if(triggered)
-		{
+		if(triggered) {
 			unsigned simdata[ndata + 5];
 			simdata[0]   = 0xFFFFFFFF;
 			simdata[1]   = 0xFFFFFFFF;
@@ -243,8 +221,7 @@ int main(void)
 			simdata[3]   = 0xFFFFFFFF;
 			simdata[4]   = 0xFFFFFFFF;
 			unsigned i_0 = 0x21;
-			for(unsigned i = 0; i < ndata; i++)
-			{
+			for(unsigned i = 0; i < ndata; i++) {
 				unsigned noise = rand() & 0x00FF00FF;
 				simdata[i + 5] = 0x00FF00FF + noise;
 

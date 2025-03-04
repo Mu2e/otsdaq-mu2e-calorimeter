@@ -27,38 +27,20 @@
 #include <sstream>
 #include <vector>
 
-namespace mu2e
-{
-class CaloDataVerifier : public art::EDFilter
-{
+namespace mu2e {
+class CaloDataVerifier : public art::EDFilter {
   public:
-	struct Config
-	{
-		fhicl::Atom<int> verbosity{
-		    fhicl::Name("verbosity"), fhicl::Comment("Verbosity [0-2]"), 0};
-		fhicl::Atom<int> data_type{
-		    fhicl::Name("dataType"),
-		    fhicl::Comment("Data type (0:standard, 1:debug, 2:counters)"),
-		    0};
-		fhicl::Atom<int> metrics_level{
-		    fhicl::Name("metricsLevel"), fhicl::Comment("Metrics reporting level"), 1};
-		fhicl::Atom<bool> produce_calo_decoders{
-		    fhicl::Name("produceCaloDecoders"),
-		    fhicl::Comment("Produce calo decoders [default: true]"),
-		    true};
-		fhicl::Atom<bool> stop_on_failure{
-		    fhicl::Name("stopOnFailure"),
-		    fhicl::Comment("Throw exception if checks fail [default: false]"),
-		    false};
-		fhicl::Atom<bool> check_ewts{
-		    fhicl::Name("checkEWTs"),
-		    fhicl::Comment("Check for EWT continuity across events [default: false]"),
-		    false};
-		fhicl::Atom<std::string> subsystem_override{
-		    fhicl::Name("subsystemOverride"),
-		    fhicl::Comment("Override calo subsystem [\"calo\", \"tracker\"]"),
-		    "calo"};
-	};
+	// clang-format off
+    struct Config {
+      fhicl::Atom<int> verbosity {fhicl::Name("verbosity" ) , fhicl::Comment("Verbosity [0-2]"), 0};
+      fhicl::Atom<int> data_type {fhicl::Name("dataType" ) , fhicl::Comment("Data type (0:standard, 1:debug, 2:counters)"), 0};
+      fhicl::Atom<int> metrics_level {fhicl::Name("metricsLevel" ) , fhicl::Comment("Metrics reporting level"), 1};
+      fhicl::Atom<bool> produce_calo_decoders {fhicl::Name("produceCaloDecoders" ) , fhicl::Comment("Produce calo decoders [default: true]"), true};
+      fhicl::Atom<bool> stop_on_failure {fhicl::Name("stopOnFailure" ) , fhicl::Comment("Throw exception if checks fail [default: false]"), false};
+      fhicl::Atom<bool> check_ewts {fhicl::Name("checkEWTs" ) , fhicl::Comment("Check for EWT continuity across events [default: false]"), false};
+      fhicl::Atom<std::string> subsystem_override {fhicl::Name("subsystemOverride" ) , fhicl::Comment("Override calo subsystem [\"calo\", \"tracker\"]"), "calo"};
+    };
+	// clang-format on
 
 	explicit CaloDataVerifier(const art::EDFilter::Table<Config>& config);
 
@@ -142,19 +124,14 @@ mu2e::CaloDataVerifier::CaloDataVerifier(const art::EDFilter::Table<Config>& con
     , metrics_reporting_level_(config().metrics_level())
     , produceCaloDecoders_(config().produce_calo_decoders())
     , stopOnFailure_(config().stop_on_failure())
-    , checkEWTs_(config().check_ewts())
-{
-	if(config().subsystem_override() == "calo")
-	{
+    , checkEWTs_(config().check_ewts()) {
+	if(config().subsystem_override() == "calo") {
 		subsystem_ = DTCLib::DTC_Subsystem::DTC_Subsystem_Calorimeter;
-	}
-	else if(config().subsystem_override() == "tracker")
-	{
+	} else if(config().subsystem_override() == "tracker") {
 		subsystem_ = DTCLib::DTC_Subsystem::DTC_Subsystem_Tracker;
 	}
 
-	if(produceCaloDecoders_)
-	{
+	if(produceCaloDecoders_) {
 		produces<std::vector<mu2e::CalorimeterDataDecoder>>();
 	}
 
@@ -170,8 +147,7 @@ mu2e::CaloDataVerifier::CaloDataVerifier(const art::EDFilter::Table<Config>& con
 	failedEvent = false;
 }
 
-bool mu2e::CaloDataVerifier::filter(art::Event& event)
-{
+bool mu2e::CaloDataVerifier::filter(art::Event& event) {
 	art::EventNumber_t eventNumber = event.event();
 	// TLOG(TLVL_INFO) << "mu2e::CaloDataVerifier::filter eventNumber= " <<
 	// (int)eventNumber << std::endl;
@@ -191,8 +167,7 @@ bool mu2e::CaloDataVerifier::filter(art::Event& event)
 
 	artdaq::Fragments fragments = getFragments(event);
 	TLOG(TLVL_DEBUG + 6) << "Iterating through " << fragments.size() << " fragments\n";
-	for(const auto& frag : fragments)
-	{
+	for(const auto& frag : fragments) {
 		mu2e::DTCEventFragment eventFragment(frag);
 		processCaloData(eventFragment, caloDecoderColl);
 
@@ -203,10 +178,8 @@ bool mu2e::CaloDataVerifier::filter(art::Event& event)
 		total_failed_BeginMarker += event_failed_BeginMarker;
 		total_failed_LastMarker += event_failed_LastMarker;
 
-		if(failedEvent)
-		{
-			if(verbosity_ > 0)
-			{
+		if(failedEvent) {
+			if(verbosity_ > 0) {
 				std::cout << "Failed event " << (int)eventNumber << "\n";
 				// std::cout << "Previous event was " << (int)(previousArtEvent->event())
 				// << "\n";
@@ -218,8 +191,7 @@ bool mu2e::CaloDataVerifier::filter(art::Event& event)
 	}
 
 	// Send metrics
-	if(metricMan != nullptr)
-	{
+	if(metricMan != nullptr) {
 		// Failures
 		metricMan->sendMetric("failed_DTCEWTs",
 		                      event_failed_DTCEWTs,
@@ -263,9 +235,7 @@ bool mu2e::CaloDataVerifier::filter(art::Event& event)
 		                      "Hits per event",
 		                      metrics_reporting_level_,
 		                      artdaq::MetricMode::LastPoint);
-	}
-	else
-	{
+	} else {
 		TLOG(TLVL_DEBUG + 6) << "WARNING: No metric manager found!";
 	}
 
@@ -274,14 +244,12 @@ bool mu2e::CaloDataVerifier::filter(art::Event& event)
 	TLOG(TLVL_DEBUG + 6) << "[CaloDataVerifier::filter] found " << nCaloHits
 	                     << " calo hits in event" << (int)eventNumber;
 
-	if(nCaloEvents == 0)
-	{
+	if(nCaloEvents == 0) {
 		TLOG(TLVL_WARNING)
 		    << "[CaloDataVerifier::filter] found no calo subevents in event"
 		    << (int)eventNumber << "!";
 	}
-	if(produceCaloDecoders_)
-	{
+	if(produceCaloDecoders_) {
 		event.put(std::move(caloDecoderColl));
 	}
 
@@ -291,18 +259,15 @@ bool mu2e::CaloDataVerifier::filter(art::Event& event)
 	return true;
 }
 
-bool mu2e::CaloDataVerifier::endRun(art::Run&)
-{
-	if(verbosity_ > 0)
-	{
+bool mu2e::CaloDataVerifier::endRun(art::Run&) {
+	if(verbosity_ > 0) {
 		printRunSummary();
 	}
 
 	return true;
 }
 
-artdaq::Fragments mu2e::CaloDataVerifier::getFragments(art::Event& event)
-{
+artdaq::Fragments mu2e::CaloDataVerifier::getFragments(art::Event& event) {
 	artdaq::Fragments    fragments;
 	artdaq::FragmentPtrs containerFragments;
 
@@ -311,36 +276,26 @@ artdaq::Fragments mu2e::CaloDataVerifier::getFragments(art::Event& event)
 
 	TLOG(TLVL_DEBUG + 6) << "Iterating through " << fragmentHandles.size()
 	                     << " fragment handles\n";
-	for(const auto& handle : fragmentHandles)
-	{
-		if(!handle.isValid() || handle->empty())
-		{
+	for(const auto& handle : fragmentHandles) {
+		if(!handle.isValid() || handle->empty()) {
 			continue;
 		}
 
-		if(handle->front().type() == artdaq::Fragment::ContainerFragmentType)
-		{
-			for(const auto& cont : *handle)
-			{
+		if(handle->front().type() == artdaq::Fragment::ContainerFragmentType) {
+			for(const auto& cont : *handle) {
 				artdaq::ContainerFragment contf(cont);
-				if(contf.fragment_type() != mu2e::FragmentType::DTCEVT)
-				{
+				if(contf.fragment_type() != mu2e::FragmentType::DTCEVT) {
 					break;
 				}
 
-				for(size_t ii = 0; ii < contf.block_count(); ++ii)
-				{
+				for(size_t ii = 0; ii < contf.block_count(); ++ii) {
 					containerFragments.push_back(contf[ii]);
 					fragments.push_back(*containerFragments.back());
 				}
 			}
-		}
-		else
-		{
-			if(handle->front().type() == mu2e::FragmentType::DTCEVT)
-			{
-				for(auto frag : *handle)
-				{
+		} else {
+			if(handle->front().type() == mu2e::FragmentType::DTCEVT) {
+				for(auto frag : *handle) {
 					fragments.emplace_back(frag);
 				}
 			}
@@ -351,8 +306,7 @@ artdaq::Fragments mu2e::CaloDataVerifier::getFragments(art::Event& event)
 
 void mu2e::CaloDataVerifier::processCaloData(
     mu2e::DTCEventFragment&                                           eventFragment,
-    std::unique_ptr<std::vector<mu2e::CalorimeterDataDecoder>> const& caloDecoderColl)
-{
+    std::unique_ptr<std::vector<mu2e::CalorimeterDataDecoder>> const& caloDecoderColl) {
 	failedEvent = false;
 
 	DTCLib::DTC_Event dtcevent = eventFragment.getData();
@@ -365,8 +319,7 @@ void mu2e::CaloDataVerifier::processCaloData(
 	                     << " calorimeter subevents (DTCs)\n";
 
 	// Loop over calo DTCs
-	for(const auto& subevent : caloSubEvents)
-	{
+	for(const auto& subevent : caloSubEvents) {
 		// Create caloDecoder instance -> it will create an internal memory copy of this
 		// subevent
 		caloDecoderColl->emplace_back(subevent);
@@ -374,8 +327,7 @@ void mu2e::CaloDataVerifier::processCaloData(
 		auto&                         this_subevent = caloDecoder.event_;
 
 		uint64_t dtcID = this_subevent.GetDTCID();
-		if(checkEWTs_ && !checkAndUpdateDTCEWT(this_subevent))
-		{
+		if(checkEWTs_ && !checkAndUpdateDTCEWT(this_subevent)) {
 			event_failed_DTCEWTs++;
 			failMap_DTCEWTs[dtcID]++;
 			failedEvent = true;
@@ -387,28 +339,23 @@ void mu2e::CaloDataVerifier::processCaloData(
 		uint                               nROCs      = dataBlocks.size();
 		TLOG(TLVL_DEBUG + 6) << "Iterating through " << nROCs << " data blocks (ROCs)\n";
 		std::vector<int> roc_hits;
-		for(uint iroc = 0; iroc < nROCs; iroc++)
-		{
-			if(checkEWTs_ && !checkAndUpdateROCEWT(dataBlocks[iroc]))
-			{
+		for(uint iroc = 0; iroc < nROCs; iroc++) {
+			if(checkEWTs_ && !checkAndUpdateROCEWT(dataBlocks[iroc])) {
 				event_failed_ROCEWTs++;
 				failMap_ROCEWTs[dtcID][iroc]++;
 				failedEvent = true;
 			}
 
-			if(data_type_ == 0)
-			{  /////// STANDARD HITS ///////
+			if(data_type_ == 0) {  /////// STANDARD HITS ///////
 
 				auto caloHits = caloDecoder.GetCalorimeterHitData(iroc);
 				uint nHits    = caloHits->size();
 				roc_hits.push_back(nHits);
-				for(uint ihit = 0; ihit < nHits; ihit++)
-				{
+				for(uint ihit = 0; ihit < nHits; ihit++) {
 					mu2e::CalorimeterDataDecoder::CalorimeterHitDataPacket hit =
 					    caloHits->at(ihit).first;
 					std::vector<uint16_t> hit_waveform = caloHits->at(ihit).second;
-					if(hit_waveform.size() == 0)
-					{
+					if(hit_waveform.size() == 0) {
 						TLOG(TLVL_WARNING)
 						    << "[CaloDataVerifier::filter] found empty waveform! DTC "
 						    << dtcID << " ROC " << iroc << " hit " << ihit << " BoardID "
@@ -416,32 +363,26 @@ void mu2e::CaloDataVerifier::processCaloData(
 					}
 					nCaloHits++;
 				}
-			}
-			else if(data_type_ == 1)
-			{  /////// DEBUG HITS ///////
+			} else if(data_type_ == 1) {  /////// DEBUG HITS ///////
 				auto caloHits = caloDecoder.GetCalorimeterHitTestData(iroc);
 				uint nHits    = caloHits->size();
 				roc_hits.push_back(nHits);
 
-				for(uint ihit = 0; ihit < nHits; ihit++)
-				{
+				for(uint ihit = 0; ihit < nHits; ihit++) {
 					mu2e::CalorimeterDataDecoder::CalorimeterHitTestDataPacket hit =
 					    caloHits->at(ihit).first;
 					std::vector<uint16_t> hit_waveform = caloHits->at(ihit).second;
-					if(!checkHitBeginMarker(hit))
-					{
+					if(!checkHitBeginMarker(hit)) {
 						event_failed_BeginMarker++;
 						failMap_BeginMarker[dtcID][iroc]++;
 						failedEvent = true;
 					}
-					if(!checkHitLastMarker(hit))
-					{
+					if(!checkHitLastMarker(hit)) {
 						event_failed_LastMarker++;
 						failMap_LastMarker[dtcID][iroc]++;
 						failedEvent = true;
 					}
-					if(hit_waveform.size() == 0)
-					{
+					if(hit_waveform.size() == 0) {
 						TLOG(TLVL_WARNING)
 						    << "[CaloDataVerifier::filter] found empty waveform! DTC "
 						    << dtcID << " ROC " << iroc << " hit " << ihit << " BoardID "
@@ -472,19 +413,15 @@ void mu2e::CaloDataVerifier::processCaloData(
 						ss_wf << sample << " ";
 					TLOG(TLVL_DEBUG + 6) << "Waveform:\n" << ss_wf.str();
 				}
-			}
-			else if(data_type_ == 2)
-			{  /////// COUNTERS ///////
+			} else if(data_type_ == 2) {  /////// COUNTERS ///////
 				auto caloHits = caloDecoder.GetCalorimeterCountersData(iroc);
 				uint nHits    = caloHits->size();
 				roc_hits.push_back(nHits);
-				for(uint ihit = 0; ihit < nHits; ihit++)
-				{
+				for(uint ihit = 0; ihit < nHits; ihit++) {
 					mu2e::CalorimeterDataDecoder::CalorimeterCountersDataPacket hit =
 					    caloHits->at(ihit).first;
 					std::vector<uint32_t> hit_counters = caloHits->at(ihit).second;
-					if(hit_counters.size() == 0)
-					{
+					if(hit_counters.size() == 0) {
 						TLOG(TLVL_WARNING)
 						    << "[CaloDataVerifier::filter] found empty counters! DTC "
 						    << dtcID << " ROC " << iroc << " hit " << ihit;
@@ -492,23 +429,19 @@ void mu2e::CaloDataVerifier::processCaloData(
 					nCaloHits++;
 
 					if(checkEWTs_ &&
-					   !checkAndUpdateROCCounter(dataBlocks[iroc], hit_counters))
-					{
+					   !checkAndUpdateROCCounter(dataBlocks[iroc], hit_counters)) {
 						event_failed_ROCCounters++;
 						failedEvent = true;
 						failMap_ROCCounters[dtcID][iroc]++;
 					}
 
-					if(!checkCounters(dataBlocks[iroc], hit_counters))
-					{
+					if(!checkCounters(dataBlocks[iroc], hit_counters)) {
 						event_failed_Counters++;
 						failedEvent = true;
 						failMap_Counters[dtcID][iroc]++;
-						if(verbosity_ > 1)
-						{
+						if(verbosity_ > 1) {
 							std::cout << "Dumping these counters:\n";
-							for(auto c : hit_counters)
-							{
+							for(auto c : hit_counters) {
 								std::cout << c << " ";
 							}
 							std::cout << std::endl;
@@ -531,20 +464,16 @@ void mu2e::CaloDataVerifier::processCaloData(
 						          << sample << std::dec << " ";
 					TLOG(TLVL_DEBUG + 6) << "Counters (hex):\n" << ss_wf_hex.str();
 
-				}  // end of hit loop
-			}
-			else if(data_type_ == 3)
-			{  /////// EMULATED COUNTERS ///////
+				}                         // end of hit loop
+			} else if(data_type_ == 3) {  /////// EMULATED COUNTERS ///////
 				auto caloHits = caloDecoder.GetEmulatedCountersData(iroc);
 				uint nHits    = caloHits->size();
 				roc_hits.push_back(nHits);
-				for(uint ihit = 0; ihit < nHits; ihit++)
-				{
+				for(uint ihit = 0; ihit < nHits; ihit++) {
 					mu2e::CalorimeterDataDecoder::CalorimeterCountersDataPacket hit =
 					    caloHits->at(ihit).first;
 					std::vector<uint32_t> hit_counters = caloHits->at(ihit).second;
-					if(hit_counters.size() == 0)
-					{
+					if(hit_counters.size() == 0) {
 						TLOG(TLVL_WARNING)
 						    << "[CaloDataVerifier::filter] found empty counters! DTC "
 						    << dtcID << " ROC " << iroc << " hit " << ihit;
@@ -552,23 +481,19 @@ void mu2e::CaloDataVerifier::processCaloData(
 					nCaloHits++;
 
 					if(checkEWTs_ &&
-					   !checkAndUpdateROCCounter(dataBlocks[iroc], hit_counters))
-					{
+					   !checkAndUpdateROCCounter(dataBlocks[iroc], hit_counters)) {
 						event_failed_ROCCounters++;
 						failedEvent = true;
 						failMap_ROCCounters[dtcID][iroc]++;
 					}
 
-					if(!checkEmulatedCounters(dataBlocks[iroc], hit_counters))
-					{
+					if(!checkEmulatedCounters(dataBlocks[iroc], hit_counters)) {
 						event_failed_Counters++;
 						failedEvent = true;
 						failMap_Counters[dtcID][iroc]++;
-						if(verbosity_ > 1)
-						{
+						if(verbosity_ > 1) {
 							std::cout << "Dumping these counters:\n";
-							for(auto c : hit_counters)
-							{
+							for(auto c : hit_counters) {
 								std::cout << c << " ";
 							}
 							std::cout << std::endl;
@@ -605,33 +530,28 @@ void mu2e::CaloDataVerifier::processCaloData(
 
 	}  // loop over subevents (DTCs)
 
-	if(failedEvent && verbosity_ > 1)
-	{
+	if(failedEvent && verbosity_ > 1) {
 		std::cout << "===================================================\n";
 		std::cout << "========== THIS EVENT HAS SOME FAILURES ===========\n";
 		std::cout << "===================================================\n";
 		std::cout << "\n----- Dumping previous event -----\n\n";
-		printEvent(*previousDTCEvent);
+		// printEvent(*previousDTCEvent);
 		std::cout << "\n----- Dumping current event -----\n\n";
 		printEvent(dtcevent);
 	}
 	previousDTCEvent = &dtcevent;
 }
 
-bool mu2e::CaloDataVerifier::checkAndUpdateDTCEWT(const DTCLib::DTC_SubEvent& subevent)
-{
+bool mu2e::CaloDataVerifier::checkAndUpdateDTCEWT(const DTCLib::DTC_SubEvent& subevent) {
 	uint64_t dtcID  = subevent.GetDTCID();
 	long int dtcEWT = subevent.GetEventWindowTag().GetEventWindowTag(true);
-	if(lastDTCEventWindow.find(dtcID) != lastDTCEventWindow.end())
-	{
-		if(verbosity_ > 1)
-		{
+	if(lastDTCEventWindow.find(dtcID) != lastDTCEventWindow.end()) {
+		if(verbosity_ > 1) {
 			std::cout << "Checking the event window (DTC: " << dtcID << ")\n"
 			          << "current: " << dtcEWT
 			          << " previous: " << lastDTCEventWindow[dtcID] << "\n";
 		}
-		if(dtcEWT != lastDTCEventWindow[dtcID] + 1)
-		{
+		if(dtcEWT != lastDTCEventWindow[dtcID] + 1) {
 			TLOG(TLVL_DEBUG + 6)
 			    << "Error in the event window (DTC " << dtcID << ")!\n"
 			    << "current: " << dtcEWT << " previous: " << lastDTCEventWindow[dtcID]
@@ -644,24 +564,21 @@ bool mu2e::CaloDataVerifier::checkAndUpdateDTCEWT(const DTCLib::DTC_SubEvent& su
 	return true;
 }
 
-bool mu2e::CaloDataVerifier::checkAndUpdateROCEWT(const DTCLib::DTC_DataBlock& dataBlock)
-{
+bool mu2e::CaloDataVerifier::checkAndUpdateROCEWT(
+    const DTCLib::DTC_DataBlock& dataBlock) {
 	DTCLib::DTC_DataHeaderPacket* rocHeader = dataBlock.GetHeader().get();
 	uint64_t                      dtcID     = rocHeader->GetID();
 	uint64_t                      rocID     = rocHeader->GetLinkID();
 	long int rocEWT = rocHeader->GetEventWindowTag().GetEventWindowTag(true);
 	if(lastROCEventWindow.find(dtcID) != lastROCEventWindow.end() &&
-	   lastROCEventWindow[dtcID].find(rocID) != lastROCEventWindow[dtcID].end())
-	{
-		if(verbosity_ > 1)
-		{
+	   lastROCEventWindow[dtcID].find(rocID) != lastROCEventWindow[dtcID].end()) {
+		if(verbosity_ > 1) {
 			std::cout << "Checking the event window (DTC: " << dtcID << ", ROC: " << rocID
 			          << ")\n"
 			          << "current: " << rocEWT
 			          << " previous: " << lastROCEventWindow[dtcID][rocID] << "\n";
 		}
-		if(rocEWT != lastROCEventWindow[dtcID][rocID] + 1)
-		{
+		if(rocEWT != lastROCEventWindow[dtcID][rocID] + 1) {
 			TLOG(TLVL_DEBUG + 6) << "Error in the event window (DTC: " << dtcID
 			                     << ", ROC: " << rocID << ")!\n"
 			                     << "current: " << rocEWT
@@ -676,25 +593,21 @@ bool mu2e::CaloDataVerifier::checkAndUpdateROCEWT(const DTCLib::DTC_DataBlock& d
 }
 
 bool mu2e::CaloDataVerifier::checkAndUpdateROCCounter(
-    const DTCLib::DTC_DataBlock& dataBlock, const std::vector<uint32_t>& hit_counters)
-{
+    const DTCLib::DTC_DataBlock& dataBlock, const std::vector<uint32_t>& hit_counters) {
 	DTCLib::DTC_DataHeaderPacket* rocHeader        = dataBlock.GetHeader().get();
 	uint64_t                      dtcID            = rocHeader->GetID();
 	uint64_t                      rocID            = rocHeader->GetLinkID();
 	uint32_t                      thisFirstCounter = hit_counters.front();
 	uint32_t                      thisLastCounter  = hit_counters.back();
 	if(lastROCCounter.find(dtcID) != lastROCCounter.end() &&
-	   lastROCCounter[dtcID].find(rocID) != lastROCCounter[dtcID].end())
-	{
-		if(verbosity_ > 1)
-		{
+	   lastROCCounter[dtcID].find(rocID) != lastROCCounter[dtcID].end()) {
+		if(verbosity_ > 1) {
 			std::cout << "Checking the ROC counter sequence (DTC: " << dtcID
 			          << ", ROC: " << rocID << ")\n"
 			          << "current: " << thisFirstCounter
 			          << " previous: " << lastROCCounter[dtcID][rocID] << "\n";
 		}
-		if(thisFirstCounter != lastROCCounter[dtcID][rocID] + 1)
-		{
+		if(thisFirstCounter != lastROCCounter[dtcID][rocID] + 1) {
 			TLOG(TLVL_DEBUG + 6) << "Error in the ROC counter sequence (DTC: " << dtcID
 			                     << ", ROC: " << rocID << ")!\n"
 			                     << "current: " << thisFirstCounter
@@ -708,27 +621,22 @@ bool mu2e::CaloDataVerifier::checkAndUpdateROCCounter(
 }
 
 bool mu2e::CaloDataVerifier::checkHitBeginMarker(
-    const mu2e::CalorimeterDataDecoder::CalorimeterHitTestDataPacket& hit)
-{
+    const mu2e::CalorimeterDataDecoder::CalorimeterHitTestDataPacket& hit) {
 	return (hit.BeginMarker == 0xAAA);
 }
 
 bool mu2e::CaloDataVerifier::checkHitLastMarker(
-    const mu2e::CalorimeterDataDecoder::CalorimeterHitTestDataPacket& hit)
-{
+    const mu2e::CalorimeterDataDecoder::CalorimeterHitTestDataPacket& hit) {
 	return (hit.LastSampleMarker != 0);
 }
 
 bool mu2e::CaloDataVerifier::checkCounters(const DTCLib::DTC_DataBlock& dataBlock,
-                                           const std::vector<uint32_t>& hit_counters)
-{
+                                           const std::vector<uint32_t>& hit_counters) {
 	DTCLib::DTC_DataHeaderPacket* rocHeader = dataBlock.GetHeader().get();
 	uint64_t                      dtcID     = rocHeader->GetID();
 	uint64_t                      rocID     = rocHeader->GetLinkID();
-	for(uint i = 0; i < hit_counters.size() - 1; i++)
-	{
-		if(hit_counters[i + 1] != hit_counters[i] + 1)
-		{
+	for(uint i = 0; i < hit_counters.size() - 1; i++) {
+		if(hit_counters[i + 1] != hit_counters[i] + 1) {
 			TLOG(TLVL_DEBUG + 6)
 			    << "Error in the counter sequence (DTC: " << dtcID << ", ROC: " << rocID
 			    << ")!\n"
@@ -741,15 +649,12 @@ bool mu2e::CaloDataVerifier::checkCounters(const DTCLib::DTC_DataBlock& dataBloc
 }
 
 bool mu2e::CaloDataVerifier::checkEmulatedCounters(
-    const DTCLib::DTC_DataBlock& dataBlock, const std::vector<uint32_t>& hit_counters)
-{
+    const DTCLib::DTC_DataBlock& dataBlock, const std::vector<uint32_t>& hit_counters) {
 	DTCLib::DTC_DataHeaderPacket* rocHeader = dataBlock.GetHeader().get();
 	uint64_t                      dtcID     = rocHeader->GetID();
 	uint64_t                      rocID     = rocHeader->GetLinkID();
-	for(uint i = 0; i < hit_counters.size() - 1; i++)
-	{
-		if(hit_counters[i + 1] != hit_counters[i] + 2)
-		{
+	for(uint i = 0; i < hit_counters.size() - 1; i++) {
+		if(hit_counters[i + 1] != hit_counters[i] + 2) {
 			TLOG(TLVL_ERROR) << "Error in the counter sequence (DTC: " << dtcID
 			                 << ", ROC: " << rocID << ")!\n"
 			                 << "counter " << i << " : " << hit_counters[i] << "\n"
@@ -761,34 +666,28 @@ bool mu2e::CaloDataVerifier::checkEmulatedCounters(
 	return true;
 }
 
-void mu2e::CaloDataVerifier::printEvent(const DTCLib::DTC_Event& dtcevent)
-{
+void mu2e::CaloDataVerifier::printEvent(const DTCLib::DTC_Event& dtcevent) {
 	printEventHeader(dtcevent);
 	std::vector<DTCLib::DTC_SubEvent> subevents = dtcevent.GetSubEvents();
-	for(uint idtc = 0; idtc < subevents.size(); idtc++)
-	{
-		std::cout << "-- DTC " << idtc << " --\n";
+	for(uint idtc = 0; idtc < subevents.size(); idtc++) {
+		std::cout << "-- DTC " << int(subevents[idtc].GetDTCID()) << " --\n";
 		printSubEvent(subevents[idtc]);
 	}
 }
 
-void mu2e::CaloDataVerifier::printSubEvent(const DTCLib::DTC_SubEvent& subevent)
-{
+void mu2e::CaloDataVerifier::printSubEvent(const DTCLib::DTC_SubEvent& subevent) {
 	printDTCHeader(subevent);
 	std::vector<DTCLib::DTC_DataBlock> dataBlocks = subevent.GetDataBlocks();
-	for(uint iroc = 0; iroc < dataBlocks.size(); iroc++)
-	{
+	for(uint iroc = 0; iroc < dataBlocks.size(); iroc++) {
 		std::cout << "-- ROC " << iroc << " --\n";
 		printROC(dataBlocks[iroc]);
 	}
 }
 
-void mu2e::CaloDataVerifier::printEventHeader(const DTCLib::DTC_Event& dtcevent)
-{
+void mu2e::CaloDataVerifier::printEventHeader(const DTCLib::DTC_Event& dtcevent) {
 	auto headerPtr = reinterpret_cast<uint16_t const*>(dtcevent.GetRawBufferPointer());
 	std::cout << "Event HEX DUMP (24 bytes) ------------------\n";
-	for(size_t word = 0; word < 12; word++)
-	{
+	for(size_t word = 0; word < 12; word++) {
 		std::cout << std::hex << std::setw(4) << std::setfill('0') << headerPtr[word]
 		          << std::dec << " ";
 	}
@@ -796,12 +695,10 @@ void mu2e::CaloDataVerifier::printEventHeader(const DTCLib::DTC_Event& dtcevent)
 	return;
 }
 
-void mu2e::CaloDataVerifier::printDTCHeader(const DTCLib::DTC_SubEvent& subevent)
-{
+void mu2e::CaloDataVerifier::printDTCHeader(const DTCLib::DTC_SubEvent& subevent) {
 	auto headerPtr = reinterpret_cast<uint16_t const*>(subevent.GetRawBufferPointer());
 	std::cout << "DTC HEX DUMP (48 bytes) ------------------\n";
-	for(size_t word = 0; word < 24; word++)
-	{
+	for(size_t word = 0; word < 24; word++) {
 		std::cout << std::hex << std::setw(4) << std::setfill('0') << headerPtr[word]
 		          << std::dec << " ";
 		if(word % 8 == 7)
@@ -810,39 +707,43 @@ void mu2e::CaloDataVerifier::printDTCHeader(const DTCLib::DTC_SubEvent& subevent
 	return;
 }
 
-void mu2e::CaloDataVerifier::printROC(const DTCLib::DTC_DataBlock& dataBlock)
-{
+void mu2e::CaloDataVerifier::printROC(const DTCLib::DTC_DataBlock& dataBlock) {
 	auto headerPtr = reinterpret_cast<uint16_t const*>(dataBlock.GetRawBufferPointer());
 	auto dataPtr   = reinterpret_cast<uint16_t const*>(dataBlock.GetData());
 	std::cout << "ROC HEX DUMP (" << dataBlock.byteSize << " bytes) ------------------\n";
-	for(size_t word = 0; word < 8; word++)
-	{
+	for(size_t word = 0; word < 8; word++) {
 		std::cout << std::hex << std::setw(4) << std::setfill('0') << headerPtr[word]
 		          << std::dec << " ";
 	}
 	std::cout << std::endl;
-	for(size_t word = 0; word < (dataBlock.byteSize - 16) / 2; word++)
-	{
+	for(size_t word = 0; word < (dataBlock.byteSize - 16) / 2; word++) {
 		std::cout << std::hex << std::setw(4) << std::setfill('0') << dataPtr[word]
 		          << std::dec << " ";
 		if(word % 16 == 15)
 			std::cout << std::endl;
 	}
+	std::cout << "--- DECODED WORDS --- " << std::endl;
+	uint n12bitWords = 21 * (dataBlock.GetHeader()->GetPacketCount() / 2);
+	mu2e::CalorimeterDataDecoder::Data12bitReader reader(
+	    reinterpret_cast<uint16_t const*>(dataBlock.GetData()));
+	for(size_t word = 0; word < n12bitWords; word++) {
+		std::cout << std::hex << std::setw(3) << std::setfill('0') << reader[word]
+		          << std::dec << " ";
+		if(word % 21 == 20)
+			std::cout << std::endl;
+	}
 	return;
 }
 
-void mu2e::CaloDataVerifier::printRunSummary()
-{
+void mu2e::CaloDataVerifier::printRunSummary() {
 	std::cout << "Run summary:" << std::endl
 	          << "\t total calo events: " << nCaloEvents << std::endl
 	          << "\t total calo hits: " << nCaloHits << std::endl;
 
 	std::cout << "Total hits per channel:" << std::endl;
-	for(auto board : totalHitMap)
-	{
+	for(auto board : totalHitMap) {
 		std::cout << "\tBoard " << board.first << ": ";
-		for(int channel = 0; channel < 20; channel++)
-		{
+		for(int channel = 0; channel < 20; channel++) {
 			std::cout << board.second[channel] << " ";
 		}
 		std::cout << std::endl;
@@ -858,44 +759,36 @@ void mu2e::CaloDataVerifier::printRunSummary()
 	          << "\t total failed 0xFFF checks: " << total_failed_LastMarker << std::endl;
 
 	std::cout << "Failed boundary counters per ROC:" << std::endl;
-	for(auto dtc : failMap_ROCCounters)
-	{
+	for(auto dtc : failMap_ROCCounters) {
 		std::cout << "\tDTC " << dtc.first << std::endl;
-		for(auto roc : dtc.second)
-		{
+		for(auto roc : dtc.second) {
 			std::cout << "\t\tROC " << roc.first << " , failures: " << roc.second
 			          << std::endl;
 		}
 	}
 
 	std::cout << "Failed internal counters per ROC:" << std::endl;
-	for(auto dtc : failMap_Counters)
-	{
+	for(auto dtc : failMap_Counters) {
 		std::cout << "\tDTC " << dtc.first << std::endl;
-		for(auto roc : dtc.second)
-		{
+		for(auto roc : dtc.second) {
 			std::cout << "\t\tROC " << roc.first << " , failures: " << roc.second
 			          << std::endl;
 		}
 	}
 
 	std::cout << "Failed 0xAAA words per ROC:" << std::endl;
-	for(auto dtc : failMap_BeginMarker)
-	{
+	for(auto dtc : failMap_BeginMarker) {
 		std::cout << "\tDTC " << dtc.first << std::endl;
-		for(auto roc : dtc.second)
-		{
+		for(auto roc : dtc.second) {
 			std::cout << "\t\tROC " << roc.first << " , failures: " << roc.second
 			          << std::endl;
 		}
 	}
 
 	std::cout << "Failed 0xFFF words per ROC:" << std::endl;
-	for(auto dtc : failMap_LastMarker)
-	{
+	for(auto dtc : failMap_LastMarker) {
 		std::cout << "\tDTC " << dtc.first << std::endl;
-		for(auto roc : dtc.second)
-		{
+		for(auto roc : dtc.second) {
 			std::cout << "\t\tROC " << roc.first << " , failures: " << roc.second
 			          << std::endl;
 		}

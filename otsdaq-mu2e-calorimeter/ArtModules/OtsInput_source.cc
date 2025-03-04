@@ -5,8 +5,7 @@
 #include <string>
 using std::string;
 
-namespace ots
-{
+namespace ots {
 typedef art::Source<detail::RawEventQueueReader> OtsInput;
 }
 

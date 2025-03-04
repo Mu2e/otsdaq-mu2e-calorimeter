@@ -38,11 +38,9 @@
 #define MU2E_FIRMWARE_DESC "(C) ENEA-INFN 2012-2024 - MU2E-ADC board (SiPM SPI version)"
 
 #ifdef GNU_COMP
-typedef enum
-{
+typedef enum {
 #else
-typedef enum MZB_OSCMDCODE_t
-{
+typedef enum MZB_OSCMDCODE_t {
 #endif
 	SYNTAX_ERROR = 0,  //
 	ADCONVERT,         // AD128S start conversion
@@ -118,8 +116,7 @@ typedef enum MZB_OSCMDCODE_t
 	RESERVED           //
 } MZB_OSCMDCODE_t;
 
-typedef struct
-{
+typedef struct {
 	MZB_OSCMDCODE_t code;
 	const char*     str;
 } MZB_OSCMDCODE_MAP_t;
@@ -198,11 +195,9 @@ MZB_OSCMDCODE_MAP_t code_map[] = {{SYNTAX_ERROR, "SYNTAX_ERROR"},
                                   {RESERVED, "RESERVED"}};
 
 #ifdef GNU_COMP
-typedef struct __attribute__((__packed__))
-{
+typedef struct __attribute__((__packed__)) {
 #else
-typedef __packed struct EE_DATABUF_tag
-{
+typedef __packed struct EE_DATABUF_tag {
 #endif
 	uint16_t ridx;
 	uint16_t reserved1[3];
@@ -257,11 +252,9 @@ typedef __packed struct EE_DATABUF_tag
 	uint16_t i2cs_errcnt, i2cs_lastError;
 	uint16_t ladc_errcnt, ladc_lastError;
 #ifdef GNU_COMP
-	struct __attribute__((__packed__))
-	{
+	struct __attribute__((__packed__)) {
 #else
-	__packed struct
-	{
+	__packed struct {
 #endif
 		uint16_t errcnt;
 		uint16_t lastErr;
@@ -276,41 +269,33 @@ typedef __packed struct EE_DATABUF_tag
 	uint16_t apdCalib_tag;  // 'CL'
 	uint16_t reserved9[3];
 #ifdef GNU_COMP
-	struct __attribute__((__packed__))
-	{
+	struct __attribute__((__packed__)) {
 #else
-	__packed struct
-	{
+	__packed struct {
 #endif
 		double slope;
 		double offset;
 	} edac_cal[FEE_NUM];
 #ifdef GNU_COMP
-	struct __attribute__((__packed__))
-	{
+	struct __attribute__((__packed__)) {
 #else
-	__packed struct
-	{
+	__packed struct {
 #endif
 		double slope;
 		double offset;
 	} eads0_cal[FEE_NUM];
 #ifdef GNU_COMP
-	struct __attribute__((__packed__))
-	{
+	struct __attribute__((__packed__)) {
 #else
-	__packed struct
-	{
+	__packed struct {
 #endif
 		double slope;
 		double offset;
 	} eads1_cal[FEE_NUM];
 #ifdef GNU_COMP
-	struct __attribute__((__packed__))
-	{
+	struct __attribute__((__packed__)) {
 #else
-	__packed struct
-	{
+	__packed struct {
 #endif
 		double slope;
 		double offset;

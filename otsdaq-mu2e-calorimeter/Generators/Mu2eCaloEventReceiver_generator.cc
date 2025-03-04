@@ -18,10 +18,8 @@
 
 #define TRACE_NAME "Mu2eCaloEventReceiver"
 
-namespace mu2e
-{
-class Mu2eCaloEventReceiver : public mu2e::Mu2eEventReceiverBase
-{
+namespace mu2e {
+class Mu2eCaloEventReceiver : public mu2e::Mu2eEventReceiverBase {
 	std::vector<uint16_t> _fragment_ids;
 	DTCLib::DTC_SimMode   _sim_mode;
 
@@ -45,26 +43,22 @@ mu2e::Mu2eCaloEventReceiver::Mu2eCaloEventReceiver(fhicl::ParameterSet const& ps
     , _fragment_ids(
           ps.get<std::vector<uint16_t>>("fragment_ids", std::vector<uint16_t>()))
     , _sim_mode(DTCLib::DTC_SimModeConverter::ConvertToSimMode(
-          ps.get<std::string>("sim_mode", "N")))
-{
+          ps.get<std::string>("sim_mode", "N"))) {
 	TLOG(TLVL_DEBUG) << "Mu2eCaloEventReceiver Initialized with mode " << mode_;
 	std::cout << "init Mu2eCaloEventRecevier" << std::endl;
 }
 
 mu2e::Mu2eCaloEventReceiver::~Mu2eCaloEventReceiver() {}
 
-bool mu2e::Mu2eCaloEventReceiver::getNext_(artdaq::FragmentPtrs& frags)
-{
+bool mu2e::Mu2eCaloEventReceiver::getNext_(artdaq::FragmentPtrs& frags) {
 	bool rc(true);
 	std::cout << "[Mu2eCaloEventReceiver:getNext] getting next event" << std::endl;
-	while(!simFileRead_ && !should_stop())
-	{
+	while(!simFileRead_ && !should_stop()) {
 		std::cout << "[Mu2eCaloEventReceiver:getNext]  sleeping" << std::endl;
 		usleep(5000);
 	}
 
-	if(should_stop())
-	{
+	if(should_stop()) {
 		std::cout << "[Mu2eCaloEventReceiver:getNext]  should stop" << std::endl;
 		return false;
 	}
@@ -78,8 +72,7 @@ bool mu2e::Mu2eCaloEventReceiver::getNext_(artdaq::FragmentPtrs& frags)
 	//-----------------------------------------------------------------------------
 	// increment the subrun number, if needed
 	//-----------------------------------------------------------------------------
-	if((ev_counter() % 10) == 0)
-	{
+	if((ev_counter() % 10) == 0) {
 		artdaq::Fragment* esf = new artdaq::Fragment(1);
 		std::cout << "[Mu2eCaloEventReceiver:getNext]  setting end of sub-run type"
 		          << std::endl;
@@ -95,8 +88,7 @@ bool mu2e::Mu2eCaloEventReceiver::getNext_(artdaq::FragmentPtrs& frags)
 }
 
 //-----------------------------------------------------------------------------
-bool mu2e::Mu2eCaloEventReceiver::simulateEvent(artdaq::FragmentPtrs& Frags)
-{
+bool mu2e::Mu2eCaloEventReceiver::simulateEvent(artdaq::FragmentPtrs& Frags) {
 	double            tstamp = ev_counter();
 	artdaq::Fragment* frag =
 	    new artdaq::Fragment(ev_counter(), _fragment_ids[0], FragmentType::CAL, tstamp);
@@ -148,8 +140,7 @@ bool mu2e::Mu2eCaloEventReceiver::simulateEvent(artdaq::FragmentPtrs& Frags)
 	return true;
 }
 //-----------------------------------------------------------------------------
-bool mu2e::Mu2eCaloEventReceiver::sendEmpty_(artdaq::FragmentPtrs& Frags)
-{
+bool mu2e::Mu2eCaloEventReceiver::sendEmpty_(artdaq::FragmentPtrs& Frags) {
 	std::cout << "[Mu2eCaloEventReceiver:sendEMpty]  making empty frag" << std::endl;
 	Frags.emplace_back(new artdaq::Fragment());
 	Frags.back()->setSystemType(artdaq::Fragment::EmptyFragmentType);
