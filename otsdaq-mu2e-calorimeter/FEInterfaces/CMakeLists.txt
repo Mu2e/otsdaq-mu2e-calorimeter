@@ -15,8 +15,8 @@ cet_make_library(
 cet_build_plugin(ROCCalorimeterInterface
   otsdaq::FEInterface
   LIBRARIES REG
-  otsdaq_mu2e::ROCPolarFireCoreInterface
-  otsdaq_mu2e_calorimeter::FEInterfaces
+  otsdaq-mu2e::ROCPolarFireCoreInterface
+  otsdaq-mu2e-calorimeter::FEInterfaces
   otsdaq::Macros
   )
  
