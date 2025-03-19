@@ -3,61 +3,60 @@
 
 process_name : iercAnalysis
 
-source : {
-   module_type : RootInput
-   fileNames   : @nil
-   maxEvents   : -1
+                   source : {
+module_type:
+	RootInput fileNames : @nil maxEvents : -1
 }
 
 services : {
-
-  #@local::Services.Reco
-  GeometryService		:		{inputFile: "Offline/Mu2eG4/geom/geom_common.txt" bFieldFile: "Offline/Mu2eG4/geom/bfgeom_reco_v01.txt" simulatedDetector : {tool_type: "Mu2e"}}
-  ConditionsService		:		{ conditionsfile : "Offline/ConditionsService/data/conditions_01.txt"}
-  GlobalConstantsService		:		{inputFile : "Offline/GlobalConstantsService/data/globalConstants_01.txt"}
-  DbService		:		@local::DbEmpty
-  ProditionsService		:		@local::Proditions
-  TimeTracker: {}
+	#@ local::Services.Reco GeometryService : {
+	inputFile:
+		"Offline/Mu2eG4/geom/geom_common.txt" bFieldFile
+		    : "Offline/Mu2eG4/geom/bfgeom_reco_v01.txt" simulatedDetector : {
+		tool_type:
+			"Mu2e"
+		}
+	}
+ConditionsService: {
+conditionsfile:
+	"Offline/ConditionsService/data/conditions_01.txt"
+}
+GlobalConstantsService: {
+inputFile:
+	"Offline/GlobalConstantsService/data/globalConstants_01.txt"
+}
+DbService:
+	@local::DbEmpty ProditionsService : @local::Proditions TimeTracker : {
+	}
 }
 
 physics : {
 
-  producers : {
+	producers : {
 
-    genFrags : {
-      module_type  : ArtFragmentsFromDTCEvents
-      diagLevel    : 0
-      makeCaloFrag : 1
-      makeTrkFrag  : 0
-      makeCRVFrag  : 0
-      makeSTMFrag  : 0
-    }
+		genFrags : {
+			module_type : ArtFragmentsFromDTCEvents diagLevel : 0 makeCaloFrag : 1
+			makeTrkFrag : 0 makeCRVFrag : 0 makeSTMFrag : 0
+		}
 
-    CaloDigiIERC : {
-      module_type : CaloDigiFromFragments
-      dataType : 1
-      diagLevel : 0
-      caloTag : "genFrags"
-      useOfflineID : false
-      useDTCROCID : true
-    }
-  }
+		CaloDigiIERC : {
+			module_type : CaloDigiFromFragments dataType : 1 diagLevel : 0
+			caloTag : "genFrags" useOfflineID : false useDTCROCID : true
+		}
+	}
 
-  analyzers  : {
-    pulseIERCAnalysis : {
-      module_type : CaloiercAnalyzer
-      caloDigiModuleLabel : "CaloDigiIERC"
-      caloDigiInstanceLabel : ""
-      verbosity : 0
-      splineFilename : "/home/mu2edaq/dev_calo/pgirotti_testing/srcs/otsdaq-mu2e-calorimeter/test/ierc_splines_gr4_106291.root"
-    }
-  }
+	analyzers : {
+		pulseIERCAnalysis : {
+			module_type : CaloiercAnalyzer caloDigiModuleLabel : "CaloDigiIERC"
+			caloDigiInstanceLabel : "" verbosity : 0
+			splineFilename : "/home/mu2eshift/gr4_process/srcs/otsdaq-mu2e-calorimeter/"
+			                 "test/ierc_splines_gr4_106291.root"
+		}
+	}
 
-  t1 : [ genFrags , CaloDigiIERC ]
-  e1 : [ pulseIERCAnalysis ]
+	t1 : [ genFrags, CaloDigiIERC ] e1 : [pulseIERCAnalysis]
 
-  trigger_paths  : [t1]
-  end_paths      : [e1]
+	trigger_paths : [t1] end_paths : [e1]
 }
 
-services.scheduler.wantSummary: true
+          services.scheduler.wantSummary : true
