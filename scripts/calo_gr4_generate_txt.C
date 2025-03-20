@@ -7,8 +7,6 @@
 #include <sstream>
 #include <vector>
 
-gInterpreter->GenerateDictionary("vector<vector<float>>", "vector");
-
 void saveTimeDataToFile(std::ofstream&     outFile,
                         const std::string& inputFileName,
                         int                option) {
@@ -65,9 +63,9 @@ void saveTimeDataToFile(std::ofstream&     outFile,
 		std::ostringstream lineStream;
 		lineStream << ewt;
 
-		std::cout << std::endl;
-		// Loop over each sorted SiPM ID and write the data in the required format
-		// for (size_t idx : indices) {
+		// std::cout << std::endl;
+		//  Loop over each sorted SiPM ID and write the data in the required format
+		//  for (size_t idx : indices) {
 		for(auto pair : timeMap) {
 			if(option == 1) {
 				if(pair.second.size() >= 2) {
@@ -93,9 +91,9 @@ void saveTimeDataToFile(std::ofstream&     outFile,
 	file->Close();
 }
 
-int Calo_generate_txt(const std::string& inputFileName,
-                      const std::string& outputName,
-                      int                option) {
+int calo_gr4_generate_txt(const std::string& inputFileName,
+                          const std::string& outputName,
+                          int                option) {
 	// Create the output file name
 	std::string   outputFileName = outputName;
 	std::ofstream outFile(outputFileName, std::ios::trunc);
@@ -104,6 +102,8 @@ int Calo_generate_txt(const std::string& inputFileName,
 		          << std::endl;
 		return -1;
 	}
+
+	gInterpreter->GenerateDictionary("vector<vector<float>>", "vector");
 
 	// Section to insert header
 	if(option == 1) {  // Two events
