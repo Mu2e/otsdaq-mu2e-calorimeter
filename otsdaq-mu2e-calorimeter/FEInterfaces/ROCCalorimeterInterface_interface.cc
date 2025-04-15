@@ -232,8 +232,8 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(
 	// 	                        static_cast<FEVInterface::frontEndMacroFunction_t>(
 	// 	                            &ROCCalorimeterInterface::GetTempChannel),
 	// 	                        std::vector<std::string>{"channelNumber"}, //inputs
-	// parameters 	                        std::vector<std::string>{"readValue"}, //output parameters 	                        1);  //
-	// requiredUserPermissions
+	// parameters 	                        std::vector<std::string>{"readValue"},
+	// //output parameters 	                        1);  // requiredUserPermissions
 
 }  // end constructor()
 
