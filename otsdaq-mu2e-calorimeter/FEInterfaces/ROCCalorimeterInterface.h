@@ -67,16 +67,16 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface {
         ROC_ADDRESS_IS_LASER                 = 78,
         ROC_ADDRESS_LASER_DELAY              = 77,
 
-        ROC_ADDRESS_MZB_BUSY                 = 140, 
+        ROC_ADDRESS_MZB_BUSY                 = 140,
 
-        ROC_ADDRESS_SELECTLINE               = 141, 
+        ROC_ADDRESS_SELECTLINE               = 141,
 
-        ROC_ADDRESS_BOARD_ID                 = 142, 
+        ROC_ADDRESS_BOARD_ID                 = 142,
 
-        ROC_ADDRESS_OSCMODE_FLAG             = 148, 
-        ROC_ADDRESS_OSCMODE_LENGHT           = 149, 
+        ROC_ADDRESS_OSCMODE_FLAG             = 148,
+        ROC_ADDRESS_OSCMODE_LENGHT           = 149,
 
-        ROC_ADDRESS_BOARD_U_ID_LSB           = 145, 
+        ROC_ADDRESS_BOARD_U_ID_LSB           = 145,
         ROC_ADDRESS_BOARD_U_ID_CSB           = 146,
         ROC_ADDRESS_BOARD_U_ID_MSB           = 147
 
@@ -113,9 +113,9 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface {
 
     // void SetupForPatternDataTaking					(__ARGS__); // Moved to ROCPolarFireCoreInterface::ROCPolarFireCoreInterface, otsdaq_mu2e/otsdaq-mu2e/FEInterfaces/ROCPolarFireCoreInterfaceImpl.cc
     void SetupForPatternFixedLengthDataTaking		(__ARGS__);
-    void SetupForPatternFixedLengthDataTaking       (unsigned int numberOfWords);	
+    void SetupForPatternFixedLengthDataTaking       (unsigned int numberOfWords);
     void SetupForADCsDataTaking		(__ARGS__);
-    void SetupForADCsDataTaking		(bool setThr, unsigned int threshold);	
+    void SetupForADCsDataTaking		(bool setThr, unsigned int threshold);
 
     void SendMzCommand(__ARGS__);
     void EvaluateBlockWriteErrorRate(__ARGS__);
