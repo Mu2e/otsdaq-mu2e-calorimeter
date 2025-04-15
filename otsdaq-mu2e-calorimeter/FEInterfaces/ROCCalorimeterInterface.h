@@ -36,7 +36,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface {
     virtual uint16_t						readEmulatorRegister	(uint16_t address) override;
 
 
-    virtual void 							readROCBlock			(std::vector<DTCLib::roc_data_t>& data, DTCLib::roc_address_t address, uint16_t wordCount, bool incrementAddress) override; 
+    virtual void 							readROCBlock			(std::vector<DTCLib::roc_data_t>& data, DTCLib::roc_address_t address, uint16_t wordCount, bool incrementAddress) override;
     virtual void 						universalBlockRead			(char* address, char* returnValue, unsigned int numberOfBytes) override;
 
     bool emulatorWorkLoop(void) override;
@@ -59,7 +59,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface {
         ROC_ADDRESS_MASK_A                   = 120,
         ROC_ADDRESS_MASK_B                   = 121,
         ROC_ADDRESS_BASE_THRESHOLD           = 100,
-      
+
         ROC_ADDRESS_IS_COUNTER               = 79,
         ROC_ADDRESS_COUNTER_IS_FALLING       = 80,
         ROC_ADDRESS_COUNTER_SIZE             = 81,
@@ -139,7 +139,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface {
     void ToggleMBBusy(bool busyonoff);
     void SetADCsThresholds(__ARGS__);
     void SetADCsThresholds(int boardid, int offset);
-    
+
     void ReadROCErrorCounter		(__ARGS__);
     void ReadMBRegisters		(__ARGS__);
 
