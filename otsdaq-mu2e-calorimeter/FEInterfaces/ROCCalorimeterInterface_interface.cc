@@ -21,7 +21,7 @@ using namespace ots;
 // 259 (and others) ==> the number of words in block read is written first as a block
 // write
 const std::set<DTCLib::roc_address_t> ROCCalorimeterInterface::SPECIAL_BLOCK_READ_ADDRS_(
-    {263, 256, 257, 261, 262, 264, 260});
+    {263, 256, 257, 261, 262, 264, 260, 265, 266});
 
 //=========================================================================================
 ROCCalorimeterInterface::ROCCalorimeterInterface(
@@ -196,6 +196,16 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(
 	                        std::vector<std::string>{"Status"},       // output parameters
 	                        1);  // requiredUserPermissions
 
+	registerFEMacroFunction(
+	    "Evaluate BlockWrite Error Rate",
+	    static_cast<FEVInterface::frontEndMacroFunction_t>(
+	        &ROCCalorimeterInterface::EvaluateBlockWriteErrorRate),
+	    std::vector<std::string>{"Number of test loops, Default := 900]",
+	                             "Number of 16-bits words in a block transfer, Default "
+	                             ":= 500]"},  // inputs parameters
+	    std::vector<std::string>{"Status"},   // output parameters
+	    1);                                   // requiredUserPermissions
+
 	// registerFEMacroFunction("SetROCCaloVoltageChannel",
 	//                         static_cast<FEVInterface::frontEndMacroFunction_t>(
 	//                             &ROCCalorimeterInterface::SetVoltageChannel),
@@ -346,33 +356,66 @@ void ROCCalorimeterInterface::ROCSlowControl(__ARGS__) {
 	os << "Word " << 11 << ": 28 current: " << (data[11] * 2.687) << " mA" << __E__;
 
 	os << __E__;
-
-	os << "Reading VTRX registers:" << __E__;
+	os << "Reading SiPMs temperature:" << __E__;
 	os << __E__;
 
-	/*  std::vector<DTCLib::roc_data_t> data3;
-	  readROCBlock(data3,
-	           264,
-	           7,
-	           false);
-	  if(data3.size() != 7)	{
-	    __FE_SS__ << "Illegal number of bytes: "  <<  data3.size() << " not " << 7 <<
-	  __E__;
-	    __FE_SS_THROW__;
-	  }
+	std::vector<DTCLib::roc_data_t> data3;
+	readROCBlock(data3, 260, 7, false);
 
-	  os << "Word " << 0 << ":  VTRX_REG_Control: 0x" << std::hex << data3[0] << " " <<
-	  __E__; os << "Word " << 1 << ":  VTRX_REG_ModCurrent: 0x" << std::hex << data3[1]<<
-	  " " << __E__; os << "Word " << 2 << ":  VTRX_REG_BiasCurrent: 0x" << std::hex <<
-	  data3[2] << " " << __E__; os << "Word " << 3 << ":  VTRX_REG_PreEmphasis: 0x" <<
-	  std::hex  << data3[3] << " " << __E__; os << "Word " << 4 << ":  VTRX_REG_ModMask:
-	  0x" << std::hex << data3[4]<< " " << __E__; os << "Word " << 5 << ":
-	  VTRX_REG_BiasMask: 0x" << std::hex << data3[5] << " " << __E__; os << "Word " << 6
-	  << ":  VTRX_REG_PreDriver: 0x" << std::hex << data3[6]   << " " << __E__;
+	os << "vector size:" << data3.size() << __E__;
 
-	  os <<  __E__;
+	os << __E__;
 
+	for(size_t i = 0; i < data3.size(); i++) {
+		os << "Word " << i << ": 0x" << ((float)data3[i]) / 100. << __E__;
+	}
+
+	os << __E__;
+	os << "Reading SiPMs current:" << __E__;
+	os << __E__;
+
+	std::vector<DTCLib::roc_data_t> data4;
+	readROCBlock(data4, 266, 7, false);
+
+	os << "vector size:" << data4.size() << __E__;
+
+	os << __E__;
+
+	for(size_t i = 0; i < data4.size(); i++) {
+		os << "Word " << i << ": 0x" << ((float)data4[i]) / 10. << __E__;
+	}
+
+	os << __E__;
+	os << "Reading SiPMs voltages:" << __E__;
+	os << __E__;
+
+	std::vector<DTCLib::roc_data_t> data5;
+	readROCBlock(data5, 265, 7, false);
+
+	os << "vector size:" << data5.size() << __E__;
+
+	os << __E__;
+
+	for(size_t i = 0; i < data5.size(); i++) {
+		os << "Word " << i << ": 0x" << ((float)data5[i]) / 100. << __E__;
+	}
+
+	/*if(data3.size() != 7)	{
+	  __FE_SS__ << "Illegal number of bytes: "  <<  data3.size() << " not " << 7 << __E__;
+	  __FE_SS_THROW__;
+	}
+
+	os << "Word " << 0 << ":  VTRX_REG_Control: 0x" << std::hex << data3[0] << " " <<
+	__E__; os << "Word " << 1 << ":  VTRX_REG_ModCurrent: 0x" << std::hex << data3[1]<< "
+	" << __E__; os << "Word " << 2 << ":  VTRX_REG_BiasCurrent: 0x" << std::hex <<
+	data3[2] << " " << __E__; os << "Word " << 3 << ":  VTRX_REG_PreEmphasis: 0x" <<
+	std::hex  << data3[3] << " " << __E__; os << "Word " << 4 << ":  VTRX_REG_ModMask: 0x"
+	<< std::hex << data3[4]<< " " << __E__; os << "Word " << 5 << ":  VTRX_REG_BiasMask:
+	0x" << std::hex << data3[5] << " " << __E__; os << "Word " << 6 << ":
+	VTRX_REG_PreDriver: 0x" << std::hex << data3[6]   << " " << __E__;
 	*/
+
+	os << __E__;
 
 	os << "Reading MB registers:" << __E__;
 	os << __E__;
@@ -418,6 +461,127 @@ void ROCCalorimeterInterface::ReadMBRegisters(__ARGS__) {
 }
 
 //==================================================================================================
+void ROCCalorimeterInterface::EvaluateBlockWriteErrorRate(__ARGS__) {
+	uint16_t nloops =
+	    __GET_ARG_IN__("Number of test loops, Default := 900]", unsigned int, 900);
+	uint16_t blockLen =
+	    __GET_ARG_IN__("Number of 16-bits words in a block transfer, Default := 500]",
+	                   unsigned int,
+	                   500);
+
+	std::stringstream os;
+
+	os << "Starting evaluation of ROC Block Write Bit Error Rate (BER) " << __E__;
+
+	uint16_t u;
+	u = thisDTC_->ReadROCRegister(linkID_, 0, 100);
+
+	uint16_t current_counter = 0;
+	int      nerrs           = 0;
+
+	long int time_first_loop        = 0;
+	long int time_second_loop       = 0;
+	long int current_first_loop     = 0;
+	long int current_second_loop    = 0;
+	long int first_time_first_loop  = 0;
+	long int first_time_second_loop = 0;
+	long int max_time_first_loop    = 0;
+	long int max_time_second_loop   = 0;
+
+	for(uint16_t iloop = 0; iloop < nloops; iloop++) {
+		std::vector<DTCLib::roc_data_t> dataout;
+		std::vector<DTCLib::roc_data_t> datain;
+
+		for(uint16_t ic = 0; ic < blockLen; ic++) {
+			dataout.push_back(current_counter);
+			current_counter++;
+		}
+
+		writeROCBlock(dataout, 259, false /* incrementAddress*/);
+
+		// should here read the CRC errors from error block Error addr=9
+
+		while((u = thisDTC_->ReadROCRegister(linkID_, 128, 100)) != 0x8000) {
+			current_first_loop++;
+			time_first_loop++;
+			if(u != 0) {
+				os << "new Max time for first loop, loop " << iloop << " is "
+				   << current_first_loop << __E__;
+				nerrs++;
+				writeRegister(14, 1);
+				writeRegister(14, 0);
+				continue;
+			}
+		}
+		while((u = thisDTC_->ReadROCRegister(linkID_, 129, 100)) == 0) {
+			current_second_loop++;
+			time_second_loop++;
+		}
+
+		if(current_first_loop > max_time_first_loop) {
+			max_time_first_loop = current_first_loop;
+			os << "new Max time for first loop, loop " << iloop << " is "
+			   << current_first_loop << __E__;
+		}
+		if(current_second_loop > max_time_second_loop) {
+			max_time_second_loop = current_second_loop;
+			os << "new Max time for second loop, loop " << iloop << " is "
+			   << current_second_loop << __E__;
+		}
+
+		if(u - 4 != blockLen) {
+			os << "Error detected in transfer " << iloop << ", nWORDs read is " << u - 4
+			   << __E__;
+			writeRegister(14, 1);
+			writeRegister(14, 0);
+			continue;
+		}
+
+		thisDTC_->ReadROCBlock(datain, linkID_, 259, u - 4, 0, 0);
+		while(datain.size() > blockLen)
+			datain.pop_back();  // maybe not needed anymnore
+
+		uint16_t icomp = 0;
+		while(icomp < dataout.size()) {
+			if(dataout[icomp] != datain[icomp]) {
+				os << "Error detected in transfer " << iloop << ", word " << icomp
+				   << __E__;
+				nerrs++;
+			}
+			// else if(icomp == 0) os << iloop << " loop, first counter is " <<
+			// datain[icomp]  <<   __E__;
+			icomp++;
+		}
+
+		writeRegister(14, 1);
+		writeRegister(14, 0);
+
+		if(iloop == 0) {
+			first_time_first_loop  = time_first_loop;
+			first_time_second_loop = time_second_loop;
+		}
+
+		current_first_loop  = 0;
+		current_second_loop = 0;
+	}
+
+	time_first_loop  = time_first_loop / nloops;
+	time_second_loop = time_second_loop / nloops;
+
+	os << "Test completed!" << __E__;
+
+	os << "Word error rate: " << nerrs / current_counter << " over " << current_counter
+	   << " words" << __E__;
+
+	os << "First loop time is " << first_time_first_loop << ", second is "
+	   << first_time_second_loop << __E__;
+	os << "Average First loop time is " << time_first_loop << ", second is "
+	   << time_second_loop << __E__;
+
+	__SET_ARG_OUT__("Status", os.str());
+}
+
+//==================================================================================================
 void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data,
                                            DTCLib::roc_address_t            address,
                                            uint16_t                         wordCount,
@@ -443,11 +607,30 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 			break;
 
 		case 260:
-			address = offsetof(EE_DATABUF_t, apdTemp_tag);
-			wordCount =
-			    offsetof(EE_DATABUF_t, apdPwrs_tag) - offsetof(EE_DATABUF_t, apdTemp_tag);
+			address   = offsetof(EE_DATABUF_t, apdTemp_tag) + 4;
+			wordCount = offsetof(EE_DATABUF_t, apdPwrs_tag) -
+			            offsetof(EE_DATABUF_t, apdTemp_tag) - 8;
 			writeROCBlock({wordCount, address}, 261, false /* incrementAddress*/);
 			wordCount = wordCount / 2;
+			address   = 261;
+			break;
+
+		case 265:
+			address   = offsetof(EE_DATABUF_t, apdBiasV_tag) + 4;
+			wordCount = offsetof(EE_DATABUF_t, apdBiasA_tag) -
+			            offsetof(EE_DATABUF_t, apdBiasV_tag) - 8;
+			writeROCBlock({wordCount, address}, 261, false /* incrementAddress*/);
+			wordCount = wordCount / 2;
+			address   = 261;
+			break;
+
+		case 266:
+			address   = offsetof(EE_DATABUF_t, apdBiasA_tag) + 4;
+			wordCount = offsetof(EE_DATABUF_t, apdTemp_tag) -
+			            offsetof(EE_DATABUF_t, apdBiasA_tag) - 8;
+			writeROCBlock({wordCount, address}, 261, false /* incrementAddress*/);
+			wordCount = wordCount / 2;
+			address   = 261;
 			break;
 
 		case 257:
@@ -505,9 +688,11 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 	while(data.size() > wordCount)
 		data.pop_back();
 
+	if(emulatedInDTC_)  // fix count for emulated ROC to survive
+		u = wordCount + 4;
 	if(data.size() != (long unsigned int)u - 4) {
-		__FE_SS__ << "ROC block read failed, expecting " << wordCount
-		          << " words, and read " << data.size() << " words." << __E__;
+		__FE_SS__ << "ROC block read failed, expecting " << u - 4 << " words, and read "
+		          << data.size() << " words." << __E__;
 		__FE_SS_THROW__;
 	}
 
@@ -859,9 +1044,10 @@ void ROCCalorimeterInterface::ConfigureLink(std::string conf,
 	if(boardid != -1) {
 		if(doCalibration)
 			CalibrateMZB(boardid);
+		SetBoardVoltages(
+		    hvonoff, boardid, conf);  // This checks which channels are pin diodes
 		if(setThresholds)
 			SetADCsThresholds(boardid, offset);
-		SetBoardVoltages(hvonoff, boardid, conf);
 		writeRegister(ROC_ADDRESS_BOARD_ID, boardid);
 	} else {
 		__FE_SS__ << "Cannot match board unique ID: readval is " << readVal
@@ -971,16 +1157,27 @@ void ROCCalorimeterInterface::SetADCsThresholds(int boardID, int offset) {
 			int   chindex;
 			float baseline;
 			float sigma;
+			int   thr;
 			int   thr2set;
 
-			confFile >> chindex;
-			confFile >> baseline;
-			confFile >> sigma;
-			confFile >> thr2set;
+			confFile >> chindex >> baseline >> sigma >> thr;
+
+			thr2set = thr + offset;
+
+			for(auto pin : _pin_diode_list) {
+				if(boardID * 100 + chindex == pin) {
+					thr2set = thr;
+					__COUT_INFO__ << "Board " << boardID << " Channel " << chindex
+					              << " detected as pin diode. Ignoring requested offset. "
+					                 "Threshold: "
+					              << thr2set << __E__;
+					break;
+				}
+			}
 
 			__COUT_INFO__ << chindex << "  " << baseline << "  " << sigma << "  "
-			              << thr2set + offset << __E__;
-			writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ichan, thr2set + offset);
+			              << thr2set << __E__;
+			writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ichan, thr2set);
 		}
 
 		confFile.close();
@@ -1065,6 +1262,10 @@ void ROCCalorimeterInterface::SetBoardVoltages(bool        hvonoff,
 
 			confFile >> chindex >> vbias[ichan] >> type;
 			__COUT_INFO__ << chindex << "  " << vbias[ichan] << "  " << type << __E__;
+
+			if(type == "PIN-DIODE") {
+				_pin_diode_list.insert(boardID * 100 + chindex);
+			}
 		}
 
 		/*for(int ichan = 0; ichan<20; ichan++){

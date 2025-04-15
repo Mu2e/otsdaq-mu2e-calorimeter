@@ -54,6 +54,14 @@ physics : {
       useOfflineID : true
     }
 
+    CaloDigiFromDTCEvents : {
+      module_type : CaloDigiFromDTCEvents
+      dataType : 1
+      diagLevel : 0
+      caloTag : "genFrags"
+      useOfflineID : true
+    }
+
   }
 
   analyzers  : {
@@ -72,7 +80,9 @@ physics : {
   e0 : [ ]
 
   t1 : [ genFrags , CaloDigi ]
+  t1b : [ CaloDigiFromDTCEvents ]
   e1 : [ outfile ]
+
 
   t2 : [ genFrags ]
   e2 : [ caloAnalyzer ]

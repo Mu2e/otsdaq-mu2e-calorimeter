@@ -1,0 +1,53 @@
+#include "Offline/fcl/minimalMessageService.fcl"
+#include "Offline/fcl/standardServices.fcl"
+
+process_name : ArtToRoot
+
+source : {
+   module_type : RootInput
+   fileNames   : @nil
+   maxEvents   : -1
+}
+
+services : {
+  TimeTracker: {}
+}
+
+physics : {
+
+  filters : {
+    filterEmptyEvents : {
+      module_type : CaloEventFilter
+    }
+  }
+
+  producers : {
+    genFrags : {
+      module_type  : ArtFragmentsFromDTCEvents
+      diagLevel    : 0
+      makeCaloFrag : 1
+      makeTrkFrag  : 0
+      makeCRVFrag  : 0
+      makeSTMFrag  : 0
+    }
+  }
+
+  analyzers  : {
+    caloAnalyzer : {
+      module_type           : CaloDataAnalyzer
+      unpackerModuleLabel   : "genFrags"
+      unpackerInstanceLabel : ""
+      verbosity             : 0
+      dataType              : 1
+      SelectEvents          : [ t1 ]
+    }
+  }
+
+  t1 : [ filterEmptyEvents, genFrags ]
+  e1 : [ caloAnalyzer ]
+
+  trigger_paths  : [t1]
+  end_paths      : [e1]
+}
+
+services.scheduler.wantSummary: true
