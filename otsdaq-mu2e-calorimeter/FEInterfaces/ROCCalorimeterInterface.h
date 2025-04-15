@@ -6,11 +6,9 @@
 #define MZ_ADDRESS 262
 #define MZ_BUFFER_SIZE 46
 
-namespace ots
-{
-  class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
-  {
-    // clang-format off
+namespace ots {
+class ROCCalorimeterInterface : public ROCPolarFireCoreInterface {
+	// clang-format off
   public:
     ROCCalorimeterInterface(const std::string&       rocUID,
 			    const ConfigurationTree& theXDAQContextConfigTree,
@@ -156,8 +154,8 @@ namespace ots
 
     std::set<int> _pin_diode_list;
 
-    // clang-format on
-  };
+	// clang-format on
+};
 
 }  // namespace ots
 

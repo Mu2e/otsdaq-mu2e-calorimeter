@@ -61,18 +61,18 @@ class CaloDataAnalyzer : public art::EDAnalyzer {
 	int                    data_type_;
 	mu2e::CaloDAQUtilities caloDAQUtil_;
 	int                    maxEventNum_;
-	bool                    fillEmptyEvents_;
-	bool                    fillFailedEvents_;
+	bool                   fillEmptyEvents_;
+	bool                   fillFailedEvents_;
 
-	int    event_failedhits;
-	int    total_events;
-	int    total_hits;
-	int    total_goodhits;
-	int    total_failedhits;
+	int                                                  event_failedhits;
+	int                                                  total_events;
+	int                                                  total_hits;
+	int                                                  total_goodhits;
+	int                                                  total_failedhits;
 	std::map<mu2e::CaloDAQUtilities::CaloHitError, uint> failure_counter;
-	size_t nCaloEvents;
-	size_t nCaloHits;
-	int    this_eventNumber;
+	size_t                                               nCaloEvents;
+	size_t                                               nCaloHits;
+	int                                                  this_eventNumber;
 
 	TH1D*   h1_t0;
 	TH1D*   h1_maxIndex;
@@ -109,7 +109,6 @@ class CaloDataAnalyzer : public art::EDAnalyzer {
 	int                                 t_nsamples;
 	int                                 t_ADC[MAXNSAMPLES];
 	std::vector<std::vector<uint16_t>>* t_ADC_hit = 0;
-
 
 	int                                 tBad_run;
 	int                                 tBad_subrun;
@@ -176,10 +175,16 @@ mu2e::CaloDataAnalyzer::CaloDataAnalyzer(const art::EDAnalyzer::Table<Config>& c
 	h1_nSamples = tfs->make<TH1D>("h1_nSamples", "Waveform length;nSamples", 100, 0, 100);
 	h2_channelHits = tfs->make<TH2D>(
 	    "h2_channelHits", "Hits per channel;BoardID;ChannelID", 256, 0, 256, 20, 0, 20);
-	h2_failedChannels = tfs->make<TH2D>(
-	    "h2_failedChannels", "Failures per channel;BoardID;ChannelID", 256, 0, 256, 20, 0, 20);
-	h2_failedROCs = tfs->make<TH2D>(
-	    "h2_failedROCs", "Failures per ROC;DTC;ROC", 30, 0, 30, 6, 0, 6);
+	h2_failedChannels = tfs->make<TH2D>("h2_failedChannels",
+	                                    "Failures per channel;BoardID;ChannelID",
+	                                    256,
+	                                    0,
+	                                    256,
+	                                    20,
+	                                    0,
+	                                    20);
+	h2_failedROCs =
+	    tfs->make<TH2D>("h2_failedROCs", "Failures per ROC;DTC;ROC", 30, 0, 30, 6, 0, 6);
 	h2_waveforms = tfs->make<TH2D>(
 	    "h2_waveforms", "All waveforms;clock ticks;ADC", 150, 0, 150, 4096, 0, 4096);
 	g_EWTs      = tfs->makeAndRegister<TGraph>("g_EWTs", "EWT check;ROC EWT;Hit EWT");
@@ -196,7 +201,7 @@ mu2e::CaloDataAnalyzer::CaloDataAnalyzer(const art::EDAnalyzer::Table<Config>& c
 	tree->Branch("nevt", &t_nevt, "nevt/I");
 	tree->Branch(
 	    "currentDTCEventWindow", &t_currentDTCEventWindow, "currentDTCEventWindow/L");
-	tree->Branch("hasFailures",&t_hasFailures, "hasFailures/I");
+	tree->Branch("hasFailures", &t_hasFailures, "hasFailures/I");
 	tree->Branch("nhits", &t_nhits, "nhits/I");
 	tree->Branch("dtcID", &t_dtcID, "dtcID[nhits]/I");
 	tree->Branch("boardID", &t_boardID, "boardID[nhits]/I");
@@ -220,7 +225,7 @@ mu2e::CaloDataAnalyzer::CaloDataAnalyzer(const art::EDAnalyzer::Table<Config>& c
 	treeBad->Branch("nevt", &tBad_nevt, "nevt/I");
 	treeBad->Branch(
 	    "currentDTCEventWindow", &tBad_currentDTCEventWindow, "currentDTCEventWindow/L");
-	treeBad->Branch("hasFailures",&tBad_hasFailures, "hasFailures/I");
+	treeBad->Branch("hasFailures", &tBad_hasFailures, "hasFailures/I");
 	treeBad->Branch("nhits", &tBad_nhits, "nhits/I");
 	treeBad->Branch("dtcID", &tBad_dtcID, "dtcID[nhits]/I");
 	treeBad->Branch("boardID", &tBad_boardID, "boardID[nhits]/I");
@@ -277,23 +282,23 @@ void mu2e::CaloDataAnalyzer::analyze(art::Event const& event) {
 	if(maxEventNum_ > 0 && this_eventNumber > maxEventNum_)
 		return;
 
-	t_run     = event.run();
-	t_subrun  = event.subRun();
-	t_nevt    = event.event();
-	tBad_run     = event.run();
-	tBad_subrun  = event.subRun();
-	tBad_nevt    = event.event();
-	tH_run    = event.run();
-	tH_subrun = event.subRun();
-	tH_nevt   = event.event();
+	t_run       = event.run();
+	t_subrun    = event.subRun();
+	t_nevt      = event.event();
+	tBad_run    = event.run();
+	tBad_subrun = event.subRun();
+	tBad_nevt   = event.event();
+	tH_run      = event.run();
+	tH_subrun   = event.subRun();
+	tH_nevt     = event.event();
 
 	t_hasFailures = 0;
-	t_nhits    = 0;
-	t_nsamples = 0;
+	t_nhits       = 0;
+	t_nsamples    = 0;
 	t_ADC_hit->clear();
 	tBad_hasFailures = 0;
-	tBad_nhits    = 0;
-	tBad_nsamples = 0;
+	tBad_nhits       = 0;
+	tBad_nsamples    = 0;
 	tBad_ADC_hit->clear();
 
 	nCaloEvents      = 0;
@@ -314,7 +319,7 @@ void mu2e::CaloDataAnalyzer::analyze(art::Event const& event) {
 		processCaloData(caloDTC);
 	}
 	if(fillEmptyEvents_ || t_nhits > 0) {
-		if (fillFailedEvents_ || event_failedhits == 0){
+		if(fillFailedEvents_ || event_failedhits == 0) {
 			tree->Fill();  // Only fill if we have at least 1 hit and no failures
 		}
 	}
@@ -346,7 +351,7 @@ void mu2e::CaloDataAnalyzer::processCaloData(
 	long int thisDTCEWT     = this_subevent.GetEventWindowTag().GetEventWindowTag(true);
 	t_currentDTCEventWindow = thisDTCEWT;
 	tBad_currentDTCEventWindow = thisDTCEWT;
-	int dtcID               = int(this_subevent.GetDTCID());
+	int dtcID                  = int(this_subevent.GetDTCID());
 
 	nCaloEvents++;
 	// Iterate over the data blocks (ROCs)
@@ -407,20 +412,24 @@ void mu2e::CaloDataAnalyzer::processCaloData(
 						          << hit_waveform.size() << std::endl;
 					}
 
-					if(tBad_nhits >= MAXNHITS) continue;
-					if(tBad_nsamples + hit_waveform.size() >= MAXNSAMPLES) continue;
+					if(tBad_nhits >= MAXNHITS)
+						continue;
+					if(tBad_nsamples + hit_waveform.size() >= MAXNSAMPLES)
+						continue;
 					tBad_nhits++;
-					tBad_dtcID[tBad_nhits - 1]       = dtcID;
-					tBad_boardID[tBad_nhits - 1]     = hit.BoardID;
-					tBad_linkID[tBad_nhits - 1]      = iroc;
-					tBad_chanID[tBad_nhits - 1]      = hit.ChannelID;
-					tBad_errflag[tBad_nhits - 1]     = hit.ErrorFlags;
-					tBad_fff[tBad_nhits - 1]         = hit.LastSampleMarker;
-					tBad_time_tot[tBad_nhits - 1]    = hit.Time;
-					tBad_ewhit[tBad_nhits - 1]       = hit.InPayloadEventWindowTag;
-					tBad_peakpos[tBad_nhits - 1]     = hit.IndexOfMaxDigitizerSample;
-					if (hit.IndexOfMaxDigitizerSample >= 0 && hit.IndexOfMaxDigitizerSample < hit_waveform.size()){
-						tBad_peakval[tBad_nhits - 1] = hit_waveform[hit.IndexOfMaxDigitizerSample];
+					tBad_dtcID[tBad_nhits - 1]    = dtcID;
+					tBad_boardID[tBad_nhits - 1]  = hit.BoardID;
+					tBad_linkID[tBad_nhits - 1]   = iroc;
+					tBad_chanID[tBad_nhits - 1]   = hit.ChannelID;
+					tBad_errflag[tBad_nhits - 1]  = hit.ErrorFlags;
+					tBad_fff[tBad_nhits - 1]      = hit.LastSampleMarker;
+					tBad_time_tot[tBad_nhits - 1] = hit.Time;
+					tBad_ewhit[tBad_nhits - 1]    = hit.InPayloadEventWindowTag;
+					tBad_peakpos[tBad_nhits - 1]  = hit.IndexOfMaxDigitizerSample;
+					if(hit.IndexOfMaxDigitizerSample >= 0 &&
+					   hit.IndexOfMaxDigitizerSample < hit_waveform.size()) {
+						tBad_peakval[tBad_nhits - 1] =
+						    hit_waveform[hit.IndexOfMaxDigitizerSample];
 					} else {
 						tBad_peakval[tBad_nhits - 1] = 0;
 					}
@@ -511,11 +520,11 @@ void mu2e::CaloDataAnalyzer::endJob() {
 	std::cout << "Total good hits: " << total_goodhits << "\n";
 	std::cout << "Total failed hits: " << total_failedhits << " ["
 	          << int(100. * total_failedhits / total_hits) << "%]\n";
-	for (auto fail : failure_counter){
-	std::cout << "Failure mode " << fail.first
-	  << " [bad " << caloDAQUtil_.getCaloHitErrorName(fail.first)
-	  << "], count: " << fail.second
-	  << " (" << int(100.*fail.second/total_hits) << "%)\n";
+	for(auto fail : failure_counter) {
+		std::cout << "Failure mode " << fail.first << " [bad "
+		          << caloDAQUtil_.getCaloHitErrorName(fail.first)
+		          << "], count: " << fail.second << " ("
+		          << int(100. * fail.second / total_hits) << "%)\n";
 	}
 }
 
