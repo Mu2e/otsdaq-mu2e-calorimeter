@@ -16,7 +16,7 @@
 #include <artdaq-core/Data/ContainerFragment.hh>
 #include "artdaq-core/Data/Fragment.hh"
 
-#include "artdaq-core-mu2e/Data/CalorimeterDataDecoder.hh"
+#include "artdaq-core-mu2e/Overlays/Decoders/CalorimeterDataDecoder.hh"
 #include "artdaq-core-mu2e/Data/EventHeader.hh"
 #include "artdaq-core-mu2e/Overlays/DTCEventFragment.hh"
 #include "artdaq-core-mu2e/Overlays/FragmentType.hh"
@@ -35,7 +35,6 @@ class CaloDataVerifier : public art::EDFilter {
       fhicl::Atom<int> verbosity {fhicl::Name("verbosity" ) , fhicl::Comment("Verbosity [0-2]"), 0};
       fhicl::Atom<int> data_type {fhicl::Name("dataType" ) , fhicl::Comment("Data type (0:standard, 1:debug, 2:counters)"), 0};
       fhicl::Atom<int> metrics_level {fhicl::Name("metricsLevel" ) , fhicl::Comment("Metrics reporting level"), 1};
-      fhicl::Atom<bool> produce_calo_decoders {fhicl::Name("produceCaloDecoders" ) , fhicl::Comment("Produce calo decoders [default: true]"), true};
       fhicl::Atom<bool> stop_on_failure {fhicl::Name("stopOnFailure" ) , fhicl::Comment("Throw exception if checks fail [default: false]"), false};
       fhicl::Atom<bool> check_ewts {fhicl::Name("checkEWTs" ) , fhicl::Comment("Check for EWT continuity across events [default: false]"), false};
       fhicl::Atom<std::string> subsystem_override {fhicl::Name("subsystemOverride" ) , fhicl::Comment("Override calo subsystem [\"calo\", \"tracker\"]"), "calo"};
@@ -76,7 +75,6 @@ class CaloDataVerifier : public art::EDFilter {
 	int                   verbosity_;
 	int                   data_type_;
 	int                   metrics_reporting_level_;
-	bool                  produceCaloDecoders_;
 	bool                  stopOnFailure_;
 	bool                  checkEWTs_;
 	DTCLib::DTC_Subsystem subsystem_;
@@ -122,17 +120,12 @@ mu2e::CaloDataVerifier::CaloDataVerifier(const art::EDFilter::Table<Config>& con
     , verbosity_(config().verbosity())
     , data_type_(config().data_type())
     , metrics_reporting_level_(config().metrics_level())
-    , produceCaloDecoders_(config().produce_calo_decoders())
     , stopOnFailure_(config().stop_on_failure())
     , checkEWTs_(config().check_ewts()) {
 	if(config().subsystem_override() == "calo") {
 		subsystem_ = DTCLib::DTC_Subsystem::DTC_Subsystem_Calorimeter;
 	} else if(config().subsystem_override() == "tracker") {
 		subsystem_ = DTCLib::DTC_Subsystem::DTC_Subsystem_Tracker;
-	}
-
-	if(produceCaloDecoders_) {
-		produces<std::vector<mu2e::CalorimeterDataDecoder>>();
 	}
 
 	TLOG(TLVL_DEBUG + 6) << "Reading data type " << data_type_;
@@ -248,9 +241,6 @@ bool mu2e::CaloDataVerifier::filter(art::Event& event) {
 		TLOG(TLVL_WARNING)
 		    << "[CaloDataVerifier::filter] found no calo subevents in event"
 		    << (int)eventNumber << "!";
-	}
-	if(produceCaloDecoders_) {
-		event.put(std::move(caloDecoderColl));
 	}
 
 	// TLOG(TLVL_INFO) << "mu2e::CaloDataVerifier::filter exiting eventNumber=" <<

@@ -16,7 +16,7 @@
 #include <artdaq-core/Data/ContainerFragment.hh>
 #include "artdaq-core/Data/Fragment.hh"
 
-#include "artdaq-core-mu2e/Data/CalorimeterDataDecoder.hh"
+#include "artdaq-core-mu2e/Overlays/Decoders/CalorimeterDataDecoder.hh"
 #include "artdaq-core-mu2e/Data/EventHeader.hh"
 #include "artdaq-core-mu2e/Overlays/DTCEventFragment.hh"
 #include "artdaq-core-mu2e/Overlays/FragmentType.hh"
