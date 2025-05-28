@@ -23,12 +23,11 @@ physics : {
 
   producers : {
     genFrags : {
-      module_type  : ArtFragmentsFromDTCEvents
+      module_type  : ProcessDTCAndCFOEvents
       diagLevel    : 0
       makeCaloFrag : 1
       makeTrkFrag  : 0
       makeCRVFrag  : 0
-      makeSTMFrag  : 0
     }
   }
 
