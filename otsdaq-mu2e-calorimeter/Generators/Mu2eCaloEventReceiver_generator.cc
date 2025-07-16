@@ -40,10 +40,8 @@ class Mu2eCaloEventReceiver : public mu2e::Mu2eEventReceiverBase {
 
 mu2e::Mu2eCaloEventReceiver::Mu2eCaloEventReceiver(fhicl::ParameterSet const& ps)
     : Mu2eEventReceiverBase(ps)
-    , _fragment_ids(
-          ps.get<std::vector<uint16_t>>("fragment_ids", std::vector<uint16_t>()))
-    , _sim_mode(DTCLib::DTC_SimModeConverter::ConvertToSimMode(
-          ps.get<std::string>("sim_mode", "N"))) {
+    , _fragment_ids(ps.get<std::vector<uint16_t>>("fragment_ids", std::vector<uint16_t>()))
+    , _sim_mode(DTCLib::DTC_SimModeConverter::ConvertToSimMode(ps.get<std::string>("sim_mode", "N"))) {
 	TLOG(TLVL_DEBUG) << "Mu2eCaloEventReceiver Initialized with mode " << mode_;
 	std::cout << "init Mu2eCaloEventRecevier" << std::endl;
 }
@@ -74,8 +72,7 @@ bool mu2e::Mu2eCaloEventReceiver::getNext_(artdaq::FragmentPtrs& frags) {
 	//-----------------------------------------------------------------------------
 	if((ev_counter() % 10) == 0) {
 		artdaq::Fragment* esf = new artdaq::Fragment(1);
-		std::cout << "[Mu2eCaloEventReceiver:getNext]  setting end of sub-run type"
-		          << std::endl;
+		std::cout << "[Mu2eCaloEventReceiver:getNext]  setting end of sub-run type" << std::endl;
 		esf->setSystemType(artdaq::Fragment::EndOfSubrunFragmentType);
 		esf->setSequenceID(ev_counter() + 1);
 		esf->setTimestamp(1 + (ev_counter() / 1));
@@ -90,8 +87,7 @@ bool mu2e::Mu2eCaloEventReceiver::getNext_(artdaq::FragmentPtrs& frags) {
 //-----------------------------------------------------------------------------
 bool mu2e::Mu2eCaloEventReceiver::simulateEvent(artdaq::FragmentPtrs& Frags) {
 	double            tstamp = ev_counter();
-	artdaq::Fragment* frag =
-	    new artdaq::Fragment(ev_counter(), _fragment_ids[0], FragmentType::CAL, tstamp);
+	artdaq::Fragment* frag   = new artdaq::Fragment(ev_counter(), _fragment_ids[0], FragmentType::CAL, tstamp);
 	std::cout << "[Mu2eCaloEventReceiver:simulateEventt]  making fake data" << std::endl;
 	const uint16_t fake_event[] = {
 	    0x01d0, 0x0000, 0x0000, 0x0000, 0x01c8, 0x0000, 0x0169, 0x0000,  // 0x000000:

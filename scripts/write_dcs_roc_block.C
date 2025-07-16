@@ -20,8 +20,7 @@ uint16_t float_to_uint16_1st_part(float float_value) {
 
 	// Extract first 16 bits for the first uint16
 	uint16_t uint16_1 = (*float_bits) & 0xFFFF;
-	cout << "float_value " << float_value << " First uint16: " << uint16_1 << " "
-	     << (boost::format("%x") % uint16_1).str() << " Hex" << endl;
+	cout << "float_value " << float_value << " First uint16: " << uint16_1 << " " << (boost::format("%x") % uint16_1).str() << " Hex" << endl;
 	return uint16_1;
 }
 
@@ -34,8 +33,7 @@ uint16_t float_to_uint16_2nd_part(float float_value) {
 
 	// Extract second 16 bits for the second uint16
 	uint16_t uint16_2 = (*float_bits >> 16) & 0xFFFF;
-	cout << "float_value " << float_value << " Second uint16: " << uint16_2 << " "
-	     << (boost::format("%x") % uint16_2).str() << " Hex" << endl;
+	cout << "float_value " << float_value << " Second uint16: " << uint16_2 << " " << (boost::format("%x") % uint16_2).str() << " Hex" << endl;
 	return uint16_2;
 }
 
@@ -45,8 +43,7 @@ uint16_t float_to_uint16_2nd_part(float float_value) {
 uint16_t uint32_to_uint16_1st_part(uint32_t* uint32_value) {
 	// Extract first 16 bits for the first uint16
 	uint16_t uint16_1 = (*uint32_value) & 0xFFFF;
-	cout << "uint32_value " << uint32_value << " First uint16: " << uint16_1 << " "
-	     << (boost::format("%x") % uint16_1).str() << " Hex" << endl;
+	cout << "uint32_value " << uint32_value << " First uint16: " << uint16_1 << " " << (boost::format("%x") % uint16_1).str() << " Hex" << endl;
 	return uint16_1;
 }
 
@@ -56,8 +53,7 @@ uint16_t uint32_to_uint16_1st_part(uint32_t* uint32_value) {
 uint16_t uint32_to_uint16_2nd_part(uint32_t* uint32_value) {
 	// Extract second 16 bits for the second uint16
 	uint16_t uint16_2 = (*uint32_value) & 0xFFFF;
-	cout << "uint32_value " << uint32_value << " Second uint16: " << uint16_2 << " "
-	     << (boost::format("%x") % uint16_2).str() << " Hex" << endl;
+	cout << "uint32_value " << uint32_value << " Second uint16: " << uint16_2 << " " << (boost::format("%x") % uint16_2).str() << " Hex" << endl;
 	return uint16_2;
 }
 
@@ -130,11 +126,9 @@ void fill_uint16_vector(std::vector<uint16_t>& input_data) {
 	uint16_2 = float_to_uint16_2nd_part(float_variable);
 
 	// Conversion test
-	std::string str =
-	    (boost::format("%x") % uint16_1).str() + (boost::format("%x") % uint16_2).str();
-	uint32_t test32tofloat = static_cast<uint32_t>(stoul(str, 0, 16));
-	cout << "Conversion test: uint32_t: " << str
-	     << " float: " << uint32_to_float(test32tofloat) << endl;
+	std::string str           = (boost::format("%x") % uint16_1).str() + (boost::format("%x") % uint16_2).str();
+	uint32_t    test32tofloat = static_cast<uint32_t>(stoul(str, 0, 16));
+	cout << "Conversion test: uint32_t: " << str << " float: " << uint32_to_float(test32tofloat) << endl;
 
 	float param_1 = 100.1;  // REAL*4  // Command parameter #1
 	float param_2 = 100.1;  // REAL*4  // Command parameter #2
@@ -150,42 +144,31 @@ void fill_uint16_vector(std::vector<uint16_t>& input_data) {
 
 	input_data.push_back(0x4344);  // 620     //INT16     // Structure id for the extended
 	                               // command request ('CD')
-	input_data.push_back(
-	    0x0001);  // 622     //INT16     // Command request (enumerated), Bit 0 to 15
-	              // command encoded,
-	              //  Bit 16 must be 1=execute, reset by firmware after command
+	input_data.push_back(0x0001);  // 622     //INT16     // Command request (enumerated), Bit 0 to 15
+	                               // command encoded,
+	                               //  Bit 16 must be 1=execute, reset by firmware after command
 	// execution
-	input_data.push_back(
-	    float_to_uint16_1st_part(param_1));  // 624     //REAL*4  // Command parameter #1
+	input_data.push_back(float_to_uint16_1st_part(param_1));  // 624     //REAL*4  // Command parameter #1
 	input_data.push_back(float_to_uint16_2nd_part(param_1));
-	input_data.push_back(
-	    float_to_uint16_1st_part(param_2));  // 628     //REAL*4  // Command parameter #2
+	input_data.push_back(float_to_uint16_1st_part(param_2));  // 628     //REAL*4  // Command parameter #2
 	input_data.push_back(float_to_uint16_2nd_part(param_2));
-	input_data.push_back(
-	    float_to_uint16_1st_part(param_3));  // 632     //REAL*4  // Command parameter #3
+	input_data.push_back(float_to_uint16_1st_part(param_3));  // 632     //REAL*4  // Command parameter #3
 	input_data.push_back(float_to_uint16_2nd_part(param_3));
-	input_data.push_back(
-	    float_to_uint16_1st_part(param_4));  // 636     //REAL*4  // Command parameter #4
+	input_data.push_back(float_to_uint16_1st_part(param_4));  // 636     //REAL*4  // Command parameter #4
 	input_data.push_back(float_to_uint16_2nd_part(param_4));
-	input_data.push_back(
-	    float_to_uint16_1st_part(param_5));  // 640     //REAL*4  // Command parameter #5
+	input_data.push_back(float_to_uint16_1st_part(param_5));  // 640     //REAL*4  // Command parameter #5
 	input_data.push_back(float_to_uint16_2nd_part(param_5));
-	input_data.push_back(
-	    float_to_uint16_1st_part(param_6));  // 644     //REAL*4  // Command parameter #6
+	input_data.push_back(float_to_uint16_1st_part(param_6));  // 644     //REAL*4  // Command parameter #6
 	input_data.push_back(float_to_uint16_2nd_part(param_6));
-	input_data.push_back(
-	    float_to_uint16_1st_part(param_7));  // 648     //REAL*4  // Command parameter #7
+	input_data.push_back(float_to_uint16_1st_part(param_7));  // 648     //REAL*4  // Command parameter #7
 	input_data.push_back(float_to_uint16_2nd_part(param_7));
-	input_data.push_back(
-	    float_to_uint16_1st_part(param_8));  // 652     //REAL*4  // Command parameter #8
+	input_data.push_back(float_to_uint16_1st_part(param_8));  // 652     //REAL*4  // Command parameter #8
 	input_data.push_back(float_to_uint16_2nd_part(param_8));
-	input_data.push_back(
-	    float_to_uint16_1st_part(param_9));  // 656     //REAL*4  // Command parameter #9
+	input_data.push_back(float_to_uint16_1st_part(param_9));  // 656     //REAL*4  // Command parameter #9
 	input_data.push_back(float_to_uint16_2nd_part(param_9));
 
 	uint32_t chksum32 = APP_chksum(&input_data, input_data.size());
-	input_data.push_back(uint32_to_uint16_1st_part(
-	    &chksum32));  // 660     //INT32   // Checksum for the extended command request
+	input_data.push_back(uint32_to_uint16_1st_part(&chksum32));  // 660     //INT32   // Checksum for the extended command request
 	input_data.push_back(uint32_to_uint16_2nd_part(&chksum32));
 }
 

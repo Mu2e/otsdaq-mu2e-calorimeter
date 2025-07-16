@@ -36,8 +36,7 @@ class mu2e::testFragments : public art::EDAnalyzer {
 	TH1F* testHist;
 };
 
-mu2e::testFragments::testFragments(fhicl::ParameterSet const& pset)
-    : EDAnalyzer{pset}, caloFragmentsTag_{"calo"} {
+mu2e::testFragments::testFragments(fhicl::ParameterSet const& pset) : EDAnalyzer{pset}, caloFragmentsTag_{"calo"} {
 	art::ServiceHandle<art::TFileService> tfs;
 	// testTree  = tfs->make<TTree>("test", "test");
 	// testTree->Branch("nSize", &_nSize, "nSize/F");
@@ -57,8 +56,7 @@ void mu2e::testFragments::analyze(art::Event const& e) {
 		std::string instn = prov->processName();
 
 		std::string name = fcn + "_" + prov->moduleLabel() + "_" + instn;
-		std::cout << "[testFragments]  extracting name =  " << fcn << " " << modn << " "
-		          << instn << std::endl;  // artdaq::Fragments daq test001
+		std::cout << "[testFragments]  extracting name =  " << fcn << " " << modn << " " << instn << std::endl;  // artdaq::Fragments daq test001
 
 		size_t totalSize = 0;
 
@@ -66,12 +64,10 @@ void mu2e::testFragments::analyze(art::Event const& e) {
 			auto size = ((*calFragments)[idx]).size() * sizeof(artdaq::RawDataType);
 			testHist->Fill(size);
 			totalSize += size;
-			std::cout << "[testFragments]  \tCAL Fragment " << idx << " has size " << size
-			          << std::endl;
+			std::cout << "[testFragments]  \tCAL Fragment " << idx << " has size " << size << std::endl;
 		}
 		// testTree->Fill();
-		std::cout << "[testFragments]  \tTotal Size: " << (int)totalSize << " bytes."
-		          << std::endl;
+		std::cout << "[testFragments]  \tTotal Size: " << (int)totalSize << " bytes." << std::endl;
 	}
 }
 

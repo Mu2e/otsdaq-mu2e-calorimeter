@@ -44,27 +44,13 @@ namespace mu2e {
 class CaloiercAnalyzer : public art::EDAnalyzer {
   public:
 	struct Config {
-		fhicl::Atom<std::string> caloDigiModuleLabel{
-		    fhicl::Name("caloDigiModuleLabel"),
-		    fhicl::Comment("caloDigiModuleLabel"),
-		    ""};
-		fhicl::Atom<std::string> caloDigiInstanceLabel{
-		    fhicl::Name("caloDigiInstanceLabel"),
-		    fhicl::Comment("caloDigiInstanceLabel"),
-		    ""};
-		fhicl::Atom<int> verbosity{
-		    fhicl::Name("verbosity"), fhicl::Comment("Verbosity [0-2]"), 0};
-		fhicl::Atom<std::string> splineFilename{
-		    fhicl::Name("splineFilename"), fhicl::Comment("splineFilename"), ""};
-		fhicl::Atom<bool> uset0{
-		    fhicl::Name("uset0"),
-		    fhicl::Comment("Use t0 instead of fitting with templates"),
-		    false};
-		fhicl::Atom<int> skipAfterN{
-		    fhicl::Name("skipAfterN"), fhicl::Comment("Don't fit after N hits"), -1};
-		fhicl::Atom<bool> produceTree{fhicl::Name("produceTree"),
-		                              fhicl::Comment("Produce tree with fit results"),
-		                              true};
+		fhicl::Atom<std::string> caloDigiModuleLabel{fhicl::Name("caloDigiModuleLabel"), fhicl::Comment("caloDigiModuleLabel"), ""};
+		fhicl::Atom<std::string> caloDigiInstanceLabel{fhicl::Name("caloDigiInstanceLabel"), fhicl::Comment("caloDigiInstanceLabel"), ""};
+		fhicl::Atom<int>         verbosity{fhicl::Name("verbosity"), fhicl::Comment("Verbosity [0-2]"), 0};
+		fhicl::Atom<std::string> splineFilename{fhicl::Name("splineFilename"), fhicl::Comment("splineFilename"), ""};
+		fhicl::Atom<bool>        uset0{fhicl::Name("uset0"), fhicl::Comment("Use t0 instead of fitting with templates"), false};
+		fhicl::Atom<int>         skipAfterN{fhicl::Name("skipAfterN"), fhicl::Comment("Don't fit after N hits"), -1};
+		fhicl::Atom<bool>        produceTree{fhicl::Name("produceTree"), fhicl::Comment("Produce tree with fit results"), true};
 	};
 
 	explicit CaloiercAnalyzer(const art::EDAnalyzer::Table<Config>& config);
@@ -167,10 +153,8 @@ int mu2e::CaloiercAnalyzer::load_templates() {
 			}
 			//
 
-			templateMap[board][channel] =
-			    (TSpline3*)template_file.Get(templateName.c_str());
-			std::cout << "Loaded template for Board " << board << " channel " << channel
-			          << "\n";
+			templateMap[board][channel] = (TSpline3*)template_file.Get(templateName.c_str());
+			std::cout << "Loaded template for Board " << board << " channel " << channel << "\n";
 		}
 	}
 
@@ -186,10 +170,8 @@ TFitResultPtr mu2e::CaloiercAnalyzer::fit_waveform(TGraph* graph, int sipm_id) {
 		if(!templateMap.empty()) {
 			auto board_pair   = templateMap.begin();
 			auto channel_pair = board_pair->second.begin();
-			std::cout << "No available template for Board " << board << " channel "
-			          << channel << "!\n";
-			std::cout << "Using the one of Board " << board_pair->first << " channel "
-			          << channel_pair->first << " instead!\n";
+			std::cout << "No available template for Board " << board << " channel " << channel << "!\n";
+			std::cout << "Using the one of Board " << board_pair->first << " channel " << channel_pair->first << " instead!\n";
 			thisSpline = channel_pair->second;
 		} else {
 			std::cout << "No templates? Skipping fit...\n";
@@ -199,10 +181,8 @@ TFitResultPtr mu2e::CaloiercAnalyzer::fit_waveform(TGraph* graph, int sipm_id) {
 		// No template for this channel -- but board is known
 		if(!templateMap[board].empty()) {
 			auto channel_pair = templateMap[board].begin();
-			std::cout << "No available template for Board " << board << " channel "
-			          << channel << "!\n";
-			std::cout << "Using the one of Board " << board << " channel "
-			          << channel_pair->first << " instead!\n";
+			std::cout << "No available template for Board " << board << " channel " << channel << "!\n";
+			std::cout << "Using the one of Board " << board << " channel " << channel_pair->first << " instead!\n";
 			thisSpline = channel_pair->second;
 		} else {
 			std::cout << "No templates for board " << board << "?? Skipping fit...\n";
@@ -215,13 +195,7 @@ TFitResultPtr mu2e::CaloiercAnalyzer::fit_waveform(TGraph* graph, int sipm_id) {
 	double xmin     = thisSpline->GetXmin();
 	double xmax     = thisSpline->GetXmax();
 	TF1*   f_spline = new TF1(
-        "f_spline",
-        [&](double* x, double* par) {
-            return par[0] * thisSpline->Eval(x[0] - par[1]) + par[2];
-        },
-        0.,
-        19.,
-        3);
+        "f_spline", [&](double* x, double* par) { return par[0] * thisSpline->Eval(x[0] - par[1]) + par[2]; }, 0., 19., 3);
 	f_spline->SetParNames("scale", "tpeak offset", "ped offset", "roc", "chan");
 	f_spline->SetNpx(10000);
 	f_spline->SetRange(xmin, xmax);
@@ -240,8 +214,7 @@ void mu2e::CaloiercAnalyzer::analyze(art::Event const& event) {
 	total_events++;
 	last_event = this_eventNumber;
 
-	const auto& caloDigis =
-	    *event.getValidHandle(consumes<mu2e::CaloDigiCollection>(caloDigiModuleLabel_));
+	const auto& caloDigis = *event.getValidHandle(consumes<mu2e::CaloDigiCollection>(caloDigiModuleLabel_));
 
 	if(caloDigis.size() == 0) {
 		// std::cout << "No calodigis!\n";
@@ -258,10 +231,8 @@ void mu2e::CaloiercAnalyzer::analyze(art::Event const& event) {
 		for(uint storedHit = 0; storedHit < digiMap[thisID].size(); storedHit++) {
 			auto storedDigi = caloDigis[digiMap[thisID][storedHit]];
 			if(thisTime < storedDigi.t0()) {
-				std::cout << "Found unsorted hit! (in position " << storedHit << " of "
-				          << digiMap[thisID].size() << ") ";
-				std::cout << "Current t0: " << thisTime
-				          << " , last t0: " << storedDigi.t0() << "\n";
+				std::cout << "Found unsorted hit! (in position " << storedHit << " of " << digiMap[thisID].size() << ") ";
+				std::cout << "Current t0: " << thisTime << " , last t0: " << storedDigi.t0() << "\n";
 				digiMap[thisID].insert(digiMap[thisID].begin() + storedHit, ihit);
 				sorted = false;
 				total_unsorted++;
@@ -279,9 +250,7 @@ void mu2e::CaloiercAnalyzer::analyze(art::Event const& event) {
 		std::cout << "\n-- LIST OF CALODIGIS READ --\n";
 		for(auto pair : digiMap) {
 			int thisID = pair.first;
-			std::cout << "SiPM ID " << thisID << " [dtc: " << thisID / 120
-			          << ", roc: " << (thisID % 120) / 20 << " (" << (thisID / 20) % 6
-			          << "), chan: " << thisID % 20 << "] (" << pair.second.size()
+			std::cout << "SiPM ID " << thisID << " [dtc: " << thisID / 120 << ", roc: " << (thisID % 120) / 20 << " (" << (thisID / 20) % 6 << "), chan: " << thisID % 20 << "] (" << pair.second.size()
 			          << " hits) : ";
 			for(int idx : pair.second) {
 				float thisTime = caloDigis[idx].t0();
@@ -314,14 +283,12 @@ void mu2e::CaloiercAnalyzer::analyze(art::Event const& event) {
 				// std::cout<<"Fitting sipm "<<pair.first<<", hit "<<ihit<<", (idx:
 				// "<<idx<<")\nWaveform: ";
 				auto this_waveform = caloDigis[idx].waveform();
-				for(uint gi = 0; gi < this_waveform.size();
-				    gi++) {  // Fill the tgraph to be fit
+				for(uint gi = 0; gi < this_waveform.size(); gi++) {  // Fill the tgraph to be fit
 					// std::cout<<this_waveform[gi]<<" ";
 					gadc->SetPoint(gi, gi, this_waveform[gi]);
 					// gadc->SetPointError(gi, 0., 1.);
 				}
-				TFitResultPtr fitResult =
-				    fit_waveform(gadc, caloDigis[idx].SiPMID());  // FIT!
+				TFitResultPtr fitResult = fit_waveform(gadc, caloDigis[idx].SiPMID());  // FIT!
 				if(fitResult >= 0) {
 					// std::cout<<"fitResult: "<<fitResult<<", ped:
 					// "<<fitResult->Parameter(2)<<", time:
@@ -329,13 +296,11 @@ void mu2e::CaloiercAnalyzer::analyze(art::Event const& event) {
 					// "<<fitResult->Parameter(0)<<"\n"; std::cout<<"chi2:
 					// "<<fitResult->Chi2()<<", ndf: "<<fitResult->Ndf()<<",
 					// chi2/ndf: "<<fitResult->Chi2()/fitResult->Ndf()<<"\n";
-					timeMap[pair.first].push_back(
-					    5. * (caloDigis[idx].t0() + fitResult->Parameter(1)));
+					timeMap[pair.first].push_back(5. * (caloDigis[idx].t0() + fitResult->Parameter(1)));
 					chi2Map[pair.first].push_back(fitResult->Chi2());
 					chi2rMap[pair.first].push_back(fitResult->Chi2() / fitResult->Ndf());
 				} else {  // if bad fit, don't fill at all
-					std::cout << "Bad fit status: " << fitResult << " for sipmid "
-					          << pair.first << " hit " << idx << "\n";
+					std::cout << "Bad fit status: " << fitResult << " for sipmid " << pair.first << " hit " << idx << "\n";
 					total_badfits++;
 				}
 			}
@@ -384,20 +349,15 @@ void mu2e::CaloiercAnalyzer::analyze(art::Event const& event) {
 	// Same channel
 	for(auto pair : timeMap) {
 		int thisID = pair.first;
-		if(pair.second.size() > 1) {  // there must be at least 2 hits
-			if(map_h1_dt_singlechan.find(thisID) ==
-			   map_h1_dt_singlechan.end()) {  // This hist doesn't exist yet
-				TString hname = Form("h1_dt_schan_%d", thisID);
-				TString htitle =
-				    Form("[SAME CHANNEL] dt between hit 0 and hit 1 of sipm %d", thisID);
-				map_h1_dt_singlechan[thisID] =
-				    tfs->make<TH1F>(hname, htitle, 600, 10009, 10011);
+		if(pair.second.size() > 1) {                                               // there must be at least 2 hits
+			if(map_h1_dt_singlechan.find(thisID) == map_h1_dt_singlechan.end()) {  // This hist doesn't exist yet
+				TString hname                = Form("h1_dt_schan_%d", thisID);
+				TString htitle               = Form("[SAME CHANNEL] dt between hit 0 and hit 1 of sipm %d", thisID);
+				map_h1_dt_singlechan[thisID] = tfs->make<TH1F>(hname, htitle, 600, 10009, 10011);
 				map_h1_dt_singlechan[thisID]->GetXaxis()->SetTitle("dt [ns]");
-				TString gname = Form("g_dtevt_schan_%d", thisID);
-				TString gtitle =
-				    Form("[SAME CHANNEL] dt between hit 0 and hit 1 of sipm %d", thisID);
-				map_g_dtevt_singlechan[thisID] =
-				    tfs->makeAndRegister<TGraph>(gname, gtitle);
+				TString gname                  = Form("g_dtevt_schan_%d", thisID);
+				TString gtitle                 = Form("[SAME CHANNEL] dt between hit 0 and hit 1 of sipm %d", thisID);
+				map_g_dtevt_singlechan[thisID] = tfs->makeAndRegister<TGraph>(gname, gtitle);
 				map_g_dtevt_singlechan[thisID]->GetXaxis()->SetTitle("Event number");
 				map_g_dtevt_singlechan[thisID]->GetYaxis()->SetTitle("dt [ns]");
 				map_g_dtevt_singlechan[thisID]->SetMarkerStyle(20);
@@ -426,11 +386,9 @@ void mu2e::CaloiercAnalyzer::analyze(art::Event const& event) {
 			int nextChan   = nextID % 20;
 			if(thisID == nextID)
 				continue;
-			if(thisDTCROC ==
-			   nextDTCROC) {  // We found a different channel in the same board
+			if(thisDTCROC == nextDTCROC) {  // We found a different channel in the same board
 				int idpair = thisID * 10000 + nextID;
-				if(map_h1_dt_sameboard.find(idpair) ==
-				   map_h1_dt_sameboard.end()) {  // This hist doesn't exist yet
+				if(map_h1_dt_sameboard.find(idpair) == map_h1_dt_sameboard.end()) {  // This hist doesn't exist yet
 					TString hname  = Form("map_h1_dt_sameboard_%d_%d", nextID, thisID);
 					TString htitle = Form(
 					    "[SAME BOARD] dt between chan %d and %d (DTC: %d, Board: %d, hit "
@@ -439,8 +397,7 @@ void mu2e::CaloiercAnalyzer::analyze(art::Event const& event) {
 					    thisChan,
 					    thisDTC,
 					    thisROC);
-					map_h1_dt_sameboard[idpair] =
-					    tfs->make<TH1F>(hname, htitle, 5000, -50, 50);
+					map_h1_dt_sameboard[idpair] = tfs->make<TH1F>(hname, htitle, 5000, -50, 50);
 					map_h1_dt_sameboard[idpair]->GetXaxis()->SetTitle("dt [ns]");
 					TString gname  = Form("map_g_dtevt_sameboard_%d_%d", nextID, thisID);
 					TString gtitle = Form(
@@ -450,8 +407,7 @@ void mu2e::CaloiercAnalyzer::analyze(art::Event const& event) {
 					    thisChan,
 					    thisDTC,
 					    thisROC);
-					map_g_dtevt_sameboard[idpair] =
-					    tfs->makeAndRegister<TGraph>(gname, gtitle);
+					map_g_dtevt_sameboard[idpair] = tfs->makeAndRegister<TGraph>(gname, gtitle);
 					map_g_dtevt_sameboard[idpair]->GetXaxis()->SetTitle("Event number");
 					map_g_dtevt_sameboard[idpair]->GetYaxis()->SetTitle("dt [ns]");
 					map_g_dtevt_sameboard[idpair]->SetMarkerStyle(20);
@@ -491,10 +447,8 @@ void mu2e::CaloiercAnalyzer::analyze(art::Event const& event) {
 					int refDTC    = refDTCROC / 6;
 					int refROC    = refDTCROC % 6;
 					int idpair    = refID * 10000 + thisID;
-					if(map_h1_dt_diffboard.find(idpair) ==
-					   map_h1_dt_diffboard.end()) {  // This hist doesn't exist yet
-						TString hname = Form(
-						    "map_h1_dt_diffboard_chan%d_%d_%d", thisChan, thisID, refID);
+					if(map_h1_dt_diffboard.find(idpair) == map_h1_dt_diffboard.end()) {  // This hist doesn't exist yet
+						TString hname  = Form("map_h1_dt_diffboard_chan%d_%d_%d", thisChan, thisID, refID);
 						TString htitle = Form(
 						    "[DIFFERENT BOARD] dt between (DTC: %d, Board: %d) and (DTC: "
 						    "%d, Board: %d) [chan %d, hit 0]",
@@ -503,13 +457,9 @@ void mu2e::CaloiercAnalyzer::analyze(art::Event const& event) {
 						    refDTC,
 						    refROC,
 						    thisChan);
-						map_h1_dt_diffboard[idpair] =
-						    tfs->make<TH1F>(hname, htitle, 20000, -200, 200);
+						map_h1_dt_diffboard[idpair] = tfs->make<TH1F>(hname, htitle, 20000, -200, 200);
 						map_h1_dt_diffboard[idpair]->GetXaxis()->SetTitle("dt [ns]");
-						TString gname  = Form("map_g_dtevt_diffboard_chan%d_%d_%d",
-                                             thisChan,
-                                             thisID,
-                                             refID);
+						TString gname  = Form("map_g_dtevt_diffboard_chan%d_%d_%d", thisChan, thisID, refID);
 						TString gtitle = Form(
 						    "[DIFFERENT BOARD] dt between (DTC: %d, Board: %d) and (DTC: "
 						    "%d, Board: %d) [chan %d, hit 0]",
@@ -518,10 +468,8 @@ void mu2e::CaloiercAnalyzer::analyze(art::Event const& event) {
 						    refDTC,
 						    refROC,
 						    thisChan);
-						map_g_dtevt_diffboard[idpair] =
-						    tfs->makeAndRegister<TGraph>(gname, gtitle);
-						map_g_dtevt_diffboard[idpair]->GetXaxis()->SetTitle(
-						    "Event number");
+						map_g_dtevt_diffboard[idpair] = tfs->makeAndRegister<TGraph>(gname, gtitle);
+						map_g_dtevt_diffboard[idpair]->GetXaxis()->SetTitle("Event number");
 						map_g_dtevt_diffboard[idpair]->GetYaxis()->SetTitle("dt [ns]");
 						map_g_dtevt_diffboard[idpair]->SetMarkerStyle(20);
 					}
@@ -538,8 +486,7 @@ void mu2e::CaloiercAnalyzer::analyze(art::Event const& event) {
 
 void mu2e::CaloiercAnalyzer::endJob() {
 	std::cout << "\n-- CaloiercAnalyzer JOB SUMMARY --\n";
-	std::cout << "Total events: " << total_events << " (last event: " << last_event
-	          << ")\n";
+	std::cout << "Total events: " << total_events << " (last event: " << last_event << ")\n";
 	std::cout << "Total hits: " << total_hits << "\n";
 	std::cout << "Total unsorted hits found: " << total_unsorted << "\n";
 	std::cout << "Total bad fits: " << total_badfits << "\n";

@@ -7,9 +7,7 @@
 #include <sstream>
 #include <vector>
 
-void saveTimeDataToFile(std::ofstream&     outFile,
-                        const std::string& inputFileName,
-                        int                option) {
+void saveTimeDataToFile(std::ofstream& outFile, const std::string& inputFileName, int option) {
 	// Open the ROOT file named InputName.root
 	std::string rootFileName = inputFileName;
 	TFile*      file         = TFile::Open(rootFileName.c_str());
@@ -69,8 +67,7 @@ void saveTimeDataToFile(std::ofstream&     outFile,
 		for(auto pair : timeMap) {
 			if(option == 1) {
 				if(pair.second.size() >= 2) {
-					lineStream << "," << pair.second[0] << ","
-					           << (pair.second[1] - pair.second[0]);
+					lineStream << "," << pair.second[0] << "," << (pair.second[1] - pair.second[0]);
 				} else {
 					lineStream << ",NaN,NaN";
 				}
@@ -91,15 +88,12 @@ void saveTimeDataToFile(std::ofstream&     outFile,
 	file->Close();
 }
 
-int calo_gr4_generate_txt(const std::string& inputFileName,
-                          const std::string& outputName,
-                          int                option) {
+int calo_gr4_generate_txt(const std::string& inputFileName, const std::string& outputName, int option) {
 	// Create the output file name
 	std::string   outputFileName = outputName;
 	std::ofstream outFile(outputFileName, std::ios::trunc);
 	if(!outFile.is_open()) {
-		std::cerr << "Error: Could not open file " << outputFileName << " for writing!"
-		          << std::endl;
+		std::cerr << "Error: Could not open file " << outputFileName << " for writing!" << std::endl;
 		return -1;
 	}
 
@@ -113,9 +107,7 @@ int calo_gr4_generate_txt(const std::string& inputFileName,
 		               "ch60_t0, ch60_dt-10us"
 		        << std::endl;
 	} else if(option == 0) {  // One event
-		outFile << "Calo_" + inputFileName +
-		               " ewt, ch1_t0, ch11_t0, ch20_t0, ch41_t0, ch51_t0, ch60_t0"
-		        << std::endl;
+		outFile << "Calo_" + inputFileName + " ewt, ch1_t0, ch11_t0, ch20_t0, ch41_t0, ch51_t0, ch60_t0" << std::endl;
 	}
 
 	saveTimeDataToFile(outFile, inputFileName, option);

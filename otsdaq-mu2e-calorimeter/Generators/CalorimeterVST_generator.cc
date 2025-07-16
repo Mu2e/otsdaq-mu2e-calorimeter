@@ -47,27 +47,26 @@ class CalorimeterVST : public artdaq::CommandableFragmentGenerator {
 	std::chrono::steady_clock::time_point procStartTime_;
 	DTCLib::DTC_SimMode                   _sim_mode;
 	uint8_t                               _board_id;
-	std::vector<uint16_t>
-	     _fragment_ids;  // handled by CommandableGenerator, but not a data member there
-	bool simFileRead_;
-	bool _loadSimFile;
-	std::string      _simFileName;
-	bool             _rawOutputEnable;
-	std::string      rawOutputFile_;
-	std::ofstream    rawOutputStream_;
-	bool             sendEmpties_;
-	int              _debugLevel;
-	size_t           _nEventsDbg;
-	size_t           _request_delay;
-	size_t           _heartbeatsAfter;
-	int              _heartbeatInterval;
-	int              _dtcId;
-	std::vector<int> _activeLinks;  // active links - connected ROCs
-	uint             _rocMask;
-	int              _sleepTimeDMA;  // sleep time (us) after DMA release
-	int              _sleepTimeDTC;  // sleep time (ms) after register writes
-	int              _sleepTimeROC;  // sleep time (ms) after ROC register writes
-	int _sleepTimeROCReset;          // sleep time (ms) after ROC reset register write
+	std::vector<uint16_t>                 _fragment_ids;  // handled by CommandableGenerator, but not a data member there
+	bool                                  simFileRead_;
+	bool                                  _loadSimFile;
+	std::string                           _simFileName;
+	bool                                  _rawOutputEnable;
+	std::string                           rawOutputFile_;
+	std::ofstream                         rawOutputStream_;
+	bool                                  sendEmpties_;
+	int                                   _debugLevel;
+	size_t                                _nEventsDbg;
+	size_t                                _request_delay;
+	size_t                                _heartbeatsAfter;
+	int                                   _heartbeatInterval;
+	int                                   _dtcId;
+	std::vector<int>                      _activeLinks;  // active links - connected ROCs
+	uint                                  _rocMask;
+	int                                   _sleepTimeDMA;       // sleep time (us) after DMA release
+	int                                   _sleepTimeDTC;       // sleep time (ms) after register writes
+	int                                   _sleepTimeROC;       // sleep time (ms) after ROC register writes
+	int                                   _sleepTimeROCReset;  // sleep time (ms) after ROC reset register write
 
 	int _readData;            // 1: read data, 0: save empty fragment
 	int _resetROC;            // 1: reset ROC every event
@@ -75,8 +74,8 @@ class CalorimeterVST : public artdaq::CommandableFragmentGenerator {
 	int _saveSPI;             //
 	int _printFreq;           // printout frequency
 	int _maxEventsPerSubrun;  //
-	int _readoutMode;  // 0:digis; 1:ROC pattern; 101:simulate data internally, DTC not
-	                   // used; default:0
+	int _readoutMode;         // 0:digis; 1:ROC pattern; 101:simulate data internally, DTC not
+	                          // used; default:0
 
 	DTCLib::DTC*            _dtc;
 	mu2edev*                _device;
@@ -86,9 +85,9 @@ class CalorimeterVST : public artdaq::CommandableFragmentGenerator {
 
 	uint16_t _reg[200];  // DTC registers to be saved
 	int      _nreg;      // their number
-	//-----------------------------------------------------------------------------
-	// functions
-	//-----------------------------------------------------------------------------
+	                     //-----------------------------------------------------------------------------
+	                     // functions
+	                     //-----------------------------------------------------------------------------
   public:
 	explicit CalorimeterVST(fhicl::ParameterSet const& ps);
 	virtual ~CalorimeterVST();
@@ -133,11 +132,8 @@ class CalorimeterVST : public artdaq::CommandableFragmentGenerator {
 	// CommandableFragmentGenerator class)
 
 	double _timeSinceLastSend() {
-		auto now = std::chrono::steady_clock::now();
-		auto deltaw =
-		    std::chrono::duration_cast<std::chrono::duration<double, std::ratio<1>>>(
-		        now - lastReportTime_)
-		        .count();
+		auto now        = std::chrono::steady_clock::now();
+		auto deltaw     = std::chrono::duration_cast<std::chrono::duration<double, std::ratio<1>>>(now - lastReportTime_).count();
 		lastReportTime_ = now;
 		return deltaw;
 	}
@@ -155,11 +151,8 @@ class CalorimeterVST : public artdaq::CommandableFragmentGenerator {
 	virtual std::vector<uint16_t> fragmentIDs() override;
 
 	double _getProcTimerCount() {
-		auto now = std::chrono::steady_clock::now();
-		auto deltaw =
-		    std::chrono::duration_cast<std::chrono::duration<double, std::ratio<1>>>(
-		        now - procStartTime_)
-		        .count();
+		auto now    = std::chrono::steady_clock::now();
+		auto deltaw = std::chrono::duration_cast<std::chrono::duration<double, std::ratio<1>>>(now - procStartTime_).count();
 		return deltaw;
 	}
 };
@@ -185,11 +178,9 @@ mu2e::CalorimeterVST::CalorimeterVST(fhicl::ParameterSet const& ps)
     : CommandableFragmentGenerator(ps)
     , fragment_type_(toFragmentType("MU2E"))
     , lastReportTime_(std::chrono::steady_clock::now())
-    , _sim_mode(DTCLib::DTC_SimModeConverter::ConvertToSimMode(
-          ps.get<std::string>("sim_mode", "N")))
+    , _sim_mode(DTCLib::DTC_SimModeConverter::ConvertToSimMode(ps.get<std::string>("sim_mode", "N")))
     , _board_id(static_cast<uint8_t>(ps.get<int>("board_id", 0)))
-    , _fragment_ids(
-          ps.get<std::vector<uint16_t>>("fragment_ids", std::vector<uint16_t>()))  //
+    , _fragment_ids(ps.get<std::vector<uint16_t>>("fragment_ids", std::vector<uint16_t>()))  //
     , _loadSimFile(ps.get<bool>("loadSimFile"))
     , _simFileName(ps.get<std::string>("simFileName"))
     , _rawOutputEnable(ps.get<bool>("rawOutputEnable"))
@@ -237,35 +228,22 @@ mu2e::CalorimeterVST::CalorimeterVST(fhicl::ParameterSet const& ps)
 
 	_device = _dtc->GetDevice();
 
-	TLOG(TLVL_INFO) << "The DTC Firmware version string is: "
-	                << _dtc->ReadDesignVersion();
+	TLOG(TLVL_INFO) << "The DTC Firmware version string is: " << _dtc->ReadDesignVersion();
 	// TLOG(TLVL_INFO) << "Fragment IDs: " << _fragment_ids;
 
-	fhicl::ParameterSet cfoConfig =
-	    ps.get<fhicl::ParameterSet>("cfo_config", fhicl::ParameterSet());
+	fhicl::ParameterSet cfoConfig = ps.get<fhicl::ParameterSet>("cfo_config", fhicl::ParameterSet());
 
-	bool        use_dtc_cfo_emulator = cfoConfig.get<bool>("use_dtc_cfo_emulator", true);
-	size_t      debug_packet_count   = cfoConfig.get<size_t>("debug_packet_count", 0);
-	std::string dbtype               = cfoConfig.get<std::string>(
-        "debug_type", "DTC_DebugType_SpecialSequence");  // default was set to "2"
-	DTC_DebugType debug_type = DTC_DebugTypeConverter::ConvertToDebugType(dbtype);
-	bool          sticky_debug_type =
-	    cfoConfig.get<bool>("sticky_debug_type", true);  // what is this ?
-	bool quiet               = cfoConfig.get<bool>("quiet", true);
-	bool asyncRR             = cfoConfig.get<bool>("asyncRR", true);  // default was false
-	bool force_no_debug_mode = cfoConfig.get<bool>(
-	    "force_no_debug_mode", true);  // sets a bit written to the DTC register
-	bool useCFODRP = cfoConfig.get<bool>("useCFODRP", false);  // defaults to false
+	bool          use_dtc_cfo_emulator = cfoConfig.get<bool>("use_dtc_cfo_emulator", true);
+	size_t        debug_packet_count   = cfoConfig.get<size_t>("debug_packet_count", 0);
+	std::string   dbtype               = cfoConfig.get<std::string>("debug_type", "DTC_DebugType_SpecialSequence");  // default was set to "2"
+	DTC_DebugType debug_type           = DTC_DebugTypeConverter::ConvertToDebugType(dbtype);
+	bool          sticky_debug_type    = cfoConfig.get<bool>("sticky_debug_type", true);  // what is this ?
+	bool          quiet                = cfoConfig.get<bool>("quiet", true);
+	bool          asyncRR              = cfoConfig.get<bool>("asyncRR", true);              // default was false
+	bool          force_no_debug_mode  = cfoConfig.get<bool>("force_no_debug_mode", true);  // sets a bit written to the DTC register
+	bool          useCFODRP            = cfoConfig.get<bool>("useCFODRP", false);           // defaults to false
 
-	_cfo = new DTCSoftwareCFO(_dtc,
-	                          use_dtc_cfo_emulator,
-	                          debug_packet_count,
-	                          debug_type,
-	                          sticky_debug_type,
-	                          quiet,
-	                          asyncRR,
-	                          force_no_debug_mode,
-	                          useCFODRP);
+	_cfo = new DTCSoftwareCFO(_dtc, use_dtc_cfo_emulator, debug_packet_count, debug_type, sticky_debug_type, quiet, asyncRR, force_no_debug_mode, useCFODRP);
 	//-----------------------------------------------------------------------------
 	// not sure I fully understand the logic below
 	//-----------------------------------------------------------------------------
@@ -285,8 +263,7 @@ mu2e::CalorimeterVST::CalorimeterVST(fhicl::ParameterSet const& ps)
 		simFileRead_ = true;
 	}
 	if(_rawOutputEnable)
-		rawOutputStream_.open(rawOutputFile_,
-		                      std::ios::out | std::ios::app | std::ios::binary);
+		rawOutputStream_.open(rawOutputFile_, std::ios::out | std::ios::app | std::ios::binary);
 	//-----------------------------------------------------------------------------
 	// do it once anyway, the next two lines - DTC soft reset
 	// my_cntl write 0x9100 0x80000000 > /dev/null
@@ -308,125 +285,124 @@ mu2e::CalorimeterVST::CalorimeterVST(fhicl::ParameterSet const& ps)
 	//-----------------------------------------------------------------------------
 	// DTC registers to save - zero those labeled as counters at begin run !
 	//-----------------------------------------------------------------------------
-	uint16_t reg[] = {
-	    0x9004,
-	    0,
-	    0x9100,
-	    0,
-	    0x9140,
-	    0,
-	    0x9144,
-	    0,
-	    0x9158,
-	    0,
-	    0x9188,
-	    0,
-	    0x9190,
-	    1,  // bits 7-0 could be ignored,
-	    0x9194,
-	    1,  // bits 23-16 could be ignored
-	    0x9198,
-	    1,
-	    0x919c,
-	    1,
-	    0x91a8,
-	    0,
-	    0x91ac,
-	    0,
-	    0x91bc,
-	    0,
-	    0x91c0,
-	    0,
-	    0x91c4,
-	    0,
-	    0x91c8,
-	    0,
-	    0x91f4,
-	    0,
-	    0x91f8,
-	    0,
-	    0x9374,
-	    1,
-	    0x9378,
-	    1,
-	    0x9380,
-	    1,  // Link 0 Error Flags
-	    0x9384,
-	    1,  // Link 1 Error Flags
-	    0x9388,
-	    1,  // Link 2 Error Flags
-	    0x93b0,
-	    1,
-	    0x93b4,
-	    1,
-	    0x93b8,
-	    1,
-	    0x93d0,
-	    1,  // CFO Link EventStart Character Error Count
-	    0x93d8,
-	    1,  // Input Buffer Fragment Dump Count
-	    0x93dc,
-	    1,  //  Output Buffer Fragment Dump Count
-	    0x93e0,
-	    0,
-	    0x9560,
-	    1,  // SERDES RX CRC Error Count Link 0
-	    0x9564,
-	    1,  // SERDES RX CRC Error Count Link 1
-	    0x9568,
-	    1,  // SERDES RX CRC Error Count Link 2
-	    0x9630,
-	    1,  // TX Data Request Packet Count Link 0
-	    0x9634,
-	    1,  // TX Data Request Packet Count Link 1
-	    0x9638,
-	    1,  // TX Data Request Packet Count Link 2
-	    0x9650,
-	    1,  // TX Heartbeat Packet Count Link 0
-	    0x9654,
-	    1,  // TX Heartbeat Packet Count Link 1
-	    0x9658,
-	    1,  // TX Heartbeat Packet Count Link 2
-	    0x9670,
-	    1,  // RX Data Header Packet Count Link 0
-	    0x9674,
-	    1,  // RX Data Header Packet Count Link 1
-	    0x9678,
-	    1,  // RX Data Header Packet Count Link 2
-	    0x9690,
-	    1,  // RX Data Packet Count Link 0                             //  link 2 reset -
-	        // write 0
-	    0x9694,
-	    1,  // RX Data Packet Count Link 1                             //  link 2 reset -
-	        // write 0
-	    0x9698,
-	    1,  // RX Data Packet Count Link 2                             //  link 2 reset -
-	        // write 0
-	    //-----------------------------------------------------------------------------
-	    // 2023-09-14 - new counters by Rick - in DTC2023Sep02_22_22.1
-	    //-----------------------------------------------------------------------------
-	    0x9720,
-	    1,  // rxlink0
-	    0x9724,
-	    1,  // rxlink1
-	    0x9728,
-	    1,  // rxlink2
-	    0x972C,
-	    1,  // rxlink3
-	    0x9730,
-	    1,  // rxlink4
-	    0x9734,
-	    1,  // rxlink5
-	    0x9740,
-	    1,  // rxinputbufferin
-	    0x9744,
-	    1,  // DDRWrite
-	    0x9748,
-	    1,  // DDRRead
-	    0x974C,
-	    1,  // DMAtoPCI
+	uint16_t reg[] = {0x9004,
+	                  0,
+	                  0x9100,
+	                  0,
+	                  0x9140,
+	                  0,
+	                  0x9144,
+	                  0,
+	                  0x9158,
+	                  0,
+	                  0x9188,
+	                  0,
+	                  0x9190,
+	                  1,  // bits 7-0 could be ignored,
+	                  0x9194,
+	                  1,  // bits 23-16 could be ignored
+	                  0x9198,
+	                  1,
+	                  0x919c,
+	                  1,
+	                  0x91a8,
+	                  0,
+	                  0x91ac,
+	                  0,
+	                  0x91bc,
+	                  0,
+	                  0x91c0,
+	                  0,
+	                  0x91c4,
+	                  0,
+	                  0x91c8,
+	                  0,
+	                  0x91f4,
+	                  0,
+	                  0x91f8,
+	                  0,
+	                  0x9374,
+	                  1,
+	                  0x9378,
+	                  1,
+	                  0x9380,
+	                  1,  // Link 0 Error Flags
+	                  0x9384,
+	                  1,  // Link 1 Error Flags
+	                  0x9388,
+	                  1,  // Link 2 Error Flags
+	                  0x93b0,
+	                  1,
+	                  0x93b4,
+	                  1,
+	                  0x93b8,
+	                  1,
+	                  0x93d0,
+	                  1,  // CFO Link EventStart Character Error Count
+	                  0x93d8,
+	                  1,  // Input Buffer Fragment Dump Count
+	                  0x93dc,
+	                  1,  //  Output Buffer Fragment Dump Count
+	                  0x93e0,
+	                  0,
+	                  0x9560,
+	                  1,  // SERDES RX CRC Error Count Link 0
+	                  0x9564,
+	                  1,  // SERDES RX CRC Error Count Link 1
+	                  0x9568,
+	                  1,  // SERDES RX CRC Error Count Link 2
+	                  0x9630,
+	                  1,  // TX Data Request Packet Count Link 0
+	                  0x9634,
+	                  1,  // TX Data Request Packet Count Link 1
+	                  0x9638,
+	                  1,  // TX Data Request Packet Count Link 2
+	                  0x9650,
+	                  1,  // TX Heartbeat Packet Count Link 0
+	                  0x9654,
+	                  1,  // TX Heartbeat Packet Count Link 1
+	                  0x9658,
+	                  1,  // TX Heartbeat Packet Count Link 2
+	                  0x9670,
+	                  1,  // RX Data Header Packet Count Link 0
+	                  0x9674,
+	                  1,  // RX Data Header Packet Count Link 1
+	                  0x9678,
+	                  1,  // RX Data Header Packet Count Link 2
+	                  0x9690,
+	                  1,  // RX Data Packet Count Link 0                             //  link 2 reset -
+	                      // write 0
+	                  0x9694,
+	                  1,  // RX Data Packet Count Link 1                             //  link 2 reset -
+	                      // write 0
+	                  0x9698,
+	                  1,  // RX Data Packet Count Link 2                             //  link 2 reset -
+	                      // write 0
+	                  //-----------------------------------------------------------------------------
+	                  // 2023-09-14 - new counters by Rick - in DTC2023Sep02_22_22.1
+	                  //-----------------------------------------------------------------------------
+	                  0x9720,
+	                  1,  // rxlink0
+	                  0x9724,
+	                  1,  // rxlink1
+	                  0x9728,
+	                  1,  // rxlink2
+	                  0x972C,
+	                  1,  // rxlink3
+	                  0x9730,
+	                  1,  // rxlink4
+	                  0x9734,
+	                  1,  // rxlink5
+	                  0x9740,
+	                  1,  // rxinputbufferin
+	                  0x9744,
+	                  1,  // DDRWrite
+	                  0x9748,
+	                  1,  // DDRRead
+	                  0x974C,
+	                  1,  // DMAtoPCI
 
-	    0xffff};
+	                  0xffff};
 
 	_nreg = 0;
 	int i = 0;
@@ -527,31 +503,26 @@ void mu2e::CalorimeterVST::monica_var_link_config(DTCLib::DTC* Dtc, int Link) {
 	Dtc->WriteROCRegister(link, 14, 1, false, 1000);  // reset ROC
 	std::this_thread::sleep_for(std::chrono::microseconds(_sleepTimeROCReset));
 
-	Dtc->WriteROCRegister(
-	    link, 8, 0x030f, false, 1000);  // configure ROC to read all 4 lanes
+	Dtc->WriteROCRegister(link, 8, 0x030f, false, 1000);  // configure ROC to read all 4 lanes
 	std::this_thread::sleep_for(std::chrono::microseconds(_sleepTimeROC));
 
 	// added register for selecting kind of data to report in DTC status bits
 	// Use with pattern data. Set to zero, ie STATUS=0x55, when taking DIGI data
 	// rocUtil -a 30  -w 0  -l $LINK write_register > /dev/null
 
-	Dtc->WriteROCRegister(
-	    link, 30, 0x0000, false, 1000);  // configure ROC to read all 4 lanes
+	Dtc->WriteROCRegister(link, 30, 0x0000, false, 1000);  // configure ROC to read all 4 lanes
 	std::this_thread::sleep_for(std::chrono::microseconds(_sleepTimeROC));
 
 	// echo "Setting packet format version to 1"
 	// rocUtil -a 29  -w 1  -l $LINK write_register > /dev/null
 
-	Dtc->WriteROCRegister(
-	    link, 29, 0x0001, false, 1000);  // configure ROC to read all 4 lanes
+	Dtc->WriteROCRegister(link, 29, 0x0001, false, 1000);  // configure ROC to read all 4 lanes
 	std::this_thread::sleep_for(std::chrono::microseconds(_sleepTimeROC));
 }
 
 //-----------------------------------------------------------------------------
 void mu2e::CalorimeterVST::monica_var_pattern_config(DTC* Dtc, int Link) {
-	TLOG(TLVL_DEBUG)
-	    << "---------------------------------- operation \"var_patern_config\""
-	    << std::endl;
+	TLOG(TLVL_DEBUG) << "---------------------------------- operation \"var_patern_config\"" << std::endl;
 
 	//  auto startTime = std::chrono::steady_clock::now();
 
@@ -613,9 +584,7 @@ void mu2e::CalorimeterVST::printBuffer(const void* ptr, int sz) {
 // decoding doesn't belong here
 // links to be handled
 //-----------------------------------------------------------------------------
-int mu2e::CalorimeterVST::readDTCRegisters(artdaq::Fragment* Frag,
-                                           uint16_t*         Reg,
-                                           int               NReg) {
+int mu2e::CalorimeterVST::readDTCRegisters(artdaq::Fragment* Frag, uint16_t* Reg, int NReg) {
 	int rc(0);
 
 	Frag->resizeBytes(NReg * sizeof(TrkDtcFragment::RegEntry));
@@ -626,8 +595,7 @@ int mu2e::CalorimeterVST::readDTCRegisters(artdaq::Fragment* Frag,
 		try {
 			rc = _dtc->GetDevice()->read_register(Reg[i], 100, f2d + 2 * i + 1);
 		} catch(...) {
-			TLOG(TLVL_ERROR) << "event: " << ev_counter()
-			                 << "readDTCRegisters ERROR, register : " << Reg[i];
+			TLOG(TLVL_ERROR) << "event: " << ev_counter() << "readDTCRegisters ERROR, register : " << Reg[i];
 			break;
 		}
 	}
@@ -646,8 +614,7 @@ int mu2e::CalorimeterVST::readData(artdaq::Fragment* Frag) {
 	auto tmo_ms(1500);
 
 	mu2e_databuff_t* buffer;
-	size_t           nbytes = _dtc->GetDevice()->read_data(
-        DTC_DMA_Engine_DAQ, reinterpret_cast<void**>(&buffer), tmo_ms);
+	size_t           nbytes = _dtc->GetDevice()->read_data(DTC_DMA_Engine_DAQ, reinterpret_cast<void**>(&buffer), tmo_ms);
 	std::this_thread::sleep_for(std::chrono::microseconds(_sleepTimeDTC));
 
 	if(nbytes > 0) {
@@ -656,8 +623,7 @@ int mu2e::CalorimeterVST::readData(artdaq::Fragment* Frag) {
 		uint16_t bufSize = static_cast<uint16_t>(*static_cast<uint64_t*>(readPtr));
 		readPtr          = static_cast<uint8_t*>(readPtr) + 8;
 
-		TLOG(TLVL_DEBUG) << "event: " << ev_counter() << "bufSize: " << std::dec
-		                 << bufSize << " nbytes: " << nbytes;
+		TLOG(TLVL_DEBUG) << "event: " << ev_counter() << "bufSize: " << std::dec << bufSize << " nbytes: " << nbytes;
 
 		timeout = false;
 
@@ -667,25 +633,14 @@ int mu2e::CalorimeterVST::readData(artdaq::Fragment* Frag) {
 			// sure what 8 stands for. Also not sure about the meaning of the checks
 			// performed Check for dead or cafe in first packet
 			//-----------------------------------------------------------------------------
-			readPtr = static_cast<uint8_t*>(readPtr) + sizeof(DTC_EventHeader) +
-			          sizeof(DTC_SubEventHeader);
+			readPtr = static_cast<uint8_t*>(readPtr) + sizeof(DTC_EventHeader) + sizeof(DTC_SubEventHeader);
 			std::vector<size_t> wordsToCheck{1, 2, 3, 7, 8};
 			for(auto& word : wordsToCheck) {
 				auto wordPtr = static_cast<uint16_t*>(readPtr) + (word - 1);
-				TLOG(TLVL_DEBUG) << word
-				                 << (word == 1   ? "st"
-				                     : word == 2 ? "nd"
-				                     : word == 3 ? "rd"
-				                                 : "th")
-				                 << " *wordPtr: 0x" << std::hex << *wordPtr;
+				TLOG(TLVL_DEBUG) << word << (word == 1 ? "st" : word == 2 ? "nd" : word == 3 ? "rd" : "th") << " *wordPtr: 0x" << std::hex << *wordPtr;
 
 				if(*wordPtr == 0xcafe || *wordPtr == 0xdead) {
-					TLOG(TLVL_WARNING) << "Buffer Timeout detected! " << word
-					                   << (word == 1   ? "st"
-					                       : word == 2 ? "nd"
-					                       : word == 3 ? "rd"
-					                                   : "th")
-					                   << " *wordPtr 0x" << std::hex << *wordPtr;
+					TLOG(TLVL_WARNING) << "Buffer Timeout detected! " << word << (word == 1 ? "st" : word == 2 ? "nd" : word == 3 ? "rd" : "th") << " *wordPtr 0x" << std::hex << *wordPtr;
 					DTCLib::Utilities::PrintBuffer(readPtr, 16, 0, TLVL_DEBUG);
 					timeout = true;
 					break;
@@ -696,11 +651,7 @@ int mu2e::CalorimeterVST::readData(artdaq::Fragment* Frag) {
 
 	int print_event = (ev_counter() % _printFreq) == 0;
 	if(print_event) {
-		printf(" event: %10lu readSuccess : %1i timeout: %1i nbytes: %10lu\n",
-		       ev_counter(),
-		       readSuccess,
-		       timeout,
-		       nbytes);
+		printf(" event: %10lu readSuccess : %1i timeout: %1i nbytes: %10lu\n", ev_counter(), readSuccess, timeout, nbytes);
 	}
 
 	if((_debugLevel > 0) and (ev_counter() < _nEventsDbg)) {
@@ -780,12 +731,7 @@ bool mu2e::CalorimeterVST::readEvent(artdaq::FragmentPtrs& Frags) {
 	//-----------------------------------------------------------------------------
 	// duplicating setting the distance btw the two event window markers
 	//-----------------------------------------------------------------------------
-	_cfo->SendRequestsForRange(nev,
-	                           DTC_EventWindowTag(ev_counter()),
-	                           incrementTimestamp,
-	                           _heartbeatInterval,
-	                           requestsAhead,
-	                           _heartbeatsAfter);
+	_cfo->SendRequestsForRange(nev, DTC_EventWindowTag(ev_counter()), incrementTimestamp, _heartbeatInterval, requestsAhead, _heartbeatsAfter);
 
 	std::this_thread::sleep_for(std::chrono::microseconds(_sleepTimeDTC));
 
@@ -803,8 +749,7 @@ bool mu2e::CalorimeterVST::readEvent(artdaq::FragmentPtrs& Frags) {
 	// make sure even a fake fragment goes in
 	//-----------------------------------------------------------------------------
 	double            tstamp = ev_counter();
-	artdaq::Fragment* f1 =
-	    new artdaq::Fragment(ev_counter(), _fragment_ids[0], FragmentType::CAL, tstamp);
+	artdaq::Fragment* f1     = new artdaq::Fragment(ev_counter(), _fragment_ids[0], FragmentType::CAL, tstamp);
 	if(_readData) {
 		//-----------------------------------------------------------------------------
 		// read data
@@ -826,9 +771,8 @@ bool mu2e::CalorimeterVST::readEvent(artdaq::FragmentPtrs& Frags) {
 	// add one more fragment of debug type with the diagnostics registers: 8 bytes per
 	// register - (register number, value) for simplicity, keep both 4-byte integers
 	//-----------------------------------------------------------------------------
-	artdaq::Fragment* f2 = new artdaq::Fragment(
-	    ev_counter(), _fragment_ids[1], FragmentType::TRKDTC, tstamp);
-	auto metadata = TrkDtcFragment::create_metadata();
+	artdaq::Fragment* f2       = new artdaq::Fragment(ev_counter(), _fragment_ids[1], FragmentType::TRKDTC, tstamp);
+	auto              metadata = TrkDtcFragment::create_metadata();
 	f2->setMetadata(metadata);
 	if(_saveDTCRegisters) {
 		readDTCRegisters(f2, _reg, _nreg);
@@ -864,8 +808,7 @@ bool mu2e::CalorimeterVST::readEvent(artdaq::FragmentPtrs& Frags) {
 //-----------------------------------------------------------------------------
 bool mu2e::CalorimeterVST::simulateEvent(artdaq::FragmentPtrs& Frags) {
 	double            tstamp = ev_counter();
-	artdaq::Fragment* frag =
-	    new artdaq::Fragment(ev_counter(), _fragment_ids[0], FragmentType::CAL, tstamp);
+	artdaq::Fragment* frag   = new artdaq::Fragment(ev_counter(), _fragment_ids[0], FragmentType::CAL, tstamp);
 
 	const uint16_t fake_event[] = {
 	    0x01d0, 0x0000, 0x0000, 0x0000, 0x01c8, 0x0000, 0x0169, 0x0000,  // 0x000000:

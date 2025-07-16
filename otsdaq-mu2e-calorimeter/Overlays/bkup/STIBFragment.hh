@@ -36,8 +36,7 @@ class ots::STIBFragment {
 		static size_t const size_words = 1ull;  // Units of Metadata::data_t
 	};
 
-	static_assert(sizeof(Metadata) == Metadata::size_words * sizeof(Metadata::data_t),
-	              "STIBFragment::Metadata size changed");
+	static_assert(sizeof(Metadata) == Metadata::size_words * sizeof(Metadata::data_t), "STIBFragment::Metadata size changed");
 
 	// The "Header" struct contains "metadata" specific to the fragment
 	// which is not hardware-related
@@ -74,8 +73,7 @@ class ots::STIBFragment {
 		static size_t const size_words = 6ul;  // Units of Header::data_t
 	};
 
-	static_assert(sizeof(Header) == Header::size_words * sizeof(Header::data_t),
-	              "STIBFragment::Header size changed");
+	static_assert(sizeof(Header) == Header::size_words * sizeof(Header::data_t), "STIBFragment::Header size changed");
 
 	// The constructor simply sets its const private member "artdaq_Fragment_"
 	// to refer to the artdaq::Fragment object
@@ -96,9 +94,7 @@ class ots::STIBFragment {
 	size_t stib_data_words() const { return hdr_event_size() - hdr_size_words(); }
 
 	// Start of the STIB data, returned as a pointer
-	uint32_t const* dataBegin() const {
-		return reinterpret_cast<uint32_t const*>(header_() + 1);
-	}
+	uint32_t const* dataBegin() const { return reinterpret_cast<uint32_t const*>(header_() + 1); }
 
 	// End of the STIB data, returned as a pointer
 	uint32_t const* dataEnd() const { return dataBegin() + stib_data_words(); }
@@ -108,18 +104,13 @@ class ots::STIBFragment {
 	// this fragment overlay's concept of a unit of data (i.e.,
 	// Header::data_t).
 
-	static constexpr size_t bytes_per_word_() {
-		return sizeof(Header::data_t) / sizeof(uint8_t);
-	}
+	static constexpr size_t bytes_per_word_() { return sizeof(Header::data_t) / sizeof(uint8_t); }
 
 	// header_() simply takes the address of the start of this overlay's
 	// data (i.e., where the STIBFragment::Header object begins) and
 	// casts it as a pointer to STIBFragment::Header
 
-	Header const* header_() const {
-		return reinterpret_cast<STIBFragment::Header const*>(
-		    artdaq_Fragment_.dataBeginBytes());
-	}
+	Header const* header_() const { return reinterpret_cast<STIBFragment::Header const*>(artdaq_Fragment_.dataBeginBytes()); }
 
   private:
 	artdaq::Fragment const& artdaq_Fragment_;

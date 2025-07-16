@@ -169,28 +169,16 @@ mu2e::CaloDataAnalyzer::CaloDataAnalyzer(const art::EDAnalyzer::Table<Config>& c
     , fillFailedEvents_(config().fillFailedEvents()) {
 	art::ServiceHandle<art::TFileService> tfs;
 
-	h1_t0 = tfs->make<TH1D>("h1_t0", "t0 distribution;t0", 2000, 0, 20000);
-	h1_maxIndex =
-	    tfs->make<TH1D>("h1_maxIndex", "max Waveform Sample Index;Index", 100, 0, 100);
-	h1_nSamples = tfs->make<TH1D>("h1_nSamples", "Waveform length;nSamples", 100, 0, 100);
-	h2_channelHits = tfs->make<TH2D>(
-	    "h2_channelHits", "Hits per channel;BoardID;ChannelID", 256, 0, 256, 20, 0, 20);
-	h2_failedChannels = tfs->make<TH2D>("h2_failedChannels",
-	                                    "Failures per channel;BoardID;ChannelID",
-	                                    256,
-	                                    0,
-	                                    256,
-	                                    20,
-	                                    0,
-	                                    20);
-	h2_failedROCs =
-	    tfs->make<TH2D>("h2_failedROCs", "Failures per ROC;DTC;ROC", 30, 0, 30, 6, 0, 6);
-	h2_waveforms = tfs->make<TH2D>(
-	    "h2_waveforms", "All waveforms;clock ticks;ADC", 150, 0, 150, 4096, 0, 4096);
-	g_EWTs      = tfs->makeAndRegister<TGraph>("g_EWTs", "EWT check;ROC EWT;Hit EWT");
-	g_eventHits = tfs->makeAndRegister<TGraph>("g_eventHits",
-	                                           "Total hits per event;EventNumber;Hits");
-	g_eventEWT  = tfs->makeAndRegister<TGraph>("g_eventEWT", "Event EWT;EventNumber;EWT");
+	h1_t0             = tfs->make<TH1D>("h1_t0", "t0 distribution;t0", 2000, 0, 20000);
+	h1_maxIndex       = tfs->make<TH1D>("h1_maxIndex", "max Waveform Sample Index;Index", 100, 0, 100);
+	h1_nSamples       = tfs->make<TH1D>("h1_nSamples", "Waveform length;nSamples", 100, 0, 100);
+	h2_channelHits    = tfs->make<TH2D>("h2_channelHits", "Hits per channel;BoardID;ChannelID", 256, 0, 256, 20, 0, 20);
+	h2_failedChannels = tfs->make<TH2D>("h2_failedChannels", "Failures per channel;BoardID;ChannelID", 256, 0, 256, 20, 0, 20);
+	h2_failedROCs     = tfs->make<TH2D>("h2_failedROCs", "Failures per ROC;DTC;ROC", 30, 0, 30, 6, 0, 6);
+	h2_waveforms      = tfs->make<TH2D>("h2_waveforms", "All waveforms;clock ticks;ADC", 150, 0, 150, 4096, 0, 4096);
+	g_EWTs            = tfs->makeAndRegister<TGraph>("g_EWTs", "EWT check;ROC EWT;Hit EWT");
+	g_eventHits       = tfs->makeAndRegister<TGraph>("g_eventHits", "Total hits per event;EventNumber;Hits");
+	g_eventEWT        = tfs->makeAndRegister<TGraph>("g_eventEWT", "Event EWT;EventNumber;EWT");
 	g_EWTs->SetMarkerStyle(20);
 	g_eventHits->SetMarkerStyle(20);
 	g_eventEWT->SetMarkerStyle(20);
@@ -199,8 +187,7 @@ mu2e::CaloDataAnalyzer::CaloDataAnalyzer(const art::EDAnalyzer::Table<Config>& c
 	tree->Branch("run", &t_run, "run/I");
 	tree->Branch("subrun", &t_subrun, "subrun/I");
 	tree->Branch("nevt", &t_nevt, "nevt/I");
-	tree->Branch(
-	    "currentDTCEventWindow", &t_currentDTCEventWindow, "currentDTCEventWindow/L");
+	tree->Branch("currentDTCEventWindow", &t_currentDTCEventWindow, "currentDTCEventWindow/L");
 	tree->Branch("hasFailures", &t_hasFailures, "hasFailures/I");
 	tree->Branch("nhits", &t_nhits, "nhits/I");
 	tree->Branch("dtcID", &t_dtcID, "dtcID[nhits]/I");
@@ -223,8 +210,7 @@ mu2e::CaloDataAnalyzer::CaloDataAnalyzer(const art::EDAnalyzer::Table<Config>& c
 	treeBad->Branch("run", &tBad_run, "run/I");
 	treeBad->Branch("subrun", &tBad_subrun, "subrun/I");
 	treeBad->Branch("nevt", &tBad_nevt, "nevt/I");
-	treeBad->Branch(
-	    "currentDTCEventWindow", &tBad_currentDTCEventWindow, "currentDTCEventWindow/L");
+	treeBad->Branch("currentDTCEventWindow", &tBad_currentDTCEventWindow, "currentDTCEventWindow/L");
 	treeBad->Branch("hasFailures", &tBad_hasFailures, "hasFailures/I");
 	treeBad->Branch("nhits", &tBad_nhits, "nhits/I");
 	treeBad->Branch("dtcID", &tBad_dtcID, "dtcID[nhits]/I");
@@ -248,10 +234,8 @@ mu2e::CaloDataAnalyzer::CaloDataAnalyzer(const art::EDAnalyzer::Table<Config>& c
 	treeHits->Branch("subrun", &tH_subrun, "subrun/I");
 	treeHits->Branch("nevt", &tH_nevt, "nevt/I");
 	treeHits->Branch("dtcID", &tH_dtcID, "dtcID/I");
-	treeHits->Branch(
-	    "currentDTCEventWindow", &tH_currentDTCEventWindow, "currentDTCEventWindow/L");
-	treeHits->Branch(
-	    "currentROCEventWindow", &tH_currentROCEventWindow, "currentROCEventWindow/L");
+	treeHits->Branch("currentDTCEventWindow", &tH_currentDTCEventWindow, "currentDTCEventWindow/L");
+	treeHits->Branch("currentROCEventWindow", &tH_currentROCEventWindow, "currentROCEventWindow/L");
 	treeHits->Branch("nhits", &tH_nhits, "nhits/I");
 	treeHits->Branch("boardID", &tH_boardID, "boardID/I");
 	treeHits->Branch("linkID", &tH_linkID, "linkID/I");
@@ -310,9 +294,7 @@ void mu2e::CaloDataAnalyzer::analyze(art::Event const& event) {
 	// unpackerInstanceLabel_});
 
 	art::InputTag caloFragmentsTag_(unpackerModuleLabel_);
-	auto          caloDecoderColl =
-	    event.getValidHandle<std::vector<mu2e::CalorimeterDataDecoder>>(
-	        caloFragmentsTag_);
+	auto          caloDecoderColl = event.getValidHandle<std::vector<mu2e::CalorimeterDataDecoder>>(caloFragmentsTag_);
 
 	TLOG(TLVL_DEBUG + 6) << "Iterating through " << caloDecoderColl->size() << " DTCs\n";
 	for(auto caloDTC : *caloDecoderColl) {
@@ -330,26 +312,21 @@ void mu2e::CaloDataAnalyzer::analyze(art::Event const& event) {
 
 	g_eventHits->AddPoint(this_eventNumber, t_nhits);
 
-	TLOG(TLVL_DEBUG + 6) << "[CaloDataAnalyzer::analyzer] found " << nCaloEvents
-	                     << " calo subevents in event " << (int)eventNumber;
-	TLOG(TLVL_DEBUG + 6) << "[CaloDataAnalyzer::analyzer] found " << t_nhits
-	                     << " calo hits in event " << (int)eventNumber;
+	TLOG(TLVL_DEBUG + 6) << "[CaloDataAnalyzer::analyzer] found " << nCaloEvents << " calo subevents in event " << (int)eventNumber;
+	TLOG(TLVL_DEBUG + 6) << "[CaloDataAnalyzer::analyzer] found " << t_nhits << " calo hits in event " << (int)eventNumber;
 
 	if(nCaloEvents == 0) {
-		TLOG(TLVL_WARNING)
-		    << "[CaloDataAnalyzer::analyzer] found no calo subevents in event "
-		    << (int)eventNumber << "!";
+		TLOG(TLVL_WARNING) << "[CaloDataAnalyzer::analyzer] found no calo subevents in event " << (int)eventNumber << "!";
 	}
 
 	// TLOG(TLVL_INFO) << "mu2e::CaloDataAnalyzer::analyzer exiting eventNumber=" <<
 	// (int)eventNumber;
 }
 
-void mu2e::CaloDataAnalyzer::processCaloData(
-    mu2e::CalorimeterDataDecoder const& caloDecoder) {
-	auto&    this_subevent  = caloDecoder.event_;
-	long int thisDTCEWT     = this_subevent.GetEventWindowTag().GetEventWindowTag(true);
-	t_currentDTCEventWindow = thisDTCEWT;
+void mu2e::CaloDataAnalyzer::processCaloData(mu2e::CalorimeterDataDecoder const& caloDecoder) {
+	auto&    this_subevent     = caloDecoder.event_;
+	long int thisDTCEWT        = this_subevent.GetEventWindowTag().GetEventWindowTag(true);
+	t_currentDTCEventWindow    = thisDTCEWT;
 	tBad_currentDTCEventWindow = thisDTCEWT;
 	int dtcID                  = int(this_subevent.GetDTCID());
 
@@ -360,9 +337,7 @@ void mu2e::CaloDataAnalyzer::processCaloData(
 	TLOG(TLVL_DEBUG + 6) << "Iterating through " << nROCs << " data blocks (ROCs)\n";
 	std::vector<int> roc_hits;
 	for(uint iroc = 0; iroc < nROCs; iroc++) {
-		long int thisROCEWT =
-		    dataBlocks[iroc].GetHeader().get()->GetEventWindowTag().GetEventWindowTag(
-		        true);
+		long int thisROCEWT = dataBlocks[iroc].GetHeader().get()->GetEventWindowTag().GetEventWindowTag(true);
 		g_eventEWT->AddPoint(this_eventNumber, thisROCEWT);
 		if(data_type_ == 0) {  /////// STANDARD HITS ///////
 
@@ -370,14 +345,11 @@ void mu2e::CaloDataAnalyzer::processCaloData(
 			uint nHits    = caloHits->size();
 			roc_hits.push_back(nHits);
 			for(uint ihit = 0; ihit < nHits; ihit++) {
-				mu2e::CalorimeterDataDecoder::CalorimeterHitDataPacket hit =
-				    caloHits->at(ihit).first;
-				std::vector<uint16_t> hit_waveform = caloHits->at(ihit).second;
+				mu2e::CalorimeterDataDecoder::CalorimeterHitDataPacket hit          = caloHits->at(ihit).first;
+				std::vector<uint16_t>                                  hit_waveform = caloHits->at(ihit).second;
 				if(hit_waveform.size() == 0) {
-					TLOG(TLVL_WARNING)
-					    << "[CaloDataAnalyzer::analyzer] found empty waveform! DTC "
-					    << dtcID << " ROC " << iroc << " hit " << ihit << " BoardID "
-					    << hit.BoardID << " ChannelNumber " << hit.ChannelNumber;
+					TLOG(TLVL_WARNING) << "[CaloDataAnalyzer::analyzer] found empty waveform! DTC " << dtcID << " ROC " << iroc << " hit " << ihit << " BoardID " << hit.BoardID << " ChannelNumber "
+					                   << hit.ChannelNumber;
 				}
 				nCaloHits++;
 			}
@@ -389,9 +361,8 @@ void mu2e::CaloDataAnalyzer::processCaloData(
 
 			total_hits += nHits;
 			for(uint ihit = 0; ihit < nHits; ihit++) {
-				mu2e::CalorimeterDataDecoder::CalorimeterHitTestDataPacket hit =
-				    caloHits->at(ihit).first;
-				std::vector<uint16_t> hit_waveform = caloHits->at(ihit).second;
+				mu2e::CalorimeterDataDecoder::CalorimeterHitTestDataPacket hit          = caloHits->at(ihit).first;
+				std::vector<uint16_t>                                      hit_waveform = caloHits->at(ihit).second;
 
 				// Check that the hit is good
 				auto errorCode = caloDAQUtil_.isHitGood(caloHits->at(ihit));
@@ -404,12 +375,9 @@ void mu2e::CaloDataAnalyzer::processCaloData(
 					event_failedhits++;
 					total_failedhits++;
 					if(verbosity_ > 0) {
-						std::cout << "[CaloDataAnalyzer] BAD calo hit! DTC: " << dtcID
-						          << ", ROC: " << iroc << ", hit number: " << ihit
-						          << " [failure code: " << errorCode << "]" << std::endl;
+						std::cout << "[CaloDataAnalyzer] BAD calo hit! DTC: " << dtcID << ", ROC: " << iroc << ", hit number: " << ihit << " [failure code: " << errorCode << "]" << std::endl;
 						caloDAQUtil_.printCaloPulse(hit);
-						std::cout << "[CaloDataAnalyzer] \twaveform size \t"
-						          << hit_waveform.size() << std::endl;
+						std::cout << "[CaloDataAnalyzer] \twaveform size \t" << hit_waveform.size() << std::endl;
 					}
 
 					if(tBad_nhits >= MAXNHITS)
@@ -426,10 +394,8 @@ void mu2e::CaloDataAnalyzer::processCaloData(
 					tBad_time_tot[tBad_nhits - 1] = hit.Time;
 					tBad_ewhit[tBad_nhits - 1]    = hit.InPayloadEventWindowTag;
 					tBad_peakpos[tBad_nhits - 1]  = hit.IndexOfMaxDigitizerSample;
-					if(hit.IndexOfMaxDigitizerSample >= 0 &&
-					   hit.IndexOfMaxDigitizerSample < hit_waveform.size()) {
-						tBad_peakval[tBad_nhits - 1] =
-						    hit_waveform[hit.IndexOfMaxDigitizerSample];
+					if(hit.IndexOfMaxDigitizerSample >= 0 && hit.IndexOfMaxDigitizerSample < hit_waveform.size()) {
+						tBad_peakval[tBad_nhits - 1] = hit_waveform[hit.IndexOfMaxDigitizerSample];
 					} else {
 						tBad_peakval[tBad_nhits - 1] = 0;
 					}
@@ -459,13 +425,11 @@ void mu2e::CaloDataAnalyzer::processCaloData(
 
 				// Fill trees
 				if(t_nhits >= MAXNHITS) {
-					std::cout << "ERROR! This event has more than " << MAXNHITS
-					          << " hits (MAXNHITS)\n";
+					std::cout << "ERROR! This event has more than " << MAXNHITS << " hits (MAXNHITS)\n";
 					continue;
 				}
 				if(t_nsamples + hit_waveform.size() >= MAXNSAMPLES) {
-					std::cout << "ERROR! This event has more than " << MAXNSAMPLES
-					          << " waveform samples (MAXNSAMPLES)\n";
+					std::cout << "ERROR! This event has more than " << MAXNSAMPLES << " waveform samples (MAXNSAMPLES)\n";
 					continue;
 				}
 
@@ -493,9 +457,8 @@ void mu2e::CaloDataAnalyzer::processCaloData(
 			uint nHits    = caloHits->size();
 			roc_hits.push_back(nHits);
 			for(uint ihit = 0; ihit < nHits; ihit++) {
-				mu2e::CalorimeterDataDecoder::CalorimeterCountersDataPacket hit =
-				    caloHits->at(ihit).first;
-				std::vector<uint32_t> hit_counters = caloHits->at(ihit).second;
+				mu2e::CalorimeterDataDecoder::CalorimeterCountersDataPacket hit          = caloHits->at(ihit).first;
+				std::vector<uint32_t>                                       hit_counters = caloHits->at(ihit).second;
 
 				nCaloHits++;
 
@@ -513,18 +476,13 @@ void mu2e::CaloDataAnalyzer::processCaloData(
 }
 
 void mu2e::CaloDataAnalyzer::endJob() {
-	std::cout << "\n ----- [CaloDataAnalyzer] Decoding errors summary ----- "
-	          << std::endl;
+	std::cout << "\n ----- [CaloDataAnalyzer] Decoding errors summary ----- " << std::endl;
 	std::cout << "Total events: " << total_events << "\n";
 	std::cout << "Total hits: " << total_hits << "\n";
 	std::cout << "Total good hits: " << total_goodhits << "\n";
-	std::cout << "Total failed hits: " << total_failedhits << " ["
-	          << int(100. * total_failedhits / total_hits) << "%]\n";
+	std::cout << "Total failed hits: " << total_failedhits << " [" << int(100. * total_failedhits / total_hits) << "%]\n";
 	for(auto fail : failure_counter) {
-		std::cout << "Failure mode " << fail.first << " [bad "
-		          << caloDAQUtil_.getCaloHitErrorName(fail.first)
-		          << "], count: " << fail.second << " ("
-		          << int(100. * fail.second / total_hits) << "%)\n";
+		std::cout << "Failure mode " << fail.first << " [bad " << caloDAQUtil_.getCaloHitErrorName(fail.first) << "], count: " << fail.second << " (" << int(100. * fail.second / total_hits) << "%)\n";
 	}
 }
 

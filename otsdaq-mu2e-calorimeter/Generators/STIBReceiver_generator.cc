@@ -31,13 +31,11 @@ void ots::STIBReceiver::ProcessData_(artdaq::FragmentPtrs& frags) {
 
 	std::ofstream output;
 	if(rawOutput_) {
-		std::string outputPath =
-		    rawPath_ + "/STIBReceiver-" + ip_ + ":" + std::to_string(dataport_) + ".bin";
+		std::string outputPath = rawPath_ + "/STIBReceiver-" + ip_ + ":" + std::to_string(dataport_) + ".bin";
 		output.open(outputPath, std::ios::out | std::ios::app | std::ios::binary);
 	}
 
-	std::cout << __COUT_HDR_FL__ << "Starting STIBReceiver Packet Processing Loop"
-	          << std::endl;
+	std::cout << __COUT_HDR_FL__ << "Starting STIBReceiver Packet Processing Loop" << std::endl;
 	for(auto packet = packetBuffers_.begin(); packet != packetBuffers_.end(); ++packet) {
 		for(size_t word = 0; word < (*packet)->size(); word += 4) {
 			uint8_t byte3 = (*packet)->at(word);
@@ -54,12 +52,7 @@ void ots::STIBReceiver::ProcessData_(artdaq::FragmentPtrs& frags) {
 				{
 					std::size_t initial_payload_size = 0;
 
-					frags.emplace_back(
-					    artdaq::Fragment::FragmentBytes(initial_payload_size,
-					                                    ev_counter(),
-					                                    fragment_id(),
-					                                    ots::detail::FragmentType::STIB,
-					                                    metadata));
+					frags.emplace_back(artdaq::Fragment::FragmentBytes(initial_payload_size, ev_counter(), fragment_id(), ots::detail::FragmentType::STIB, metadata));
 					// We now have a fragment to contain this event:
 					ev_counter_inc();
 					ots::STIBFragmentWriter thisFrag(*frags.back());
@@ -80,20 +73,15 @@ void ots::STIBReceiver::ProcessData_(artdaq::FragmentPtrs& frags) {
 				}
 
 				if((byte0 & 0x10) == 0x10) {  // Bunch Counter Low
-					bunch_counter = (bunch_counter & 0xFFFFFF000000) + byte1 +
-					                (byte2 << 8) + (byte3 << 16);
+					bunch_counter = (bunch_counter & 0xFFFFFF000000) + byte1 + (byte2 << 8) + (byte3 << 16);
 				} else if((byte0 & 0x20) == 0x20) {  // Bunch Counter High
-					bunch_counter = (bunch_counter & 0xFFFFFF) + ((uint64_t)byte1 << 24) +
-					                ((uint64_t)byte2 << 32) + ((uint64_t)byte3 << 40);
+					bunch_counter = (bunch_counter & 0xFFFFFF) + ((uint64_t)byte1 << 24) + ((uint64_t)byte2 << 32) + ((uint64_t)byte3 << 40);
 				} else if((byte0 & 0xb0) == 0xb0) {  // Trigger Counter High
-					triggerCounter = (triggerCounter & 0xFFFF) + ((uint64_t)byte1 << 16) +
-					                 ((uint64_t)byte2 << 24) + ((uint64_t)byte3 << 32);
+					triggerCounter = (triggerCounter & 0xFFFF) + ((uint64_t)byte1 << 16) + ((uint64_t)byte2 << 24) + ((uint64_t)byte3 << 32);
 				} else if((byte0 & 0xa0) == 0xa0) {  // Trigger Counter Low
-					bunch_counter = (bunch_counter & 0xFFFFFFFFFF00) + byte1;
-					triggerCounter =
-					    (triggerCounter & 0xFFFFFF0000) + byte2 + (byte3 << 8);
-				} else if(((byte0 & 0xc0) == 0xc0) ||
-				          ((byte0 & 0xd0) == 0xd0) ||  // Trigger Input
+					bunch_counter  = (bunch_counter & 0xFFFFFFFFFF00) + byte1;
+					triggerCounter = (triggerCounter & 0xFFFFFF0000) + byte2 + (byte3 << 8);
+				} else if(((byte0 & 0xc0) == 0xc0) || ((byte0 & 0xd0) == 0xd0) ||  // Trigger Input
 				          ((byte0 & 0xe0) == 0xe0) || ((byte0 & 0xf0) == 0xf0)) {
 					bunch_counter = (bunch_counter & 0xFFFFFFFFFF00) + byte1;
 					triggerInput0 = byte2;
@@ -101,8 +89,7 @@ void ots::STIBReceiver::ProcessData_(artdaq::FragmentPtrs& frags) {
 				}
 			} else if((byte0 & 1) == 1) {
 				inData = true;
-				data.push_back((uint32_t)byte0 + ((uint32_t)byte1 << 8) +
-				               ((uint64_t)byte2 << 16) + ((uint64_t)byte3 << 24));
+				data.push_back((uint32_t)byte0 + ((uint32_t)byte1 << 8) + ((uint64_t)byte2 << 16) + ((uint64_t)byte3 << 24));
 			}
 		}
 	}

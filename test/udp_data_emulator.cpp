@@ -36,8 +36,8 @@ using namespace std;
 // #define ZED_IP   "192.168.133.6"    // the ZED IP users will be connecting to
 // #define ZED_IP             "192.168.133.5"    // the ZED IP users will be
 //  connecting to
-#define COMMUNICATION_PORT "2035"  // the port on ZedBoard for communicating with XDAQ
-#define STREAMING_PORT "2036"      // the port on ZedBoard for streaming to XDAQ
+#define COMMUNICATION_PORT "2035"       // the port on ZedBoard for communicating with XDAQ
+#define STREAMING_PORT "2036"           // the port on ZedBoard for streaming to XDAQ
 #define DESTINATION_IP "192.168.133.5"  // the IP for the destination of the datastream
 #define DESTINATION_PORT 2039           // the port for the destination of the datastream
 #define MAXBUFLEN 1492
@@ -119,15 +119,8 @@ struct sockaddr_in setupSocketAddress(const char* ip, unsigned int port) {
 
 //========================================================================================================================
 int send(int toSocket, struct sockaddr_in& toAddress, const std::string& buffer) {
-	std::cout << "Socket Descriptor #: " << toSocket << " ip: " << std::hex
-	          << toAddress.sin_addr.s_addr << std::dec
-	          << " port: " << ntohs(toAddress.sin_port) << std::endl;
-	if(sendto(toSocket,
-	          buffer.c_str(),
-	          buffer.size(),
-	          0,
-	          (struct sockaddr*)&(toAddress),
-	          sizeof(sockaddr_in)) < (int)(buffer.size())) {
+	std::cout << "Socket Descriptor #: " << toSocket << " ip: " << std::hex << toAddress.sin_addr.s_addr << std::dec << " port: " << ntohs(toAddress.sin_port) << std::endl;
+	if(sendto(toSocket, buffer.c_str(), buffer.size(), 0, (struct sockaddr*)&(toAddress), sizeof(sockaddr_in)) < (int)(buffer.size())) {
 		std::cout << "Error writing buffer" << std::endl;
 		return -1;
 	}
@@ -150,12 +143,7 @@ int receive(int fromSocket, struct sockaddr_in& fromAddress, std::string& buffer
 		socklen_t addressLength = sizeof(fromAddress);
 		int       nOfBytes;
 		buffer.resize(MAXBUFLEN);
-		if((nOfBytes = recvfrom(fromSocket,
-		                        &buffer[0],
-		                        MAXBUFLEN,
-		                        0,
-		                        (struct sockaddr*)&fromAddress,
-		                        &addressLength)) == -1)
+		if((nOfBytes = recvfrom(fromSocket, &buffer[0], MAXBUFLEN, 0, (struct sockaddr*)&fromAddress, &addressLength)) == -1)
 			return -1;
 
 		// Confirm you've received the message by returning message to sender
@@ -184,8 +172,7 @@ int main(void) {
 
 	int                communicationSocket = makeSocket(0, COMMUNICATION_PORT, p);
 	int                streamingSocket     = makeSocket(0, STREAMING_PORT, p);
-	struct sockaddr_in streamingReceiver =
-	    setupSocketAddress(DESTINATION_IP, DESTINATION_PORT);
+	struct sockaddr_in streamingReceiver   = setupSocketAddress(DESTINATION_IP, DESTINATION_PORT);
 	struct sockaddr_in messageSender;
 
 	std::string communicationBuffer;
@@ -225,8 +212,7 @@ int main(void) {
 				unsigned noise = rand() & 0x00FF00FF;
 				simdata[i + 5] = 0x00FF00FF + noise;
 
-				std::cout << std::hex << std::setw(8) << std::setfill('0') << simdata[i]
-				          << std::endl;
+				std::cout << std::hex << std::setw(8) << std::setfill('0') << simdata[i] << std::endl;
 			}
 
 			//            sendto(streamingSocket, simdata, sizeof(simdata), 0,

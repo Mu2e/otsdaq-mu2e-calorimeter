@@ -170,8 +170,7 @@ int main(int argc, char* argv[]) {
 
 		val = 4;
 		for(int i = 0; i < buff[1]; ++i, ++val)
-			memcpy((void*)&buff[RX_DATA_OFFSET + i * 8],
-			       (void*)&val,
+			memcpy((void*)&buff[RX_DATA_OFFSET + i * 8], (void*)&val,
 			       8);  // increment each time
 		packetSz = RX_DATA_OFFSET + buff[1] * 8;
 
@@ -212,21 +211,12 @@ int main(int argc, char* argv[]) {
 		printf("\n");
 
 		// read response ///////////////////////////////////////////////////////////
-		if((numbytes = recvfrom(sockfd,
-		                        buff,
-		                        MAXBUFLEN - 1,
-		                        0,
-		                        (struct sockaddr*)&their_addr,
-		                        &addr_len)) == -1) {
+		if((numbytes = recvfrom(sockfd, buff, MAXBUFLEN - 1, 0, (struct sockaddr*)&their_addr, &addr_len)) == -1) {
 			perror("recvfrom");
 			exit(1);
 		}
 
-		printf("sw: got read response from %s\n",
-		       inet_ntop(their_addr.ss_family,
-		                 get_in_addr((struct sockaddr*)&their_addr),
-		                 s,
-		                 sizeof s));
+		printf("sw: got read response from %s\n", inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr*)&their_addr), s, sizeof s));
 		printf("sw: packet is %d bytes long\n", numbytes);
 		printf("recv packet contents: ");
 
@@ -302,21 +292,12 @@ int main(int argc, char* argv[]) {
 
 				// read response
 				// ///////////////////////////////////////////////////////////
-				if((numbytes = recvfrom(sockfd,
-				                        buff,
-				                        MAXBUFLEN - 1,
-				                        0,
-				                        (struct sockaddr*)&their_addr,
-				                        &addr_len)) == -1) {
+				if((numbytes = recvfrom(sockfd, buff, MAXBUFLEN - 1, 0, (struct sockaddr*)&their_addr, &addr_len)) == -1) {
 					perror("recvfrom");
 					exit(1);
 				}
 
-				printf("sw: got read response from %s\n",
-				       inet_ntop(their_addr.ss_family,
-				                 get_in_addr((struct sockaddr*)&their_addr),
-				                 s,
-				                 sizeof s));
+				printf("sw: got read response from %s\n", inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr*)&their_addr), s, sizeof s));
 				printf("sw: packet is %d bytes long\n", numbytes);
 				printf("recv packet contents: ");
 
@@ -356,21 +337,12 @@ int main(int argc, char* argv[]) {
 		printf("sw: sent %d bytes to %s\n", numbytes, argv[1]);
 
 		// read response ///////////////////////////////////////////////////////////
-		if((numbytes = recvfrom(sockfd,
-		                        buff,
-		                        MAXBUFLEN - 1,
-		                        0,
-		                        (struct sockaddr*)&their_addr,
-		                        &addr_len)) == -1) {
+		if((numbytes = recvfrom(sockfd, buff, MAXBUFLEN - 1, 0, (struct sockaddr*)&their_addr, &addr_len)) == -1) {
 			perror("recvfrom");
 			exit(1);
 		}
 
-		printf("sw: got read response from %s\n",
-		       inet_ntop(their_addr.ss_family,
-		                 get_in_addr((struct sockaddr*)&their_addr),
-		                 s,
-		                 sizeof s));
+		printf("sw: got read response from %s\n", inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr*)&their_addr), s, sizeof s));
 		printf("sw: packet is %d bytes long\n", numbytes);
 		printf("recv packet contents: ");
 

@@ -65,9 +65,8 @@ void write_testfranco(int Link, int ROCSleepTime = 5000) {
 	bool x = dtc.WriteROCBlock(link, 263, input_data, 0, 0, 100);  // was 257
 	// std::this_thread::sleep_for(std::chrono::microseconds(ROCSleepTime));
 
-	while((u = dtc.ReadROCRegister(link, 128, 100)) == 0) {
-	}  // when the write operation ends the micropro
-	   // cessor writes 0x8000 to register 0x128
+	while((u = dtc.ReadROCRegister(link, 128, 100)) == 0) {}  // when the write operation ends the micropro
+	                                                          // cessor writes 0x8000 to register 0x128
 
 	printf("r_128:0x%04x\n", u);
 

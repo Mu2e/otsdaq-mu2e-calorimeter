@@ -33,15 +33,13 @@ void DemoDQMHistos::fill(std::string& buffer, std::map<std::string, std::string>
 	{  // print
 		ss << "dataP Read: 0x ";
 		for(unsigned int i = 0; i < (buffer).size(); ++i)
-			ss << std::hex << (int)(((buffer)[i] >> 4) & 0xF)
-			   << (int)(((buffer)[i]) & 0xF) << " " << std::dec;
+			ss << std::hex << (int)(((buffer)[i] >> 4) & 0xF) << (int)(((buffer)[i]) & 0xF) << " " << std::dec;
 		ss << std::endl;
 		std::cout << "\n" << ss.str();
 
 		std::cout << "sequence = " << (int)*((unsigned char*)&((buffer)[1])) << std::endl;
 
-		std::cout << "dataQW = 0x" << std::hex << (dataQW) << " " << std::dec << dataQW
-		          << std::endl;
+		std::cout << "dataQW = 0x" << std::hex << (dataQW) << " " << std::dec << dataQW << std::endl;
 	}
 
 	sequenceNumbers_->Fill((unsigned int)(*((unsigned char*)&((buffer)[1]))));

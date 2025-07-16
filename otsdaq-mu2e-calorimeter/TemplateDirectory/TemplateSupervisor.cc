@@ -11,8 +11,7 @@ using namespace ots;
 XDAQ_INSTANTIATOR_IMPL(TemplateSupervisor)
 
 //========================================================================================================================
-TemplateSupervisor::TemplateSupervisor(xdaq::ApplicationStub* s)
-    : xdaq::Application(s), SOAPMessenger(this) {
+TemplateSupervisor::TemplateSupervisor(xdaq::ApplicationStub* s) : xdaq::Application(s), SOAPMessenger(this) {
 	INIT_MF("TemplateSupervisor");
 	xgi::bind(this, &TemplateSupervisor::Default, "Default");
 	init();

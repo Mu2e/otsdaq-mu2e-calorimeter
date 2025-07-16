@@ -46,8 +46,7 @@ class CaloEventFilter : public art::EDFilter {
 };
 }  // namespace mu2e
 
-mu2e::CaloEventFilter::CaloEventFilter(const art::EDFilter::Table<Config>& config)
-    : art::EDFilter{config} {
+mu2e::CaloEventFilter::CaloEventFilter(const art::EDFilter::Table<Config>& config) : art::EDFilter{config} {
 	if(config().subsystem_override() == "calo") {
 		subsystem_ = DTCLib::DTC_Subsystem::DTC_Subsystem_Calorimeter;
 	} else if(config().subsystem_override() == "tracker") {
@@ -84,8 +83,7 @@ artdaq::Fragments mu2e::CaloEventFilter::getFragments(art::Event& event) {
 	std::vector<art::Handle<artdaq::Fragments>> fragmentHandles;
 	fragmentHandles = event.getMany<std::vector<artdaq::Fragment>>();
 
-	TLOG(TLVL_DEBUG + 6) << "Iterating through " << fragmentHandles.size()
-	                     << " fragment handles\n";
+	TLOG(TLVL_DEBUG + 6) << "Iterating through " << fragmentHandles.size() << " fragment handles\n";
 	for(const auto& handle : fragmentHandles) {
 		if(!handle.isValid() || handle->empty()) {
 			continue;

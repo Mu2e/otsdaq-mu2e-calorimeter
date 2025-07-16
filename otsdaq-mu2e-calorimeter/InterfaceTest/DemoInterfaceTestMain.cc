@@ -20,27 +20,20 @@ int main(int argc, char** argv) {
 
 	ConfigurationManager* theConfigurationManager_ = new ConfigurationManager();
 
-	std::string XDAQContextTableName_     = "XDAQContextTable";
-	std::string supervisorContextUID_     = "mainContext";
-	std::string supervisorApplicationUID_ = "FESupervisor";
-	std::string interfaceUID_             = "ExampleInterface0";
-	std::string supervisorConfigurationPath_ =
-	    "/" + supervisorContextUID_ + "/LinkToApplicationConfiguration/" +
-	    supervisorApplicationUID_ + "/LinkToSupervisorConfiguration";
-	const ConfigurationTree theXDAQContextConfigTree_ =
-	    theConfigurationManager_->getNode(XDAQContextTableName_);
+	std::string             XDAQContextTableName_        = "XDAQContextTable";
+	std::string             supervisorContextUID_        = "mainContext";
+	std::string             supervisorApplicationUID_    = "FESupervisor";
+	std::string             interfaceUID_                = "ExampleInterface0";
+	std::string             supervisorConfigurationPath_ = "/" + supervisorContextUID_ + "/LinkToApplicationConfiguration/" + supervisorApplicationUID_ + "/LinkToSupervisorConfiguration";
+	const ConfigurationTree theXDAQContextConfigTree_    = theConfigurationManager_->getNode(XDAQContextTableName_);
 
 	std::string                           configurationGroupName = "defaultConfig";
-	std::pair<std::string, TableGroupKey> theGroup(configurationGroupName,
-	                                               TableGroupKey(configurationKeyValue_));
+	std::pair<std::string, TableGroupKey> theGroup(configurationGroupName, TableGroupKey(configurationKeyValue_));
 
 	theConfigurationManager_->loadTableGroup(theGroup.first, theGroup.second, true);
 
-	FEOtsUDPTemplateInterface* theInterface_ = new FEOtsUDPTemplateInterface(
-	    interfaceUID_,
-	    theXDAQContextConfigTree_,
-	    supervisorConfigurationPath_ + "/LinkToFEInterfaceTable/" + interfaceUID_ +
-	        "/LinkToFETypeConfiguration");
+	FEOtsUDPTemplateInterface* theInterface_ =
+	    new FEOtsUDPTemplateInterface(interfaceUID_, theXDAQContextConfigTree_, supervisorConfigurationPath_ + "/LinkToFEInterfaceTable/" + interfaceUID_ + "/LinkToFETypeConfiguration");
 	std::cout << "Done with new" << std::endl;
 	// Test interface class methods here //
 	theInterface_->configure();

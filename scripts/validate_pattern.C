@@ -95,10 +95,8 @@ int validate_pattern(int ievtno, string file_name) {
 
 		const int LINK_HEAD_SIZE = 4;  // link data header in 32-bit words
 
-		int hit_in[64] = {1,  2,  3,  0,  0,  0,  7,  8,  9,  10, 11, 12, 13, 14, 15, 16,
-		                  0,  20, 21, 22, 12, 13, 11, 12, 0,  0,  8,  4,  12, 11, 12, 13,
-		                  16, 6,  3,  1,  12, 0,  16, 17, 18, 19, 12, 1,  12, 12, 11, 11,
-		                  0,  0,  0,  0,  13, 14, 10, 13, 11, 14, 14, 15, 8,  9,  10, 32};
+		int hit_in[64] = {1,  2, 3, 0, 0,  0, 7,  8,  9,  10, 11, 12, 13, 14, 15, 16, 0, 20, 21, 22, 12, 13, 11, 12, 0,  0,  8,  4,  12, 11, 12, 13,
+		                  16, 6, 3, 1, 12, 0, 16, 17, 18, 19, 12, 1,  12, 12, 11, 11, 0, 0,  0,  0,  13, 14, 10, 13, 11, 14, 14, 15, 8,  9,  10, 32};
 
 		unsigned int last_data;
 		unsigned int prev_data       = -1;
@@ -162,10 +160,7 @@ int validate_pattern(int ievtno, string file_name) {
 				// else DEBUG = 0;
 
 				if(DEBUG) {
-					cout << endl
-					     << " At evtcount " << evtcount
-					     << " payload_size=" << payload_size << " link_size=" << link_size
-					     << " and evt_size=" << evt_size << endl;
+					cout << endl << " At evtcount " << evtcount << " payload_size=" << payload_size << " link_size=" << link_size << " and evt_size=" << evt_size << endl;
 				}
 				// cout<< " Read data_int=0x"<<hex<<data_int[0]<<" and
 				// prev_data=0x"<<prev_data<<dec<<endl;
@@ -201,16 +196,14 @@ int validate_pattern(int ievtno, string file_name) {
 				if(ilink == 0 && link_head_counter == 3) {
 					trg_no = trg_no + (lsb_word << 16);
 					if(DEBUG)
-						cout << "  Event " << evtcount << " has timestamp 0x" << hex
-						     << trg_no << dec << endl;
+						cout << "  Event " << evtcount << " has timestamp 0x" << hex << trg_no << dec << endl;
 				}
 
 				// first DATA HEADER WORD contains VALID word + overall LINK SIZE in units
 				// of bites
 				if(link_head_counter == 1) {
 					if(DEBUG)
-						cout << "  starting link header check for ilink " << ilink
-						     << " of event " << evtcount << dec << endl;
+						cout << "  starting link header check for ilink " << ilink << " of event " << evtcount << dec << endl;
 
 					if(ilink < LINK_NO) {
 						low_word = link_size * 4;
@@ -268,36 +261,20 @@ int validate_pattern(int ievtno, string file_name) {
 				// report errors
 				if(lsb_word != low_word) {
 					if(DEBUG)
-						cout << " ==> link " << ilink
-						     << " has error for LSB-data of header word "
-						     << link_head_counter << ":  expected 0x" << hex << low_word
-						     << " but found 0x" << lsb_word << " for event " << dec
-						     << evtcount - 1 << hex << " at line 0x" << hex
-						     << setfill('0') << setw(8) << hexcount << dec << endl;
+						cout << " ==> link " << ilink << " has error for LSB-data of header word " << link_head_counter << ":  expected 0x" << hex << low_word << " but found 0x" << lsb_word
+						     << " for event " << dec << evtcount - 1 << hex << " at line 0x" << hex << setfill('0') << setw(8) << hexcount << dec << endl;
 					if(ilink != 5)
-						fout << " ==> link " << ilink
-						     << " has error for LSB-data of header word "
-						     << link_head_counter << ":  expected 0x" << hex << low_word
-						     << " but found 0x" << lsb_word << " for event " << dec
-						     << evtcount - 1 << hex << " at line 0x" << hex
-						     << setfill('0') << setw(8) << hexcount << dec << endl;
+						fout << " ==> link " << ilink << " has error for LSB-data of header word " << link_head_counter << ":  expected 0x" << hex << low_word << " but found 0x" << lsb_word
+						     << " for event " << dec << evtcount - 1 << hex << " at line 0x" << hex << setfill('0') << setw(8) << hexcount << dec << endl;
 				}
 
 				if(msb_word != high_word) {
 					if(DEBUG)
-						cout << " ==> link " << ilink
-						     << " has error for MSB-data of header word "
-						     << link_head_counter << ":  expected 0x" << hex << high_word
-						     << " but found 0x" << msb_word << " for event " << dec
-						     << evtcount - 1 << hex << " at line 0x" << hex
-						     << setfill('0') << setw(8) << hexcount << dec << endl;
+						cout << " ==> link " << ilink << " has error for MSB-data of header word " << link_head_counter << ":  expected 0x" << hex << high_word << " but found 0x" << msb_word
+						     << " for event " << dec << evtcount - 1 << hex << " at line 0x" << hex << setfill('0') << setw(8) << hexcount << dec << endl;
 					if(ilink != 5)
-						fout << " ==> link " << ilink
-						     << " has error for MSB-data of header word "
-						     << link_head_counter << ":  expected 0x" << hex << high_word
-						     << " but found 0x" << msb_word << " for event " << dec
-						     << evtcount - 1 << hex << " at line 0x" << hex
-						     << setfill('0') << setw(8) << hexcount << dec << endl;
+						fout << " ==> link " << ilink << " has error for MSB-data of header word " << link_head_counter << ":  expected 0x" << hex << high_word << " but found 0x" << msb_word
+						     << " for event " << dec << evtcount - 1 << hex << " at line 0x" << hex << setfill('0') << setw(8) << hexcount << dec << endl;
 				}
 			}  // end of check_header
 
@@ -308,36 +285,26 @@ int validate_pattern(int ievtno, string file_name) {
 					if(ilink == FIRST_LINK) {
 						start_prev_data = prev_data;
 						if(DEBUG)
-							cout << "  ilink is " << ilink
-							     << " ==> set start_prev_data as 0x" << hex
-							     << start_prev_data << dec << endl;
+							cout << "  ilink is " << ilink << " ==> set start_prev_data as 0x" << hex << start_prev_data << dec << endl;
 					} else if(ilink < (FIRST_LINK + LINK_NO)) {
 						prev_data = start_prev_data;
 						if(DEBUG)
-							cout << "  ilink is " << ilink
-							     << " ==> overwrite prev_data as 0x" << hex << prev_data
-							     << dec << endl;
+							cout << "  ilink is " << ilink << " ==> overwrite prev_data as 0x" << hex << prev_data << dec << endl;
 					}
 				}
 
 				payload_counter++;
 
 				if(DEBUG)
-					cout << "  payload_counter = " << payload_counter
-					     << " has data_int = 0x" << hex << data_int[0] << dec << endl;
+					cout << "  payload_counter = " << payload_counter << " has data_int = 0x" << hex << data_int[0] << dec << endl;
 
-				if(prev_data ==
-				   -1) {  // this is the very first payload word (expected to be zero)
+				if(prev_data == -1) {  // this is the very first payload word (expected to be zero)
 					prev_data = data_int[0];
 					if(DEBUG || prev_data != 0)
-						cout << "   at evtcount " << evtcount
-						     << ": UNUSUAL starting counter of 0x" << hex << data_int[0]
-						     << dec << endl;
+						cout << "   at evtcount " << evtcount << ": UNUSUAL starting counter of 0x" << hex << data_int[0] << dec << endl;
 				} else {  // prev_data has been set to previous payload counter
 					if(DEBUG)
-						cout << "  previous prev_data at evtcount " << evtcount
-						     << ": data_int = 0x" << hex << data_int[0] << dec
-						     << " and prev_data = 0x" << hex << prev_data << dec << endl;
+						cout << "  previous prev_data at evtcount " << evtcount << ": data_int = 0x" << hex << data_int[0] << dec << " and prev_data = 0x" << hex << prev_data << dec << endl;
 					if(data_int[0] != prev_data + 1) {
 						is_payload_error = 1;
 						prev_data        = prev_data + 1;
@@ -349,21 +316,13 @@ int validate_pattern(int ievtno, string file_name) {
 				if(is_payload_error) {
 					is_payload_error = 0;
 					if(DEBUG) {
-						cout << "  bad payload word 0x" << hex << data_int[0] << dec
-						     << " at word count " << payload_counter << " of "
-						     << word_in_payload << " for event " << evtcount - 1
-						     << " tag " << evtcount + evt_offset - 1 << "(0x" << hex
-						     << evtcount + evt_offset - 1 << dec << "): expected 0x"
-						     << hex << (prev_data) << dec << " at line 0x" << hex
-						     << setfill('0') << setw(8) << hexcount << dec << endl;
+						cout << "  bad payload word 0x" << hex << data_int[0] << dec << " at word count " << payload_counter << " of " << word_in_payload << " for event " << evtcount - 1 << " tag "
+						     << evtcount + evt_offset - 1 << "(0x" << hex << evtcount + evt_offset - 1 << dec << "): expected 0x" << hex << (prev_data) << dec << " at line 0x" << hex << setfill('0')
+						     << setw(8) << hexcount << dec << endl;
 					}
 
-					fout << "  bad payload word 0x" << hex << data_int[0] << dec
-					     << " at word count " << payload_counter << " of "
-					     << word_in_payload << " for event " << evtcount - 1 << " tag "
-					     << evtcount + evt_offset - 1 << "(0x" << hex
-					     << evtcount + evt_offset - 1 << dec << "): expected 0x" << hex
-					     << (prev_data) << dec << " at line 0x" << hex << setfill('0')
+					fout << "  bad payload word 0x" << hex << data_int[0] << dec << " at word count " << payload_counter << " of " << word_in_payload << " for event " << evtcount - 1 << " tag "
+					     << evtcount + evt_offset - 1 << "(0x" << hex << evtcount + evt_offset - 1 << dec << "): expected 0x" << hex << (prev_data) << dec << " at line 0x" << hex << setfill('0')
 					     << setw(8) << hexcount << dec << endl;
 				}
 
@@ -410,8 +369,7 @@ int validate_pattern(int ievtno, string file_name) {
 		}  // end of while (!fin.eof()) {
 
 		cout << endl;
-		cout << "Processed " << evtcount << " events out of " << ievtno << " in file "
-		     << file_name << endl;
+		cout << "Processed " << evtcount << " events out of " << ievtno << " in file " << file_name << endl;
 
 	}  // end of if (!fin.is_open()) {
 

@@ -56,11 +56,9 @@ int converter(string run_num) {
 
 	filein.open(file_in.c_str(), ios::binary);
 
-	string file_header =
-	    std::string(getenv("OTSDAQ_DATA")) + "/" + "header_" + run_num + ".txt";
+	string file_header = std::string(getenv("OTSDAQ_DATA")) + "/" + "header_" + run_num + ".txt";
 	fileheader.open(file_header.c_str());
-	string file_payload =
-	    std::string(getenv("OTSDAQ_DATA")) + "/" + "payload_" + run_num + ".txt";
+	string file_payload = std::string(getenv("OTSDAQ_DATA")) + "/" + "payload_" + run_num + ".txt";
 	filepayload.open(file_payload.c_str());
 
 	while(true) {

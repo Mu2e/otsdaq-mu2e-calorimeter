@@ -212,26 +212,15 @@ int main(int argc, char** argv) {
 			         << "Packet Received!" << std::endl;
 
 			addr_len = sizeof their_addr;
-			if((totalNumberOfBytes = recvfrom(sockfd,
-			                                  buff,
-			                                  MAXBUFLEN - 1,
-			                                  0,
-			                                  (struct sockaddr*)&their_addr,
-			                                  &addr_len)) == -1) {
+			if((totalNumberOfBytes = recvfrom(sockfd, buff, MAXBUFLEN - 1, 0, (struct sockaddr*)&their_addr, &addr_len)) == -1) {
 				perror("recvfrom");
 				exit(1);
 			}
 
 			__COUT__ << ":::"
-			         << "hw: got packet from "
-			         << inet_ntop(their_addr.ss_family,
-			                      get_in_addr((struct sockaddr*)&their_addr),
-			                      s,
-			                      sizeof s)
-			         << std::endl;
+			         << "hw: got packet from " << inet_ntop(their_addr.ss_family, get_in_addr((struct sockaddr*)&their_addr), s, sizeof s) << std::endl;
 			__COUT__ << ":::"
-			         << "hw: packet total is " << totalNumberOfBytes << " bytes long"
-			         << std::endl;
+			         << "hw: packet total is " << totalNumberOfBytes << " bytes long" << std::endl;
 			//			__COUT__ << ":::" << "hw: packet contents \n";
 			//			for(int i=0; i<totalNumberOfBytes; i++)
 			//			{
@@ -246,16 +235,12 @@ int main(int argc, char** argv) {
 			// treat as stacked packets
 			handlerIndex = 0;
 
-			while(handlerIndex < totalNumberOfBytes &&
-			      (numberOfBytes = (buff[handlerIndex + 0]
-			                            ? 18
-			                            : 10)) &&  // assume write is 18 and read is 10
+			while(handlerIndex < totalNumberOfBytes && (numberOfBytes = (buff[handlerIndex + 0] ? 18 : 10)) &&  // assume write is 18 and read is 10
 			      handlerIndex + numberOfBytes <= totalNumberOfBytes) {
 				__COUT__ << ":::"
 				         << "hw: packet byte index " << handlerIndex << std::endl;
 				__COUT__ << ":::"
-				         << "hw: packet is " << numberOfBytes << " bytes long"
-				         << std::endl;
+				         << "hw: packet is " << numberOfBytes << " bytes long" << std::endl;
 
 				for(int i = 0; i < numberOfBytes; i++) {
 					if((i - RX_ADDR_OFFSET) % 8 == 0)
@@ -267,7 +252,7 @@ int main(int argc, char** argv) {
 				__PRINTF__("\n");
 
 				// handle packet
-				if(numberOfBytes == 10 &&  // size is valid (type, size, 8-byte address)
+				if(numberOfBytes == 10 &&        // size is valid (type, size, 8-byte address)
 				   buff[handlerIndex + 0] == 0)  // read
 				{
 					uint64_t addr;
@@ -278,40 +263,30 @@ int main(int argc, char** argv) {
 					__PRINTF__(" 0x%16.16lX \n", addr);
 
 					// setup response packet based on address
-					buff[handlerIndex + 0] = 0;  // read type
-					buff[handlerIndex + 1] =
-					    sequence++;  // 1-byte sequence id increments and wraps
+					buff[handlerIndex + 0] = 0;           // read type
+					buff[handlerIndex + 1] = sequence++;  // 1-byte sequence id increments and wraps
 
 					switch(addr)  // define address space
 					{
 					case 0x1001:
-						memcpy((void*)&buff[handlerIndex + TX_DATA_OFFSET],
-						       (void*)&data_gen_cnt,
-						       8);
+						memcpy((void*)&buff[handlerIndex + TX_DATA_OFFSET], (void*)&data_gen_cnt, 8);
 						__COUT__ << std::hex << ":::"
 						         << "Read data count: 0x" << data_gen_cnt << endl;
 						break;
 					case 0x1002:
-						memcpy((void*)&buff[handlerIndex + TX_DATA_OFFSET],
-						       (void*)&data_gen_rate,
-						       8);
+						memcpy((void*)&buff[handlerIndex + TX_DATA_OFFSET], (void*)&data_gen_rate, 8);
 						__COUT__ << std::hex << ":::"
 						         << "Read data rate: 0x" << data_gen_rate << endl;
 						break;
 					case 0x1003:
 						memset((void*)&buff[handlerIndex + TX_DATA_OFFSET + 1], 0, 7);
-						memcpy((void*)&buff[handlerIndex + TX_DATA_OFFSET],
-						       (void*)&led_register,
-						       1);
+						memcpy((void*)&buff[handlerIndex + TX_DATA_OFFSET], (void*)&led_register, 1);
 						__COUT__ << std::hex << ":::"
-						         << "Read LED register: 0x" << (unsigned int)led_register
-						         << endl;
+						         << "Read LED register: 0x" << (unsigned int)led_register << endl;
 						break;
 					case 0x0000000100000009:
 						memset((void*)&buff[handlerIndex + TX_DATA_OFFSET + 1], 0, 7);
-						memcpy((void*)&buff[handlerIndex + TX_DATA_OFFSET],
-						       (void*)&dataEnabled,
-						       1);
+						memcpy((void*)&buff[handlerIndex + TX_DATA_OFFSET], (void*)&dataEnabled, 1);
 						__COUT__ << std::hex << ":::"
 						         << "Read data enable: 0x" << dataEnabled << endl;
 						break;
@@ -321,22 +296,13 @@ int main(int argc, char** argv) {
 					}
 
 					packetSz = TX_DATA_OFFSET + 8;  // only response with 1 QW
-					if((numberOfBytes = sendto(sockfd,
-					                           buff,
-					                           packetSz,
-					                           0,
-					                           (struct sockaddr*)&their_addr,
-					                           sizeof(struct sockaddr_storage))) == -1) {
+					if((numberOfBytes = sendto(sockfd, buff, packetSz, 0, (struct sockaddr*)&their_addr, sizeof(struct sockaddr_storage))) == -1) {
 						perror("hw: sendto");
 						exit(1);
 					}
-					__PRINTF__("hw: sent %d bytes back. sequence=%d\n",
-					           numberOfBytes,
-					           (unsigned char)buff[handlerIndex + 1]);
-				} else if(numberOfBytes >= 18 &&
-				          (numberOfBytes - 2) % 8 ==
-				              0 &&  // size is valid (multiple of 8 data)
-				          buff[handlerIndex + 0] == 1)  // write
+					__PRINTF__("hw: sent %d bytes back. sequence=%d\n", numberOfBytes, (unsigned char)buff[handlerIndex + 1]);
+				} else if(numberOfBytes >= 18 && (numberOfBytes - 2) % 8 == 0 &&  // size is valid (multiple of 8 data)
+				          buff[handlerIndex + 0] == 1)                            // write
 				{
 					uint64_t addr;
 					memcpy((void*)&addr, (void*)&buff[handlerIndex + RX_ADDR_OFFSET], 8);
@@ -348,27 +314,20 @@ int main(int argc, char** argv) {
 					switch(addr)  // define address space
 					{
 					case 0x1001:
-						memcpy((void*)&data_gen_cnt,
-						       (void*)&buff[handlerIndex + RX_DATA_OFFSET],
-						       8);
+						memcpy((void*)&data_gen_cnt, (void*)&buff[handlerIndex + RX_DATA_OFFSET], 8);
 						__COUT__ << std::hex << ":::"
 						         << "Write data count: 0x" << data_gen_cnt << endl;
 						count = 0;  // reset count
 						break;
 					case 0x1002:
-						memcpy((void*)&data_gen_rate,
-						       (void*)&buff[handlerIndex + RX_DATA_OFFSET],
-						       8);
+						memcpy((void*)&data_gen_rate, (void*)&buff[handlerIndex + RX_DATA_OFFSET], 8);
 						__COUT__ << std::hex << ":::"
 						         << "Write data rate: 0x" << data_gen_rate << endl;
 						break;
 					case 0x1003:
-						memcpy((void*)&led_register,
-						       (void*)&buff[handlerIndex + RX_DATA_OFFSET],
-						       1);
+						memcpy((void*)&led_register, (void*)&buff[handlerIndex + RX_DATA_OFFSET], 1);
 						__COUT__ << std::hex << ":::"
-						         << "Write LED register: 0x" << (unsigned int)led_register
-						         << endl;
+						         << "Write LED register: 0x" << (unsigned int)led_register << endl;
 						// show "LEDs"
 						__COUT__ << "\n\n";
 						for(int l = 0; l < 8; ++l)
@@ -378,8 +337,7 @@ int main(int argc, char** argv) {
 					case 0x0000000100000006: {
 						uint32_t           ip;
 						struct sockaddr_in socketAddress;
-						memcpy(
-						    (void*)&ip, (void*)&buff[handlerIndex + RX_DATA_OFFSET], 4);
+						memcpy((void*)&ip, (void*)&buff[handlerIndex + RX_DATA_OFFSET], 4);
 						ip = htonl(ip);
 						memcpy((void*)&socketAddress.sin_addr, (void*)&ip, 4);
 						streamToIP = inet_ntoa(socketAddress.sin_addr);
@@ -393,18 +351,14 @@ int main(int argc, char** argv) {
 						break;
 					case 0x0000000100000008: {
 						// unsigned int myport;
-						memcpy((void*)&streamToPort,
-						       (void*)&buff[handlerIndex + RX_DATA_OFFSET],
-						       4);
+						memcpy((void*)&streamToPort, (void*)&buff[handlerIndex + RX_DATA_OFFSET], 4);
 						__COUT__ << std::hex << ":::"
-						         << "Stream destination port: 0x" << streamToPort << dec
-						         << " " << streamToPort << endl;
+						         << "Stream destination port: 0x" << streamToPort << dec << " " << streamToPort << endl;
 
 						if(sendSockfd != -1)
 							close(sendSockfd);
 						sendSockfd = -1;
-						sendSockfd =
-						    makeSocket(streamToIP.c_str(), streamToPort, ai_addr);  // p);
+						sendSockfd = makeSocket(streamToIP.c_str(), streamToPort, ai_addr);  // p);
 						if(sendSockfd != -1) {
 							__COUT__ << "************************************************"
 							            "********"
@@ -413,8 +367,7 @@ int main(int argc, char** argv) {
 							            "********"
 							         << endl;
 							__COUT__ << std::hex << ":::"
-							         << "Streaming to ip: " << streamToIP << " port: 0x"
-							         << streamToPort << endl;
+							         << "Streaming to ip: " << streamToIP << " port: 0x" << streamToPort << endl;
 							__COUT__ << "************************************************"
 							            "********"
 							         << endl;
@@ -423,15 +376,12 @@ int main(int argc, char** argv) {
 							         << endl;
 						} else
 							__COUT__ << std::hex << ":::"
-							         << "Failed to create streaming socket to ip: "
-							         << streamToIP << " port: 0x" << streamToPort << endl;
+							         << "Failed to create streaming socket to ip: " << streamToIP << " port: 0x" << streamToPort << endl;
 					}
 
 					break;
 					case 0x0000000100000009:
-						memcpy((void*)&dataEnabled,
-						       (void*)&buff[handlerIndex + RX_DATA_OFFSET],
-						       1);
+						memcpy((void*)&dataEnabled, (void*)&buff[handlerIndex + RX_DATA_OFFSET], 1);
 						__COUT__ << std::hex << ":::"
 						         << "Write data enable: 0x" << (int)dataEnabled << endl;
 						count = 0;  // reset count
@@ -444,8 +394,7 @@ int main(int argc, char** argv) {
 					__COUT__ << std::hex << ":::"
 					         << "ERROR: The formatting of the string received is wrong! "
 					            "Number of bytes: "
-					         << numberOfBytes << " Read/Write " << buff[handlerIndex + 0]
-					         << std::endl;
+					         << numberOfBytes << " Read/Write " << buff[handlerIndex + 0] << std::endl;
 
 				handlerIndex += numberOfBytes;
 			}
@@ -469,16 +418,13 @@ int main(int argc, char** argv) {
 				{
 					// if(count%0x100000 == 0)
 					__COUT__ << std::hex << ":::"
-					         << "Count: " << count << " rate: " << data_gen_rate
-					         << " packet-counter: " << data_gen_cnt << std::endl;
+					         << "Count: " << count << " rate: " << data_gen_rate << " packet-counter: " << data_gen_cnt << std::endl;
 					__COUT__ << std::hex << ":::"
 					         << "Send Burst at count:" << count << std::endl;
 					// send a packet
-					buff[0] =
-					    wasDataEnable ? 2 : 1;  // type := burst middle (2) or first (1)
-					buff[1] = sequence++;       // 1-byte sequence id increments and wraps
-					memcpy((void*)&buff[TX_DATA_OFFSET],
-					       (void*)&count,
+					buff[0] = wasDataEnable ? 2 : 1;  // type := burst middle (2) or first (1)
+					buff[1] = sequence++;             // 1-byte sequence id increments and wraps
+					memcpy((void*)&buff[TX_DATA_OFFSET], (void*)&count,
 					       8);  // make data counter
 					// memcpy((void *)&buff[TX_DATA_OFFSET],(void *)&data_gen_cnt,8);
 					// //make data counter
@@ -516,8 +462,7 @@ int main(int argc, char** argv) {
 				// send a packet
 				buff[0] = 3;           // type := burst last (3)
 				buff[1] = sequence++;  // 1-byte sequence id increments and wraps
-				memcpy((void*)&buff[TX_DATA_OFFSET],
-				       (void*)&count,
+				memcpy((void*)&buff[TX_DATA_OFFSET], (void*)&count,
 				       8);  // make data counter
 
 				packetSz = TX_DATA_OFFSET + 8;  // only response with 1 QW

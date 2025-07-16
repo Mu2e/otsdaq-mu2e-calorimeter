@@ -69,10 +69,8 @@ ots::WFViewer::WFViewer(fhicl::ParameterSet const& ps)
     : art::EDAnalyzer(ps)
     , prescale_(ps.get<int>("prescale"))
     , current_run_(0)
-    , num_x_plots_(
-          ps.get<std::size_t>("num_x_plots", std::numeric_limits<std::size_t>::max()))
-    , num_y_plots_(
-          ps.get<std::size_t>("num_y_plots", std::numeric_limits<std::size_t>::max()))
+    , num_x_plots_(ps.get<std::size_t>("num_x_plots", std::numeric_limits<std::size_t>::max()))
+    , num_y_plots_(ps.get<std::size_t>("num_y_plots", std::numeric_limits<std::size_t>::max()))
     , fragment_type_labels_(ps.get<std::vector<std::string>>("fragment_type_labels"))
     , fragment_ids_(ps.get<std::vector<artdaq::Fragment::fragment_id_t>>("fragment_ids"))
     , graphs_(fragment_ids_.size())
@@ -81,8 +79,7 @@ ots::WFViewer::WFViewer(fhicl::ParameterSet const& ps)
     , writeOutput_(ps.get<bool>("write_to_file", false)) {
 	__COUT__ << "WFViewer CONSTRUCTOR BEGIN!!!!" << std::endl;
 	prescale_ = 1;
-	if(num_x_plots_ == std::numeric_limits<std::size_t>::max() ||
-	   num_y_plots_ == std::numeric_limits<std::size_t>::max()) {
+	if(num_x_plots_ == std::numeric_limits<std::size_t>::max() || num_y_plots_ == std::numeric_limits<std::size_t>::max()) {
 		switch(fragment_ids_.size()) {
 		case 1:
 			num_x_plots_ = num_y_plots_ = 1;
@@ -107,8 +104,7 @@ ots::WFViewer::WFViewer(fhicl::ParameterSet const& ps)
 			num_y_plots_ = 2;
 			break;
 		default:
-			num_x_plots_ = num_y_plots_ =
-			    static_cast<std::size_t>(ceil(sqrt(fragment_type_labels_.size())));
+			num_x_plots_ = num_y_plots_ = static_cast<std::size_t>(ceil(sqrt(fragment_type_labels_.size())));
 		}
 	}
 
@@ -124,9 +120,7 @@ ots::WFViewer::WFViewer(fhicl::ParameterSet const& ps)
 	// many of each there are
 
 	sort(fragment_type_labels_.begin(), fragment_type_labels_.end());
-	fragment_type_labels_.erase(
-	    unique(fragment_type_labels_.begin(), fragment_type_labels_.end()),
-	    fragment_type_labels_.end());
+	fragment_type_labels_.erase(unique(fragment_type_labels_.begin(), fragment_type_labels_.end()), fragment_type_labels_.end());
 
 	gStyle->SetOptStat("irm");
 	gStyle->SetMarkerStyle(22);
@@ -145,14 +139,8 @@ double ots::WFViewer::calcmean(const float* data) {
 		mean += data[ii];
 	}
 	mean /= 10;
-	std::cout << "WFViewer mean is " << mean << " data[0] is " << data[0]
-	          << " data[1] is " << data[1] << " 2=" << data[2] << " 3=" << data[3]
-	          << std::endl
-	          << std::endl;
-	std::cout << "WFViewer mean is " << mean << " data[15997] is " << data[15997]
-	          << " data[15998] is " << data[15998] << " 2=" << data[15999]
-	          << " 3=" << data[15999] << std::endl
-	          << std::endl;
+	std::cout << "WFViewer mean is " << mean << " data[0] is " << data[0] << " data[1] is " << data[1] << " 2=" << data[2] << " 3=" << data[3] << std::endl << std::endl;
+	std::cout << "WFViewer mean is " << mean << " data[15997] is " << data[15997] << " data[15998] is " << data[15998] << " 2=" << data[15999] << " 3=" << data[15999] << std::endl << std::endl;
 	//"Hex[0]:" << std::hex << lp[0] << " [1]:" << std::hex << lp[1] << " [2]:" <<
 	// std::hex << lp[2] << " [3]:" << std::hex << lp[3] << " [4]:" << std::hex <<
 	// lp[4] << std::endl << std::endl << std::endl;
@@ -203,8 +191,7 @@ void ots::WFViewer::analyze(art::Event const& e) {
 	// string, then plot, for the Nth event, a graph of the ADC values
 	// across all channels in each board_id / fragment_id combo
 
-	artdaq::Fragment::sequence_id_t expected_sequence_id =
-	    std::numeric_limits<artdaq::Fragment::sequence_id_t>::max();
+	artdaq::Fragment::sequence_id_t expected_sequence_id = std::numeric_limits<artdaq::Fragment::sequence_id_t>::max();
 
 	//  for (std::size_t i = 0; i < fragments.size(); ++i) {
 	for(const auto& frag : fragments) {
@@ -216,16 +203,12 @@ void ots::WFViewer::analyze(art::Event const& e) {
 		//  const auto& frag( fragments[i] );  // Basically a shorthand
 
 		//    if (i == 0)
-		if(expected_sequence_id ==
-		   std::numeric_limits<artdaq::Fragment::sequence_id_t>::max()) {
+		if(expected_sequence_id == std::numeric_limits<artdaq::Fragment::sequence_id_t>::max()) {
 			expected_sequence_id = frag.sequenceID();
 		}
 
 		if(expected_sequence_id != frag.sequenceID()) {
-			TLOG(TLVL_WARNING, "WFViewer")
-			    << "Warning in WFViewer: expected fragment with sequence ID "
-			    << expected_sequence_id << ", received one with sequence ID "
-			    << frag.sequenceID();
+			TLOG(TLVL_WARNING, "WFViewer") << "Warning in WFViewer: expected fragment with sequence ID " << expected_sequence_id << ", received one with sequence ID " << frag.sequenceID();
 		}
 
 		FragmentType fragtype = static_cast<FragmentType>(frag.type());
@@ -244,8 +227,7 @@ void ots::WFViewer::analyze(art::Event const& e) {
 			drPtr.reset(new DataGenFragment(frag));
 			break;
 		default:
-			throw cet::exception("Error in WFViewer: unknown fragment type supplied: " +
-			                     fragmentTypeToString(fragtype));
+			throw cet::exception("Error in WFViewer: unknown fragment type supplied: " + fragmentTypeToString(fragtype));
 		}
 
 		artdaq::Fragment::fragment_id_t fragment_id = frag.fragmentID();
@@ -255,15 +237,9 @@ void ots::WFViewer::analyze(art::Event const& e) {
 		// create it
 
 		if(!histograms_[ind]) {
-			histograms_[ind] = std::unique_ptr<TH1D>(
-			    new TH1D(Form("Fragment_%d_hist", fragment_id),
-			             "Title Dennis",
-			             300,
-			             (Double_t)0.0,
-			             (Double_t)std::numeric_limits<uint8_t>::max()));
+			histograms_[ind] = std::unique_ptr<TH1D>(new TH1D(Form("Fragment_%d_hist", fragment_id), "Title Dennis", 300, (Double_t)0.0, (Double_t)std::numeric_limits<uint8_t>::max()));
 
-			histograms_[ind]->SetTitle(Form(
-			    "Frag %d, Type %s", fragment_id, fragmentTypeToString(fragtype).c_str()));
+			histograms_[ind]->SetTitle(Form("Frag %d, Type %s", fragment_id, fragmentTypeToString(fragtype).c_str()));
 			histograms_[ind]->GetXaxis()->SetTitle("Vector Mean");
 		}
 
@@ -278,18 +254,15 @@ void ots::WFViewer::analyze(art::Event const& e) {
 			{
 				auto   val      = drPtr->dataBegin();
 				double the_mean = calcmean(val->data);
-				std::cout << __COUT_HDR_FL__ << "DJN WFViewer: Putting datapoint "
-				          << the_mean << " into histogram" << std::endl;
-				TLOG(TLVL_INFO, "WFViewer")
-				    << "Putting datapoint " << the_mean << " into histogram";
+				std::cout << __COUT_HDR_FL__ << "DJN WFViewer: Putting datapoint " << the_mean << " into histogram" << std::endl;
+				TLOG(TLVL_INFO, "WFViewer") << "Putting datapoint " << the_mean << " into histogram";
 				// histograms_[ind]->Fill( static_cast<uint8_t>(val->data[0]) );
 				histograms_[ind]->Fill(the_mean);
 			}
 			break;
 
 		default:
-			throw cet::exception("Error in WFViewer: unknown fragment type supplied: " +
-			                     fragmentTypeToString(fragtype));
+			throw cet::exception("Error in WFViewer: unknown fragment type supplied: " + fragmentTypeToString(fragtype));
 		}
 
 		if(evt_cntr % prescale_ - 1 && prescale_ > 1) {
