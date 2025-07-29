@@ -21,6 +21,8 @@
 #include "artdaq-core-mu2e/Overlays/Decoders/CalorimeterDataDecoder.hh"
 #include "artdaq-core-mu2e/Overlays/FragmentType.hh"
 
+#include "Offline/DAQ/inc/CaloDAQUtilities.hh"
+
 #include "cetlib_except/exception.h"
 
 #include <iomanip>
@@ -46,8 +48,7 @@ class CaloDataVerifier : public art::EDFilter {
 	bool         filter(art::Event& e) override;
 	virtual bool endRun(art::Run& run) override;
 
-	artdaq::Fragments getFragments(art::Event& event);
-	void              processCaloData(mu2e::DTCEventFragment& eventFragment, std::unique_ptr<std::vector<mu2e::CalorimeterDataDecoder>> const& caloDecoderColl);
+	void processCaloData(mu2e::DTCEventFragment& eventFragment, std::unique_ptr<std::vector<mu2e::CalorimeterDataDecoder>> const& caloDecoderColl);
 
 	bool checkAndUpdateDTCEWT(const DTCLib::DTC_SubEvent& subevent);
 	bool checkAndUpdateROCEWT(const DTCLib::DTC_DataBlock& dataBlock);
@@ -71,6 +72,8 @@ class CaloDataVerifier : public art::EDFilter {
 	bool                  stopOnFailure_;
 	bool                  checkEWTs_;
 	DTCLib::DTC_Subsystem subsystem_;
+
+	mu2e::CaloDAQUtilities caloDAQUtil_;
 
 	size_t nCaloEvents;
 	size_t nCaloHits;
@@ -114,7 +117,8 @@ mu2e::CaloDataVerifier::CaloDataVerifier(const art::EDFilter::Table<Config>& con
     , data_type_(config().data_type())
     , metrics_reporting_level_(config().metrics_level())
     , stopOnFailure_(config().stop_on_failure())
-    , checkEWTs_(config().check_ewts()) {
+    , checkEWTs_(config().check_ewts())
+    , caloDAQUtil_("CaloDataVerifier") {
 	if(config().subsystem_override() == "calo") {
 		subsystem_ = DTCLib::DTC_Subsystem::DTC_Subsystem_Calorimeter;
 	} else if(config().subsystem_override() == "tracker") {
@@ -150,7 +154,7 @@ bool mu2e::CaloDataVerifier::filter(art::Event& event) {
 	event_failed_BeginMarker = 0;
 	event_failed_LastMarker  = 0;
 
-	artdaq::Fragments fragments = getFragments(event);
+	artdaq::Fragments fragments = caloDAQUtil_.getFragments(event);
 	TLOG(TLVL_DEBUG + 6) << "Iterating through " << fragments.size() << " fragments\n";
 	for(const auto& frag : fragments) {
 		mu2e::DTCEventFragment eventFragment(frag);
@@ -211,42 +215,6 @@ bool mu2e::CaloDataVerifier::endRun(art::Run&) {
 	}
 
 	return true;
-}
-
-artdaq::Fragments mu2e::CaloDataVerifier::getFragments(art::Event& event) {
-	artdaq::Fragments    fragments;
-	artdaq::FragmentPtrs containerFragments;
-
-	std::vector<art::Handle<artdaq::Fragments>> fragmentHandles;
-	fragmentHandles = event.getMany<std::vector<artdaq::Fragment>>();
-
-	TLOG(TLVL_DEBUG + 6) << "Iterating through " << fragmentHandles.size() << " fragment handles\n";
-	for(const auto& handle : fragmentHandles) {
-		if(!handle.isValid() || handle->empty()) {
-			continue;
-		}
-
-		if(handle->front().type() == artdaq::Fragment::ContainerFragmentType) {
-			for(const auto& cont : *handle) {
-				artdaq::ContainerFragment contf(cont);
-				if(contf.fragment_type() != mu2e::FragmentType::DTCEVT) {
-					break;
-				}
-
-				for(size_t ii = 0; ii < contf.block_count(); ++ii) {
-					containerFragments.push_back(contf[ii]);
-					fragments.push_back(*containerFragments.back());
-				}
-			}
-		} else {
-			if(handle->front().type() == mu2e::FragmentType::DTCEVT) {
-				for(auto frag : *handle) {
-					fragments.emplace_back(frag);
-				}
-			}
-		}
-	}
-	return fragments;
 }
 
 void mu2e::CaloDataVerifier::processCaloData(mu2e::DTCEventFragment& eventFragment, std::unique_ptr<std::vector<mu2e::CalorimeterDataDecoder>> const& caloDecoderColl) {
