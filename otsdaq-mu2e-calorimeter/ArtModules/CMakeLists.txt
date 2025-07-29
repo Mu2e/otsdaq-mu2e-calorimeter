@@ -12,6 +12,25 @@ cet_build_plugin(CaloDataVerifier art::module LIBRARIES REG
  artdaq-core-mu2e::Data_dict
  artdaq-core-mu2e::Overlays
  artdaq::DAQdata
+ Offline::DAQ
+)
+
+cet_build_plugin(BaselineAnalyzer art::module
+    REG_SOURCE BaselineAnalyzer_module.cc
+    LIBRARIES REG
+     artdaq-core-mu2e::Data
+     artdaq-core-mu2e::Data_dict
+     artdaq-core-mu2e::Overlays
+     artdaq::DAQdata
+     art_root_io::TFileService_service
+     Offline::DataProducts
+     Offline::DAQ
+     Offline::CaloConditions
+     Offline::ProditionsService
+     Offline::RecoDataProducts
+     ROOT::Hist
+     ROOT::Tree
+     THMu2eCaloDisk
 )
 
 cet_build_plugin(CaloDataAnalyzer art::module
