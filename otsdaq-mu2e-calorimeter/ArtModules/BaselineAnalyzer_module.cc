@@ -51,7 +51,7 @@
 #include "TTree.h"
 #include "art_root_io/TFileService.h"
 
-#include "Offline/CaloVisualizer/THMu2eCaloDisk.h"
+#include "Offline/CaloVisualizer/inc/THMu2eCaloDisk.hh"
 
 namespace mu2e {
 class BaselineAnalyzer : public art::EDAnalyzer {
