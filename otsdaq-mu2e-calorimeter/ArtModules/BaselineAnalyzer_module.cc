@@ -149,6 +149,8 @@ mu2e::BaselineAnalyzer::BaselineAnalyzer(const art::EDAnalyzer::Table<Config>& c
 	g_thresholds->SetMarkerColor(kRed);
 	h2_disk0 = tfs->makeAndRegister<mu2e::THMu2eCaloDisk>("h2_disk0", "Disk 0", "h2_disk0", "Disk 0", 0);
 	h2_disk1 = tfs->makeAndRegister<mu2e::THMu2eCaloDisk>("h2_disk1", "Disk 1", "h2_disk1", "Disk 1", 1);
+	h2_disk0->SetCombineMode(mu2e::ECombineMode::kAverage);
+	h2_disk1->SetCombineMode(mu2e::ECombineMode::kAverage);
 }
 
 void mu2e::BaselineAnalyzer::analyze(art::Event const& event) {
@@ -184,9 +186,6 @@ void mu2e::BaselineAnalyzer::analyze(art::Event const& event) {
 
 void mu2e::BaselineAnalyzer::endJob() {
 	FitHistograms();
-	// art::ServiceHandle<art::TFileService> tfs;
-	// tfs->file().WriteTObject(h2_disk0, "h2_disk0");
-	// tfs->file().WriteTObject(h2_disk1, "h2_disk1");
 }
 
 void mu2e::BaselineAnalyzer::FitHistograms() {
@@ -325,9 +324,6 @@ void mu2e::BaselineAnalyzer::FitHistograms() {
 	for(auto pair : unprecise_map) {
 		std::cout << "Board " << pair.first << " Channel " << pair.second << "\n";
 	}
-
-	std::cout << "Disk 0: " << h2_disk0->GetEntries() << " entries\n";
-	std::cout << "Disk 1: " << h2_disk1->GetEntries() << " entries\n";
 }
 
 DEFINE_ART_MODULE(mu2e::BaselineAnalyzer)
