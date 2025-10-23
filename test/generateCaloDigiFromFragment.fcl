@@ -27,10 +27,6 @@ services : {
 physics : {
 
   filters : {
-    prescaler : {
-      module_type : EventPrescaler
-      prescaleFactor : 100
-    }
 
     caloVerifier : {
       module_type         : CaloDataVerifier
@@ -54,21 +50,28 @@ physics : {
       makeSTMFrag  : 0
     }
 
-    CaloDigi : {
-      module_type : CaloDigiFromFragments
-      dataType : 1
-      diagLevel : 0
-      caloTag : "genFrags"
-      useOfflineID : true
-    }
-
-    CaloDigiIERC : {
-      module_type : CaloDigiFromFragments
-      dataType : 1
-      diagLevel : 0
-      caloTag : "genFrags"
+    CaloDigis : {
+      module_type : CaloDigisFromDTCEvents
+      dataType : 0
+      diagLevel : 1
+      #caloTag : "genFrags"
       useOfflineID : false
       useDTCROCID : true
+    }
+
+    CaloHits : {
+      module_type : CaloHitsFromDTCEvents
+      dataType : 0
+      diagLevel : 1
+      digiSampling : 5
+      deltaTPulses : 6
+      nPEperMeV : 16
+      noiseLevelMeV : 2
+      nSigmaNoise : 1
+      hitEDepMax : 10000
+      hitEDepMin : 0
+      caphriEDepMax : 10000
+      caphriEDepMin : 0
     }
 
 
@@ -88,12 +91,8 @@ physics : {
   t0 : [caloVerifier]
 
 
-  t1 : [ genFrags , CaloDigiIERC ]
-  e1 : [ outfile, caloAnalyzer ]
-
-
-  t2 : [ genFragsSidet ]
-  e2 : [ caloAnalyzerSidet ]
+  t1 : [ CaloDigis , CaloHits ]
+  e1 : [ outfile ]
 
   trigger_paths  : [t1]
   end_paths      : [e1]
@@ -102,7 +101,7 @@ physics : {
 outputs:  {
    outfile :  {
       module_type   :   RootOutput
-      fileName      :   "digis_from_frags_debug.art"
+      fileName      :   "digis_hits_from_dtcevents.art"
 
       outputCommands: [
          "drop *_*_*_*",
