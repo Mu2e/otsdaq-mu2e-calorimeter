@@ -33,7 +33,6 @@ cet_build_plugin(CaloiercAnalyzer art::module
       art_root_io::TFileService_service
       Offline::RecoDataProducts
       Offline::DAQ
-      Offline::Mu2eKinKal
       ROOT::Hist
       ROOT::Tree
       ROOT::Core
