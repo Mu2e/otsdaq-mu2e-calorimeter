@@ -82,6 +82,12 @@ std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(
 std::string SubsystemCalorimeterParametersTable::getStructureStatusAsJSON(
 	const ConfigurationManager* cfgMgr) const
 {
+
+	// 
+	// hardwareJson: val
+	// offlineTable1 : csval -- mapOfflineTables["cal.channelstatus"]
+	//
+	
 	std::vector<std::pair<std::string, ConfigurationTree>> channelStatusRecords =
 	    cfgMgr->getNode(SubsystemCalorimeterParametersTable::CHANNEL_STATUS_TABLE).getChildren();
 
