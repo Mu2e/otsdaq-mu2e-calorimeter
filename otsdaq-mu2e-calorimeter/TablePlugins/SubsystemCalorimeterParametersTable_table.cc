@@ -8,27 +8,19 @@
 
 using namespace ots;
 
-
-const std::string SubsystemCalorimeterParametersTable::PATH_TO_TRIGGER_OFFLINE_DB = \
-	getenv("PATH_TO_TRIGGER_OFFLINE_DB") ? \
-	getenv("PATH_TO_TRIGGER_OFFLINE_DB") : \
-	"";
-const std::string SubsystemCalorimeterParametersTable::CHANNEL_STATUS_TABLE = "SubsystemCalorimeterStatusTable";
+const std::string SubsystemCalorimeterParametersTable::PATH_TO_TRIGGER_OFFLINE_DB = getenv("PATH_TO_TRIGGER_OFFLINE_DB") ? getenv("PATH_TO_TRIGGER_OFFLINE_DB") : "";
+const std::string SubsystemCalorimeterParametersTable::CHANNEL_STATUS_TABLE       = "SubsystemCalorimeterStatusTable";
 
 //==============================================================================
-SubsystemCalorimeterParametersTable::SubsystemCalorimeterParametersTable(void)
-    : TableBase("SubsystemCalorimeterParametersTable")
-{
-}
+SubsystemCalorimeterParametersTable::SubsystemCalorimeterParametersTable(void) : TableBase("SubsystemCalorimeterParametersTable") {}
 
 //==============================================================================
 SubsystemCalorimeterParametersTable::~SubsystemCalorimeterParametersTable(void) {}
 
 //==============================================================================
-/// init 
+/// init
 /// generate calo specific files needed by the online trigger and save them in the filesystem 'offline' db
-void SubsystemCalorimeterParametersTable::init(ConfigurationManager* configManager)
-{
+void SubsystemCalorimeterParametersTable::init(ConfigurationManager* configManager) {
 	// use isFirstAppInContext to only run once per context, for example to avoid
 	//	generating files on local disk multiple times.
 	bool isFirstAppInContext_ = configManager->isOwnerFirstAppInContext();
@@ -51,71 +43,60 @@ void SubsystemCalorimeterParametersTable::init(ConfigurationManager* configManag
 }  // end init()
 
 //==============================================================================
-std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(
-													ConfigurationManager* configManager, 
-													const std::string& OfflineCxxClassName){
-
+std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(ConfigurationManager* configManager, const std::string& OfflineCxxClassName) {
 	std::stringstream OfflineTable;
 	OfflineTable << "TABLE " << OfflineCxxClassName << __E__;
-	std::vector<std::pair<std::string, ConfigurationTree>> channelStatusRecords =
-	    configManager->getNode(SubsystemCalorimeterParametersTable::CHANNEL_STATUS_TABLE).getChildren();
+	std::vector<std::pair<std::string, ConfigurationTree>> channelStatusRecords = configManager->getNode(SubsystemCalorimeterParametersTable::CHANNEL_STATUS_TABLE).getChildren();
 
 	for(auto& channelStatusPair : channelStatusRecords)  // start main fe/DTC record loop
 	{
-		uint16_t boardID = channelStatusPair.second.getNode(ColChannelStatus.colBoardId_).getValue<uint16_t>();
-		ConfigurationTree::BitMap<std::string> bitmap = channelStatusPair.second.getNode(ColChannelStatus.colStatus_).getValueAsBitMap();
+		uint16_t                               boardID = channelStatusPair.second.getNode(ColChannelStatus.colBoardId_).getValue<uint16_t>();
+		ConfigurationTree::BitMap<std::string> bitmap  = channelStatusPair.second.getNode(ColChannelStatus.colStatus_).getValueAsBitMap();
 
 		OfflineTable << boardID << ", ";
-		// assume data is 1-dimensional 
-		for(uint32_t j=0; j<bitmap.numberOfColumns(0); j++)
-		{
-			OfflineTable << ((bitmap.get(0,j).size()==0) ? "0" : bitmap.get(0,j));
-			OfflineTable << ((j+1==bitmap.numberOfColumns(0)) ? "" : ", ");
+		// assume data is 1-dimensional
+		for(uint32_t j = 0; j < bitmap.numberOfColumns(0); j++) {
+			OfflineTable << ((bitmap.get(0, j).size() == 0) ? "0" : bitmap.get(0, j));
+			OfflineTable << ((j + 1 == bitmap.numberOfColumns(0)) ? "" : ", ");
 		}
 	}
 
 	return OfflineTable.str();
-} // end getStatusTableInCSVFormat()
+}  // end getStatusTableInCSVFormat()
 
 //==============================================================================
 // return status structures
-std::string SubsystemCalorimeterParametersTable::getStructureStatusAsJSON(
-	const ConfigurationManager* cfgMgr) const
-{
-
-	// 
+std::string SubsystemCalorimeterParametersTable::getStructureStatusAsJSON(const ConfigurationManager* cfgMgr) const {
+	//
 	// hardwareJson: val
 	// offlineTable1 : csval -- mapOfflineTables["cal.channelstatus"]
 	//
-	
-	std::vector<std::pair<std::string, ConfigurationTree>> channelStatusRecords =
-	    cfgMgr->getNode(SubsystemCalorimeterParametersTable::CHANNEL_STATUS_TABLE).getChildren();
+
+	std::vector<std::pair<std::string, ConfigurationTree>> channelStatusRecords = cfgMgr->getNode(SubsystemCalorimeterParametersTable::CHANNEL_STATUS_TABLE).getChildren();
 
 	std::stringstream outstream;
 	outstream << "{" << __E__;
-	outstream << "\t\"childern length\": " << channelStatusRecords.size() << "," <<__E__;
+	outstream << "\t\"childern length\": " << channelStatusRecords.size() << "," << __E__;
 	outstream << "\t[" << __E__;
 
 	uint16_t statusPairIdx = 0;
-	for(auto& channelStatusPair : channelStatusRecords)
-	{
-		uint16_t boardID = channelStatusPair.second.getNode(ColChannelStatus.colBoardId_).getValue<uint16_t>();
-		ConfigurationTree::BitMap<std::string> bitmap = channelStatusPair.second.getNode(ColChannelStatus.colStatus_).getValueAsBitMap();
+	for(auto& channelStatusPair : channelStatusRecords) {
+		uint16_t                               boardID = channelStatusPair.second.getNode(ColChannelStatus.colBoardId_).getValue<uint16_t>();
+		ConfigurationTree::BitMap<std::string> bitmap  = channelStatusPair.second.getNode(ColChannelStatus.colStatus_).getValueAsBitMap();
 		statusPairIdx++;
 
 		outstream << "\t\t{" << __E__;
-		outstream << "\t\t\"BoardID\": " << boardID << "," <<__E__;
-		outstream << "\t\t\"Rows\": " << bitmap.numberOfRows() << "," <<__E__;
+		outstream << "\t\t\"BoardID\": " << boardID << "," << __E__;
+		outstream << "\t\t\"Rows\": " << bitmap.numberOfRows() << "," << __E__;
 		outstream << "\t\t\"BitMap\": [";
 
-		// assume data is 1-dimensional 
-		for(uint32_t j=0; j<bitmap.numberOfColumns(0); j++)
-		{
-			outstream << ((bitmap.get(0,j).size()==0) ? "0" : bitmap.get(0,j));
-			outstream << ((j+1==bitmap.numberOfColumns(0)) ? "" : ", ");
+		// assume data is 1-dimensional
+		for(uint32_t j = 0; j < bitmap.numberOfColumns(0); j++) {
+			outstream << ((bitmap.get(0, j).size() == 0) ? "0" : bitmap.get(0, j));
+			outstream << ((j + 1 == bitmap.numberOfColumns(0)) ? "" : ", ");
 		}
 		outstream << "]" << __E__;
-		outstream << "\t\t}" << (statusPairIdx==channelStatusRecords.size() ? "" : ",") << __E__;
+		outstream << "\t\t}" << (statusPairIdx == channelStatusRecords.size() ? "" : ",") << __E__;
 	}
 
 	outstream << "\t]" << __E__;
