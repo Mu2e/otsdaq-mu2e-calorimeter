@@ -10,6 +10,7 @@
 using namespace ots;
 
 const std::string SubsystemCalorimeterParametersTable::PATH_TO_TRIGGER_OFFLINE_DB = getenv("PATH_TO_TRIGGER_OFFLINE_DB") ? getenv("PATH_TO_TRIGGER_OFFLINE_DB") : "";
+const std::string SubsystemCalorimeterParametersTable::PATH_TO_NOMINAL_CHANNEL_MAP = std::string(__ENV__("OTSDAQ_DIR")) + "/share/Offline/CaloConditions/data/nominal.txt";
 const std::string SubsystemCalorimeterParametersTable::CHANNEL_STATUS_TABLE       = "SubsystemCalorimeterStatusTable";
 
 //==============================================================================
@@ -68,9 +69,41 @@ void SubsystemCalorimeterParametersTable::init(ConfigurationManager* configManag
 void SubsystemCalorimeterParametersTable::generateOfflineTableMap(const ConfigurationManager* configManager)
 {
 	mapOfflineTables_.clear();
+	loadNominalChannelMap();
 	mapOfflineTables_["cal.channelstatus"] = getStatusTableInCSVFormat(configManager, "CalChannelStatus");
 	__COUTT__ << mapOfflineTables_["cal.channelstatus"] << __E__;
 } // end generateOfflineTableMap()
+
+//==============================================================================
+void SubsystemCalorimeterParametersTable::loadNominalChannelMap()
+{
+	mapNominalChannel_.clear();
+
+	std::ifstream in(SubsystemCalorimeterParametersTable::PATH_TO_NOMINAL_CHANNEL_MAP);
+	if(!in.is_open())
+	{
+		__COUTT__ << "Failed to open nominal channel map " << SubsystemCalorimeterParametersTable::PATH_TO_NOMINAL_CHANNEL_MAP;
+		return;
+	} 
+
+	std::string line;
+	try
+	{
+		std::string key, value;
+		while(std::getline(in, line))
+		{
+			std::istringstream iss(line);
+			iss >> value >> key;
+			mapNominalChannel_[key] = value;
+		}
+	}
+	catch(const std::exception& e)
+	{
+		__COUT__ << e.what() << __E__;
+	}
+
+	__COUTTV__(StringMacros::mapToString(mapNominalChannel_));
+} // end loadNominalChannelMap()
 
 //==============================================================================
 std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(const ConfigurationManager* configManager, const std::string& OfflineCxxClassName) {
@@ -80,17 +113,16 @@ std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(const
 
 	for(auto& channelStatusPair : channelStatusRecords)  // start main fe/DTC record loop
 	{
-		uint16_t                               boardID = channelStatusPair.second.getNode(ColChannelStatus.colBoardId_).getValue<uint16_t>();
+		uint32_t                               boardID = channelStatusPair.second.getNode(ColChannelStatus.colBoardId_).getValue<uint32_t>();
 		ConfigurationTree::BitMap<std::string> bitmap  = channelStatusPair.second.getNode(ColChannelStatus.colStatus_).getValueAsBitMap();
 
-		OfflineTable << boardID << ", ";
 		// assume data is 1-dimensional
 		for(uint32_t j = 0; j < bitmap.numberOfColumns(0); j++) {
+			OfflineTable << mapNominalChannel_.at(std::to_string(boardID * 20 + j)) << ", ";
 			OfflineTable << ((bitmap.get(0, j).size() == 0) ? "0" : bitmap.get(0, j));
-			OfflineTable << ((j + 1 == bitmap.numberOfColumns(0)) ? "" : ", ");
+			OfflineTable << ((j + 1 == bitmap.numberOfColumns(0)) ? "" : "\n");
 		}
 	}
-
 	return OfflineTable.str();
 }  // end getStatusTableInCSVFormat()
 
@@ -149,6 +181,6 @@ std::string SubsystemCalorimeterParametersTable::getStructureAsJSON(const Config
 	outstream << "}"; // close custom blob
 	outstream << "}"; // close full blob
 	return outstream.str();
-}  // end getStructureStatusAsJSON()
+}  // end getStructureAsJSON()
 
 DEFINE_OTS_TABLE(SubsystemCalorimeterParametersTable)
