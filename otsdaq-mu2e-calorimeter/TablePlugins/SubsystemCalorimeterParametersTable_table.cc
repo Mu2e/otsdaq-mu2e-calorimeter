@@ -4,6 +4,7 @@
 #include "otsdaq/TablePlugins/XDAQContextTable/XDAQContextTable.h"
 
 #include <sys/stat.h>  //for mkdir
+#include <fstream>
 #include <iostream>
 
 using namespace ots;
@@ -36,14 +37,43 @@ void SubsystemCalorimeterParametersTable::init(ConfigurationManager* configManag
 	__COUT__ << "*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*" << __E__;
 	__COUT__ << configManager->__SELF_NODE__ << __E__;
 
-	mapOfflineTables.clear();
-	mapOfflineTables["cal.channelstatus"] = getStatusTableInCSVFormat(configManager, "CalChannelStatus");
-	__COUT__ << "TESTING getStatusTableInCSVFormat" << __E__;
-	__COUT__ << mapOfflineTables["cal.channelstatus"] << __E__;
+	generateOfflineTableMap(configManager);
+
+	for(const auto& offlineTable : mapOfflineTables_)
+	{
+		std::string offlineTableFileName = PATH_TO_TRIGGER_OFFLINE_DB + "/" + offlineTable.first + ".txt";
+
+		try
+		{
+			std::ofstream out(offlineTableFileName);
+			if (!out)
+			{
+				__COUTT__<< "Failed to open file: " << offlineTableFileName;
+				return;
+			}
+			out << offlineTable.second;
+			out.close();
+		}
+		catch(const std::exception& e)
+		{
+			__COUT__ << "Failed to write offline table " << offlineTable.first << " to file.";
+			__COUT__ << e.what() << __E__;
+		}
+	}
+
 }  // end init()
 
+
 //==============================================================================
-std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(ConfigurationManager* configManager, const std::string& OfflineCxxClassName) {
+void SubsystemCalorimeterParametersTable::generateOfflineTableMap(const ConfigurationManager* configManager)
+{
+	mapOfflineTables_.clear();
+	mapOfflineTables_["cal.channelstatus"] = getStatusTableInCSVFormat(configManager, "CalChannelStatus");
+	__COUTT__ << mapOfflineTables_["cal.channelstatus"] << __E__;
+} // end generateOfflineTableMap()
+
+//==============================================================================
+std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(const ConfigurationManager* configManager, const std::string& OfflineCxxClassName) {
 	std::stringstream OfflineTable;
 	OfflineTable << "TABLE " << OfflineCxxClassName << __E__;
 	std::vector<std::pair<std::string, ConfigurationTree>> channelStatusRecords = configManager->getNode(SubsystemCalorimeterParametersTable::CHANNEL_STATUS_TABLE).getChildren();
@@ -66,15 +96,31 @@ std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(Confi
 
 //==============================================================================
 // return status structures
-std::string SubsystemCalorimeterParametersTable::getStructureStatusAsJSON(const ConfigurationManager* cfgMgr) const {
+std::string SubsystemCalorimeterParametersTable::getStructureAsJSON(const ConfigurationManager* cfgMgr) {
 	//
 	// hardwareJson: val
-	// offlineTable1 : csval -- mapOfflineTables["cal.channelstatus"]
+	// offlineTable1 : csval -- mapOfflineTables_["cal.channelstatus"]
 	//
+
+	if(mapOfflineTables_.size() == 0)
+		generateOfflineTableMap(cfgMgr);
 
 	std::vector<std::pair<std::string, ConfigurationTree>> channelStatusRecords = cfgMgr->getNode(SubsystemCalorimeterParametersTable::CHANNEL_STATUS_TABLE).getChildren();
 
 	std::stringstream outstream;
+	
+	outstream << "{";
+	outstream << "\t\"cat2\": {" << __E__;
+
+	std::map<std::string, std::string>::iterator it;
+	for(it = mapOfflineTables_.begin(); it != mapOfflineTables_.end(); ++it)
+	{
+		outstream << "\"" << it->first << "\":" << it->second;
+		outstream <<  (std::next(it) == mapOfflineTables_.end() ? "" : ",");
+	}
+	outstream << "},";
+
+	outstream<< "\t\"custom\": ";
 	outstream << "{" << __E__;
 	outstream << "\t\"childern length\": " << channelStatusRecords.size() << "," << __E__;
 	outstream << "\t[" << __E__;
@@ -100,7 +146,8 @@ std::string SubsystemCalorimeterParametersTable::getStructureStatusAsJSON(const 
 	}
 
 	outstream << "\t]" << __E__;
-	outstream << "}";
+	outstream << "}"; // close custom blob
+	outstream << "}"; // close full blob
 	return outstream.str();
 }  // end getStructureStatusAsJSON()
 

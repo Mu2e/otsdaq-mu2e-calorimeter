@@ -15,9 +15,11 @@ class SubsystemCalorimeterParametersTable : public TableBase {
 	// Methods
 	void 			init					(ConfigurationManager* configManager) override;
 
-	virtual std::string     getStructureStatusAsJSON	(const ConfigurationManager* configManager) const override;
+	virtual std::string     getStructureAsJSON	(const ConfigurationManager* configManager) override;
 
-	virtual std::string 	getStatusTableInCSVFormat   (ConfigurationManager* configManager, const std::string& OfflineCxxClassName);
+	virtual std::string 	getStatusTableInCSVFormat   (const ConfigurationManager* configManager, const std::string& OfflineCxxClassName);
+
+	void 					generateOfflineTableMap		(const ConfigurationManager* configManager);
 
 	bool					isFirstAppInContext_ 	= false;
 
@@ -26,7 +28,7 @@ class SubsystemCalorimeterParametersTable : public TableBase {
 	const static std::string PATH_TO_TRIGGER_OFFLINE_DB;
 	const static std::string CHANNEL_STATUS_TABLE;
 
-	std::map<std::string, std::string> mapOfflineTables;
+	std::map<std::string, std::string> mapOfflineTables_;
 
 	// Column names
 	struct ColParameters // Calorimeter subsystem top level 
