@@ -40,23 +40,19 @@ void SubsystemCalorimeterParametersTable::init(ConfigurationManager* configManag
 
 	generateOfflineTableMap(configManager);
 
-	for(const auto& offlineTable : mapOfflineTables_)
-	{
+	for(const auto& offlineTable : mapOfflineTables_) {
 		std::string offlineTableFileName = PATH_TO_TRIGGER_OFFLINE_DB + "/" + offlineTable.first + ".txt";
 
-		try
-		{
+		try {
 			std::ofstream out(offlineTableFileName);
-			if (!out)
-			{
+			if (!out) {
 				__COUTT__<< "Failed to open file: " << offlineTableFileName;
 				return;
 			}
 			out << offlineTable.second;
 			out.close();
 		}
-		catch(const std::exception& e)
-		{
+		catch(const std::exception& e) {
 			__COUT__ << "Failed to write offline table " << offlineTable.first << " to file.";
 			__COUT__ << e.what() << __E__;
 		}
@@ -66,8 +62,7 @@ void SubsystemCalorimeterParametersTable::init(ConfigurationManager* configManag
 
 
 //==============================================================================
-void SubsystemCalorimeterParametersTable::generateOfflineTableMap(const ConfigurationManager* configManager)
-{
+void SubsystemCalorimeterParametersTable::generateOfflineTableMap(const ConfigurationManager* configManager) {
 	mapOfflineTables_.clear();
 	mapOfflineTables_["CalChannelMap"] = getChannelMapAndCSVFormat(configManager, "CalChannelMap");
 	__COUTT__ << mapOfflineTables_["CalChannelMap"] << __E__;
@@ -82,14 +77,14 @@ std::string SubsystemCalorimeterParametersTable::getChannelMapAndCSVFormat(const
 	std::stringstream OfflineTable;
 	OfflineTable << "TABLE " << OfflineCxxClassName << __E__;
 	std::vector<std::pair<std::string, ConfigurationTree>> channelMapRecords = configManager->getNode(SubsystemCalorimeterParametersTable::CHANNEL_MAP_TABLE).getChildren();
-
-	for(auto& channelMapPair : channelMapRecords)  // start main fe/DTC record loop
-	{
-		uint16_t offlineID = channelMapPair.second.getNode(ColChannelMap.offlineId_).getValue<uint16_t>();
+	
+	// start main fe/DTC record loop
+	for(auto& channelMapPair : channelMapRecords) {
 		uint16_t onlineID = channelMapPair.second.getNode(ColChannelMap.onlineId_).getValue<uint16_t>();
+		uint16_t offlineID = channelMapPair.second.getNode(ColChannelMap.offlineId_).getValue<uint16_t>();
 		mapChannels_[onlineID] = offlineID;
 
-		OfflineTable << offlineID << "," << onlineID << "\n";
+		OfflineTable << onlineID << "," << offlineID << "\n";
 	}
 	return OfflineTable.str();
 } // end getChannelMapAndCSVFormat()
@@ -100,8 +95,8 @@ std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(const
 	OfflineTable << "TABLE " << OfflineCxxClassName << __E__;
 	std::vector<std::pair<std::string, ConfigurationTree>> channelStatusRecords = configManager->getNode(SubsystemCalorimeterParametersTable::CHANNEL_STATUS_TABLE).getChildren();
 
-	for(auto& channelStatusPair : channelStatusRecords)  // start main fe/DTC record loop
-	{
+	// start main fe/DTC record loop
+	for(auto& channelStatusPair : channelStatusRecords) {
 		uint32_t                               boardID = channelStatusPair.second.getNode(ColChannelStatus.colBoardId_).getValue<uint32_t>();
 		ConfigurationTree::BitMap<std::string> bitmap  = channelStatusPair.second.getNode(ColChannelStatus.colStatus_).getValueAsBitMap();
 
@@ -118,11 +113,8 @@ std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(const
 //==============================================================================
 // return status structures
 std::string SubsystemCalorimeterParametersTable::getStructureAsJSON(const ConfigurationManager* cfgMgr) {
-	//
-	// hardwareJson: val
-	// offlineTable1 : csval -- mapOfflineTables_["CalChannelStatus"]
-	//
 
+	// Don't generate maps if done already in init()
 	if(mapOfflineTables_.size() == 0)
 		generateOfflineTableMap(cfgMgr);
 
@@ -131,19 +123,20 @@ std::string SubsystemCalorimeterParametersTable::getStructureAsJSON(const Config
 	std::stringstream outstream;
 	
 	outstream << "{";
-	outstream << "\t\"cat2\": {" << __E__;
 
+	//Write all cat-3 tables converted from MongoDB
+	outstream << "\t\"cat3\": {" << __E__;
 	std::map<std::string, std::string>::iterator it;
-	for(it = mapOfflineTables_.begin(); it != mapOfflineTables_.end(); ++it)
-	{
+	for(it = mapOfflineTables_.begin(); it != mapOfflineTables_.end(); ++it) {
 		outstream << "\"" << it->first << "\":" << it->second;
 		outstream <<  (std::next(it) == mapOfflineTables_.end() ? "" : ",");
 	}
 	outstream << "},";
 
-	outstream<< "\t\"custom\": ";
+	//Write any desired table in a custom format for user-friendly quick reading
+	outstream << "\t\"custom\": ";
 	outstream << "{" << __E__;
-	outstream << "\t\"childern length\": " << channelStatusRecords.size() << "," << __E__;
+	outstream << "\t\"Number of rows\": " << channelStatusRecords.size() << "," << __E__;
 	outstream << "\t[" << __E__;
 
 	uint16_t statusPairIdx = 0;
