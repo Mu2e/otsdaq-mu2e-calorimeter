@@ -25,7 +25,6 @@ class SubsystemCalorimeterParametersTable : public TableBase {
 
 	void 					loadNominalChannelMap		();
 
-	bool					isFirstAppInContext_	= false;
 
   private:
 
