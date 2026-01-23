@@ -45,21 +45,19 @@ void SubsystemCalorimeterParametersTable::init(ConfigurationManager* configManag
 
 		try {
 			std::ofstream out(offlineTableFileName);
-			if (!out) {
-				__COUTT__<< "Failed to open file: " << offlineTableFileName;
+			if(!out) {
+				__COUTT__ << "Failed to open file: " << offlineTableFileName;
 				return;
 			}
 			out << offlineTable.second;
 			out.close();
-		}
-		catch(const std::exception& e) {
+		} catch(const std::exception& e) {
 			__COUT__ << "Failed to write offline table " << offlineTable.first << " to file.";
 			__COUT__ << e.what() << __E__;
 		}
 	}
 
 }  // end init()
-
 
 //==============================================================================
 void SubsystemCalorimeterParametersTable::generateOfflineTableMap(const ConfigurationManager* configManager) {
@@ -68,7 +66,7 @@ void SubsystemCalorimeterParametersTable::generateOfflineTableMap(const Configur
 	__COUTT__ << mapOfflineTables_["CalChannelMap"] << __E__;
 	mapOfflineTables_["CalChannelStatus"] = getStatusTableInCSVFormat(configManager, "CalChannelStatus");
 	__COUTT__ << mapOfflineTables_["CalChannelStatus"] << __E__;
-} // end generateOfflineTableMap()
+}  // end generateOfflineTableMap()
 
 //==============================================================================
 std::string SubsystemCalorimeterParametersTable::getChannelMapAndCSVFormat(const ConfigurationManager* configManager, const std::string& OfflineCxxClassName) {
@@ -77,17 +75,17 @@ std::string SubsystemCalorimeterParametersTable::getChannelMapAndCSVFormat(const
 	std::stringstream OfflineTable;
 	OfflineTable << "TABLE " << OfflineCxxClassName << __E__;
 	std::vector<std::pair<std::string, ConfigurationTree>> channelMapRecords = configManager->getNode(SubsystemCalorimeterParametersTable::CHANNEL_MAP_TABLE).getChildren();
-	
+
 	// start main fe/DTC record loop
 	for(auto& channelMapPair : channelMapRecords) {
-		uint16_t onlineID = channelMapPair.second.getNode(ColChannelMap.onlineId_).getValue<uint16_t>();
-		uint16_t offlineID = channelMapPair.second.getNode(ColChannelMap.offlineId_).getValue<uint16_t>();
+		uint16_t onlineID      = channelMapPair.second.getNode(ColChannelMap.onlineId_).getValue<uint16_t>();
+		uint16_t offlineID     = channelMapPair.second.getNode(ColChannelMap.offlineId_).getValue<uint16_t>();
 		mapChannels_[onlineID] = offlineID;
 
 		OfflineTable << onlineID << "," << offlineID << "\n";
 	}
 	return OfflineTable.str();
-} // end getChannelMapAndCSVFormat()
+}  // end getChannelMapAndCSVFormat()
 
 //==============================================================================
 std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(const ConfigurationManager* configManager, const std::string& OfflineCxxClassName) {
@@ -113,7 +111,6 @@ std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(const
 //==============================================================================
 // return status structures
 std::string SubsystemCalorimeterParametersTable::getStructureAsJSON(const ConfigurationManager* cfgMgr) {
-
 	// Don't generate maps if done already in init()
 	if(mapOfflineTables_.size() == 0)
 		generateOfflineTableMap(cfgMgr);
@@ -121,19 +118,19 @@ std::string SubsystemCalorimeterParametersTable::getStructureAsJSON(const Config
 	std::vector<std::pair<std::string, ConfigurationTree>> channelStatusRecords = cfgMgr->getNode(SubsystemCalorimeterParametersTable::CHANNEL_STATUS_TABLE).getChildren();
 
 	std::stringstream outstream;
-	
+
 	outstream << "{";
 
-	//Write all cat-3 tables converted from MongoDB
+	// Write all cat-3 tables converted from MongoDB
 	outstream << "\t\"cat3\": {" << __E__;
 	std::map<std::string, std::string>::iterator it;
 	for(it = mapOfflineTables_.begin(); it != mapOfflineTables_.end(); ++it) {
 		outstream << "\"" << it->first << "\":" << it->second;
-		outstream <<  (std::next(it) == mapOfflineTables_.end() ? "" : ",");
+		outstream << (std::next(it) == mapOfflineTables_.end() ? "" : ",");
 	}
 	outstream << "},";
 
-	//Write any desired table in a custom format for user-friendly quick reading
+	// Write any desired table in a custom format for user-friendly quick reading
 	outstream << "\t\"custom\": ";
 	outstream << "{" << __E__;
 	outstream << "\t\"Number of rows\": " << channelStatusRecords.size() << "," << __E__;
@@ -160,8 +157,8 @@ std::string SubsystemCalorimeterParametersTable::getStructureAsJSON(const Config
 	}
 
 	outstream << "\t]" << __E__;
-	outstream << "}"; // close custom blob
-	outstream << "}"; // close full blob
+	outstream << "}";  // close custom blob
+	outstream << "}";  // close full blob
 	return outstream.str();
 }  // end getStructureAsJSON()
 

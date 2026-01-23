@@ -37,7 +37,7 @@ class SubsystemCalorimeterParametersTable : public TableBase {
 	std::map<uint16_t, uint16_t> mapChannels_;
 
 	// Column names
-	struct ColParameters // Calorimeter subsystem top level 
+	struct ColParameters // Calorimeter subsystem top level
 	{
 		// Incomplete list
 		std::string const colLinkToFETypeTable					= "LinkToChannelStatusTableInfo";
