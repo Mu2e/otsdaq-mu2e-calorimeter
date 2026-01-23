@@ -100,10 +100,10 @@ std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(const
 
 		// assume data is 1-dimensional
 		for(uint32_t j = 0; j < bitmap.numberOfColumns(0); j++) {
-			const uint32_t onlineId = boardID * 20 + j;
-			auto           it       = mapChannels_.find(onlineId);
+			const uint32_t onlineID = boardID * 20 + j;
+			auto           it       = mapChannels_.find(onlineID);
 			if(it == mapChannels_.end()) {
-				__SS__ << "No channel map entry found for online ID " << onlineId
+				__SS__ << "No channel map entry found for online ID " << onlineID
 				       << " (boardID=" << boardID << ", channel=" << j
 				       << "). Tables may be inconsistent." << __E__;
 				__SS_THROW__;
