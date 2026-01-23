@@ -1,1178 +1,1125 @@
 <!DOCTYPE HTML>
-<html lang="en"> 
+<html lang="en">
 <head>
-	<title>FE Macros</title>
-
-	<link href='/WebPath/css/fonts.css?family=Inconsolata:400' rel='stylesheet' type='text/css'>
-		
-	<link rel="stylesheet" type="text/css" href="/WebPath/css/ConfigurationGUI.css">
-
-	<!-- MultiSelectBox: Must include .css style sheet and .js functionality -->
-	<link rel="stylesheet" type="text/css" href="/WebPath/css/MultiSelectBox.css">
-	<script type="text/JavaScript" src="/WebPath/js/js_lib/MultiSelectBox.js"></script>
-
-	<style type="text/css">			
-
-		/*fix margin for this page in Multi-Select (must have changed because of font/font-size)*/ 
-		.multiselectbox input, textarea {
-			margin: 			14px 5px 5px 12px;
-		}
-
-		/* make buttons and inputs have a hand cursor */
-		input, button, select, a {
-			cursor: 			pointer;
-		}
-	
-		#popUpDialog {
-			position: 			absolute;
-			z-index: 			1000;    
-			border: 			1px solid #770000;
-		    background-color: 	#efeaea;
-		    text-align: 		center;
-		    padding: 			10px;
-		}
-		
-
-		#clearDiv {
-			clear: 				both;
-		}
-		
-		#display {
-			padding: 			0;
-		}
-		
-		#macroModulesTable, .macroModuleTable {
-			border:				0;
-		}
-		.macroModule {
-			border:				1px solid grey;
-			padding:			10px;
-		}
-		
-		td {
-			white-space: 		nowrap;
-			vertical-align:		top;
-		}
-		
-		.macroOutputName, .macroInputName  {
-			font-weight:		bold;
-		}
-		
-		
-	</style>
-	
-	
-	<script type="text/JavaScript" src="/WebPath/js/Globals.js"></script>	
-	<script type="text/JavaScript" src="/WebPath/js/Debug.js"></script>	
-	<script type="text/JavaScript" src="/WebPath/js/DesktopContent.js"></script>
-	<script type="text/JavaScript" src="/WebPath/js/js_lib/SimpleContextMenu.js"></script>
-	
-	<script>		
-		
-		
-		/////////////////////////////////////////////////////////////////////////////////////////
-		/////////////////////////////////////////////////////////////////////////////////////////
-	
-		//functions:		
-			//init()	
-			//runMacro(r,c)
-			//getDateString(date)
-			//redraw()
-			//handleSelectedFEClass(r,c)
-			//handleSelectedFEUID(r,c)
-			//handleSelectedMacroType(r,c)
-			//handleSelectedMacroName(r,c)
-			//setCaretPosition(el, caretPos, endPos)
-
-		var feClassToFEsMap_; 	//map of FE Classes to FE UIDs
-		var feToMacrosMap_;		//map of FE UIDs to FE Macro structure 
-			//{requiredPermissions,inputs,outputs,supervisor,lid, feClass}
-		var publicMacros_;		//map of macro name to macro structure
-			//{requiredPermissions,inputs,outputs}
-		var privateMacros_;		//map of macro name to macro structure
-			//{requiredPermissions,inputs,outputs}
-		
-		var macroModuleLayoutString_ = "" ; //row,
-											//col,
-											//class or *,
-											//UID or *,
-											//macroType:=fe|public|private:username,
-											//macroName;
-		//macroModuleLayoutString_ += "0,1,DTCFrontEndInterface,ExampleInterface0,fe,ROC_Read;";
-		//macroModuleLayoutString_ += "1,0,DTCFrontEndInterface,*,private,testPrivate;";
-		
-		macroModuleLayoutString_ += "0,0,*,*,fe,;";
-//		macroModuleLayoutString_ += "1,0,*,*,fe,;";
-//		macroModuleLayoutString_ += "0,1,*,*,fe,;";
-//		macroModuleLayoutString_ += "1,1,*,*,fe,;";
-		
-		var macroModules_; //row col to module struct
-			//			macroModules_[r][c]["feClassSelected"] = feClassSelected;
-			//			macroModules_[r][c]["feUIDSelected"] = feUIDSelected;
-			//			macroModules_[r][c]["feMacroTypeSelected"] = feMacroTypeSelected;
-			//			macroModules_[r][c]["feMacroNameSelected"] = feMacroNameSelected;
-			//			macroModules_[r][c]["feMacroNameObject"] = feMacroNameObject;
-		var layoutMaxRow_, layoutMaxCol_;
-
-		var MACRO_TYPE_FE_ 			= "fe";
-		var MACRO_TYPE_PUBLIC_ 		= "public";
-		var MACRO_TYPE_PRIVATE_ 	= "private";
-		var MACRO_TYPES_ = {
-				"FE Macro Function" : 			MACRO_TYPE_FE_,
-				"Public MacroMaker Macro" : 	MACRO_TYPE_PUBLIC_,
-				"Private MacroMaker Macro" :	MACRO_TYPE_PRIVATE_,
-		};
-		var MAP_FROM_LAYOUT_TO_MACRO_TYPES_ = {}
-		MAP_FROM_LAYOUT_TO_MACRO_TYPES_[MACRO_TYPE_FE_] 		= 0;
-		MAP_FROM_LAYOUT_TO_MACRO_TYPES_[MACRO_TYPE_PUBLIC_] 	= 1;
-		MAP_FROM_LAYOUT_TO_MACRO_TYPES_[MACRO_TYPE_PRIVATE_] 	= 2;
-		
-		/////////////////////////////////////////////////////////////////////////////////////////
-		/////////////////////////////////////////////////////////////////////////////////////////
-
-		
-		
-		//=====================================================================================
-		//init ~~
-		//init called once body has loaded
-		function init() 
-		{			
-	
-			Debug.log("CfgGUI init ");
-	
-	
-			//get FE Macros
-			DesktopContent.XMLHttpRequest("Request?RequestType=getFEMacroList", "", 
-					function (req) 
-					{			
-
-				var str = "";
-
-				//var user = DesktopContent.getXMLValue(req,"UserDisplayName");
-				//Debug.log("user = " + user);
-
-				var macroVar;
-				var macroInArgs, macroOutArgs;
-				var FEMACROS_HEADER_FIELDS = 4;
-	
-				feClassToFEsMap_ 	= {}; //reset
-				feToMacrosMap_ 		= {}; //reset
-				publicMacros_ 		= {}; //reset
-				privateMacros_ 		= {}; //reset
-
-				/////////////////////
-				//FE Macros			
-				var feMacros = req.responseXML.getElementsByTagName("FEMacros");
-				Debug.log("feMacros.length = " + feMacros.length);	
-				for(var i=0;i<feMacros.length;++i)
-				{
-					macroVar = feMacros[i].getAttribute("value");
-					Debug.log(macroVar);
-					macroVar = macroVar.split(":");
-
-					var supervisor = macroVar[0];
-					var lid = macroVar[1];
-					var feClass = macroVar[2];
-					var feUID = macroVar[3];
-					
-					if(macroVar.length > FEMACROS_HEADER_FIELDS) //at least one function, so display name
-					{
-						//add FE UID to FE Class in global map ---------------
-						if(!feClassToFEsMap_[feClass])
-						{
-							Debug.log("Need to create FE Class to FE map entry.");							
-							feClassToFEsMap_[feClass] = [];
-						}
-						feClassToFEsMap_[feClass].push(feUID);
-					}
-
-					var c = FEMACROS_HEADER_FIELDS;
-					while(c < macroVar.length)
-					{					
-						var macroName = macroVar[c];
-
-						//add FE Macro name to FE in global map ---------------
-						if(!feToMacrosMap_[feUID])
-						{
-							Debug.log("Need to create FE to FE Macro map entry.");							
-							feToMacrosMap_[feUID] = {};
-						}
-						feToMacrosMap_[feUID][macroName] = 
-						{
-								"requiredPermissions": 	macroVar[c+1],
-								"inputs": 				[],
-								"outputs": 				[],
-								"supervisor": 			supervisor,
-								"lid": 					lid,
-								"feClass":				feClass,
-						};
-						c += 2;
-						for(var j=0;j<(macroVar[c]|0);++j)							
-							feToMacrosMap_[feUID][macroName].inputs.push(macroVar[c+1+j]);
-						c += 1 + (macroVar[c]|0);
-						for(var j=0;j<(macroVar[c]|0);++j)
-							feToMacrosMap_[feUID][macroName].outputs.push(macroVar[c+1+j]);																
-
-							
-						c += 1 + (macroVar[c]|0);
-					} //end FE macro loop
- 
-				} //end FE supervisor loop
-				
-				/////////////////////
-				//Public Macros			
-				FEMACROS_HEADER_FIELDS = 2;
-				var publicMacros = req.responseXML.getElementsByTagName("PublicMacro");
-				Debug.log("publicMacros.length = " + publicMacros.length);	
-				for(var i=0;i<publicMacros.length;++i)
-				{
-					macroVar = publicMacros[i].getAttribute("value");
-					Debug.log(macroVar);
-					macroVar = macroVar.split(":");
-
-					var macroName = macroVar[0];
-					var requiredPermissions = macroVar[1];
-
-					publicMacros_[macroName] = 
-					{
-							"requiredPermissions": 	requiredPermissions,
-							"inputs": 				[],
-							"outputs": 				[],
-					};
-
-
-					var c = FEMACROS_HEADER_FIELDS;
-					for(var j=0;j<(macroVar[c]|0);++j)							
-						publicMacros_[macroName].inputs.push(macroVar[c+1+j]);
-					c += 1 + (macroVar[c]|0);
-					for(var j=0;j<(macroVar[c]|0);++j)
-						publicMacros_[macroName].outputs.push(macroVar[c+1+j]);						
-				} //end public macro loop
-
-				/////////////////////
-				//Private Macros		
-				var privateMacros = req.responseXML.getElementsByTagName("PrivateMacro");
-				Debug.log("privateMacros.length = " + privateMacros.length);	
-				for(var i=0;i<privateMacros.length;++i)
-				{
-					macroVar = privateMacros[i].getAttribute("value");
-					Debug.log(macroVar);
-					macroVar = macroVar.split(":");
-
-					var macroName = macroVar[0];
-					var requiredPermissions = macroVar[1];
-
-					privateMacros_[macroName] = 
-					{
-							"requiredPermissions": 	requiredPermissions,
-							"inputs": 				[],
-							"outputs": 				[],
-					};
-
-
-					var c = FEMACROS_HEADER_FIELDS;
-					for(var j=0;j<(macroVar[c]|0);++j)							
-						privateMacros_[macroName].inputs.push(macroVar[c+1+j]);
-					c += 1 + (macroVar[c]|0);
-					for(var j=0;j<(macroVar[c]|0);++j)
-						privateMacros_[macroName].outputs.push(macroVar[c+1+j]);						
-				} //end public macro loop
-				
-
-				console.log("feClassToFEsMap_",feClassToFEsMap_);
-				console.log("feToMacrosMap_",feToMacrosMap_);
-				console.log("privateMacros_",privateMacros_);
-				console.log("publicMacros_",publicMacros_);
-				
-
-				if(Object.keys(feClassToFEsMap_).length == 0)
-				{
-					Debug.log("No FE Macros were found, have you Configured the State Machine? " +
-							"Try configuring and then <a onclick='init()'>Refresh</a> this window.",
-							Debug.WARN_PRIORITY);
-				}
-
-				//construct macro module layout
-				console.log("macroModuleLayoutString_",macroModuleLayoutString_);
-
-				macroModules_ = {}; //reset
-				layoutMaxRow_ = 0;
-				layoutMaxCol_ = 0;
-				var layoutModules = macroModuleLayoutString_.split(';');
-				for(var i=0;i<layoutModules.length;++i)
-				{
-					var layoutArgs = layoutModules[i].split(',');
-					if(layoutArgs.length != 6)
-						continue;
-					console.log(i,":","layoutArgs",layoutArgs);
-
-					//layout args:
-					//			row,
-					//			col,
-					//			class or *,
-					//			UID or *,
-					//			macroType:=fe|public|private:username,
-					//			macroName;
-					var r = layoutArgs[0] | 0;
-					var c = layoutArgs[1] | 0;
-					var feClassSelected = layoutArgs[2];
-					var feUIDSelected = layoutArgs[3];
-					var feMacroTypeSelected = layoutArgs[4];
-					var feMacroNameSelected = layoutArgs[5];
-
-					if(r > layoutMaxRow_)
-						layoutMaxRow_ = r;
-					if(c > layoutMaxCol_)
-						layoutMaxCol_ = c;
-
-					if(!macroModules_[r])
-						macroModules_[r] = {};
-					if(!macroModules_[r][c])
-						macroModules_[r][c] = {};
-					macroModules_[r][c]["feClassSelected"] = feClassSelected;
-					macroModules_[r][c]["feUIDSelected"] = feUIDSelected;
-					macroModules_[r][c]["feMacroTypeSelected"] = feMacroTypeSelected;
-					macroModules_[r][c]["feMacroNameSelected"] = feMacroNameSelected;
-					macroModules_[r][c]["feMacroNameObject"] = undefined;
-
-				} //end macro module extraction loop
-
-
-				console.log("macroModules_",macroModules_);
-
-				redraw();
-				return;	
-				
-					}); //end getFEMacroList handler
-		} //end init()
-	
-		//=====================================================================================
-		//runMacro ~~
-		function runMacro(r, c)
-		{
-			Debug.log("runMacro(" + r + "," + c + ")");
-			
-
-			if(!macroModules_[r])
-			{
-				Debug.log("Invalid row " + r + " specified for layout module.",
-						Debug.HIGH_PRIORITY);
-				console.log("macroModules_",macroModules_);
-				return;
-			}
-			if(!macroModules_[r][c])
-			{
-				Debug.log("Invalid column " + c + " specified for layout module.",
-						Debug.HIGH_PRIORITY);
-				console.log("macroModules_",macroModules_);
-				return;
-			}
-			
-			var feClassSelected = macroModules_[r][c].feClassSelected;	
-			var feUIDSelected = macroModules_[r][c].feUIDSelected;	
-			var feMacroTypeSelected = macroModules_[r][c].feMacroTypeSelected;
-			var macroName = macroModules_[r][c].feMacroNameSelected;
-			
-			var macroObj = macroModules_[r][c].feMacroNameObject[macroName];
-			
-			var saveOutputs = document.getElementById("outputMacroToFile-row-" + r + "-col-" + c).checked?1:0;
-			var inputsArr 	= macroObj.inputs;
-			var outputsArr 	= macroObj.outputs;
-			
-			var inEls = document.getElementsByClassName(
-					"macroInput-row-" + r + "-col-" + c
-			);
-			var postData = "";
-			
-			postData += "inputArgs=";
-			for(var i=0;i<inputsArr.length;++i)
-			{
-				Debug.log("inputArgs " + inputsArr[i]);
-				Debug.log("inputArgs.value " + inEls[i].value);
-				if(i) postData += ";";
-				postData += inputsArr[i] + "," + inEls[i].value;
-			}
-			
-			postData += "&outputArgs=";
-			for(var i=0;i<outputsArr.length;++i)
-			{
-				Debug.log("outputArgs " + outputsArr[i]);
-				if(i) postData += ",";
-				postData += outputsArr[i];
-			}
-			
-			console.log("postData",postData);
-			
-			var str = "";
-			str += "Launched... " + getDateString(new Date) + 
-					".. waiting for response...";
-			var el = document.getElementById(
-					"macroResults-row-" + r + "-col-" + c);
-			el.innerHTML = str;
-
-			DesktopContent.XMLHttpRequest("Request?RequestType=runFEMacro" +					
-					//"&feSupervisorID=" + feSupervisorID +
-					"&feClassSelected=" + feClassSelected +
-					"&feUIDSelected=" + feUIDSelected +
-					"&macroType=" + feMacroTypeSelected +
-					"&macroName=" + macroName + 
-					"&saveOutputs=" + saveOutputs
-					, postData, 
-					function (req, reqParam, errStr) {
-				
-				var str = "";
-				
-				if(!errStr) 
-					errStr = "";
-				var err = DesktopContent.getXMLValue(req,"Error");
-				if(err && err != "")
-					errStr += "\n" + err;				
-				if(errStr != "")
-				{
-					str += "Received error... " + getDateString(new Date);
-					str += "<br>";
-					Debug.log("Error while running FE Macro: " + errStr,
-							Debug.HIGH_PRIORITY);
-					el.innerHTML = str;
-					return;
-				}
-				
-				var outputArgNames = req.responseXML.getElementsByTagName("outputArgs_name");
-				var outputArgValues = req.responseXML.getElementsByTagName("outputArgs_value");
-				Debug.log("outputArgNames.length = " + outputArgNames.length);	
-				
-				str += "Last ran... " + getDateString(new Date);
-				str += "<br>";
-				for(var i=0;i<outputArgNames.length;++i)
-				{
-					var name = outputArgNames[i].getAttribute("value");
-					var value = outputArgValues[i].getAttribute("value");
-					if(name == "Filename" || name == "filename")
-						str += name + " = " +
-							//if filename, add link to CodeEditor
-							DesktopContent.htmlOpen("a", //start macro module table
-								{
-									"title":"Open file in a new browser tab: \n" +
-									value,
-									"onclick":"DesktopContent.openNewBrowserTab(" +
-									"\"Code Editor\",undefined /*subname undefined for LID lookup*/," + 
-									"\"?" +
-									"startFilePrimary=" +
-									value + "\",undefined /*unique undefined for LID lookup*/);' ", //end onclick
-								},
-								value /*innerHTML*/,
-								true /*doCloseTag*/) + "<br>";
-							
-					else
-						str += name + " = " + 
-							value + "<br>";
-				}
-				
-				el.innerHTML = str;
-			},
-			0 /*reqParam*/, 0 /*progressHandler*/, 
-			true /*callHandlerOnErr*/
-			);
-		} //end runMacro()
-
-		//=====================================================================================
-		//getDateString ~~
-		var dayArr_ = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
-		var monthArr_ = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
-		function getDateString(date)
-		{
-			var dateStr = "";
-
-			dateStr += dayArr_[date.getDay()];
-			dateStr += " ";
-			dateStr += monthArr_[date.getMonth()];
-			dateStr += " ";
-			dateStr += date.getDate();
-			dateStr += " ";
-			dateStr += date.getHours();
-			dateStr += ":";
-			dateStr += ((date.getMinutes()<10)?"0":"") + date.getMinutes();
-			dateStr += ":";
-			dateStr += ((date.getSeconds()<10)?"0":"") + date.getSeconds();
-			dateStr += " ";
-			dateStr += date.getFullYear();
-			dateStr += " ";
-			dateStr += date.toLocaleTimeString([],{timeZoneName: "short"}).split(" ")[2];
-			return dateStr;
-		} //end getDateString()
-		
-		//=====================================================================================
-		//redraw ~~
-		function redraw()
-		{
-			Debug.log("redraw()");
-
-			var maxRow = layoutMaxRow_;
-			var maxCol = layoutMaxCol_;
-						
-			console.log("maxRow",maxRow);
-			console.log("maxCol",maxCol);
-			
-			//make module grid
-			var str = "";
-			str += DesktopContent.htmlOpen("table",
-					{
-							"id": "macroModulesTable",
-					});
-			for(var c=0;c<=maxCol;++c)
-			{
-				str += DesktopContent.htmlOpen("tr");
-				for(var r=0;r<=maxRow;++r)
-				{
-					str += DesktopContent.htmlOpen(
-							"td",
-							{
-								"id": "macroModule-row-" + r + "-col-" + c,
-								"class":"macroModule",
-							},
-						"" /*innerHTML*/,true /*doCloseTag*/);
-				}
-				str += "</tr>";
-			}
-			str += "</table>";
-			
-
-			var el = document.getElementById("display");
-			el.innerHTML = str;
-			
-			for(var row in macroModules_)
-				for(var col in macroModules_[row])
-				{					
-					//layout args:
-					//			row,
-					//			col,
-					//			class or *,
-					//			UID or *,
-					//			macroType:=fe|public|private:username,
-					//			macroName;
-					var r = row | 0;
-					var c = col | 0;
-					var feClassSelected = macroModules_[r][c].feClassSelected;
-					var feUIDSelected = macroModules_[r][c].feUIDSelected;
-					var feMacroTypeSelected = macroModules_[r][c].feMacroTypeSelected;
-					var feMacroNameSelected = macroModules_[r][c].feMacroNameSelected;
-
-					//make drop down for class, UID
-					//	then inputs and outpus
-
-					str = "";
-
-					str += DesktopContent.htmlOpen("table", //start macro module table
-							{
-									"class": "macroModuleTable",
-							});
-					{ //FE Class html
-						str += DesktopContent.htmlOpen("tr"); //start row for FE Class
-						str += DesktopContent.htmlOpen("td",{},"<b>FE Type:</b>" /*innerHTML*/,true /*doCloseTag*/);
-						str += DesktopContent.htmlOpen("td");
-						{
-							str += DesktopContent.htmlOpen(
-									"select",
-									{
-											"id": "feClassSelect-row-" + r + "-col-" + c,
-											"class":"feClassSelect",
-											"onchange":"handleSelectedFEClass(" +
-											r + "," + c + ");",
-									});
-							str +=  DesktopContent.htmlOpen(
-									"option" + ("*"==feClassSelected?" selected":""),
-									{},
-									"*" /*innerHTML*/,true /*doCloseTag*/);
-							for(var feClass in feClassToFEsMap_) //go through class keys
-							{
-								console.log(feClass);
-								str +=  DesktopContent.htmlOpen(
-										"option" + (feClass==feClassSelected?" selected":""),
-										{},
-										feClass /*innerHTML*/,true /*doCloseTag*/);
-							} //end class key loop
-							str += "</select>";
-						}
-						str += "</td></tr>"; //end row for FE Class
-					} //end FE Class html
-
-					{ //FE UID html
-						str += DesktopContent.htmlOpen("tr"); //start row for FE UID
-						str += DesktopContent.htmlOpen("td",{},"<b>FE Target UID:</b>" /*innerHTML*/,true /*doCloseTag*/);
-						str += DesktopContent.htmlOpen("td");
-						{
-							str += DesktopContent.htmlOpen(
-									"select",
-									{
-											"id": "feUIDSelect-row-" + r + "-col-" + c,
-											"class":"feUIDSelect",
-											"onchange":"handleSelectedFEUID(" +
-											r + "," + c + ");",
-									});
-							str += "</select>";
-						}
-						str += "</td></tr>"; //end row for FE Class
-					} //end FE Class html
-					
-					{ //Macro Type html
-						str += DesktopContent.htmlOpen("tr"); //start row for Macro Type 
-						str += DesktopContent.htmlOpen("td",{},"<b>Macro Type:</b>" /*innerHTML*/,true /*doCloseTag*/);
-						str += DesktopContent.htmlOpen("td");
-						{
-							str += DesktopContent.htmlOpen(
-									"select",
-									{
-											"id": "macroTypeSelect-row-" + r + "-col-" + c,
-											"class":"macroTypeSelect",
-											"onchange":"handleSelectedMacroType(" +
-											r + "," + c + ");",
-									});
-							
-							for(var macroType in MACRO_TYPES_) //go through class keys
-							{
-								console.log(macroType);
-								str +=  DesktopContent.htmlOpen(
-										"option" + (MACRO_TYPES_[macroType]==
-												feMacroTypeSelected?" selected":""),
-										{},
-										macroType /*innerHTML*/,true /*doCloseTag*/);
-							} //end class key loop
-							str += "</select>";
-						}
-						str += "</td></tr>"; //end row for Macro Type 
-					} //end Macro Type html
-
-					{ //Macro Name html
-						str += DesktopContent.htmlOpen("tr"); //start row for Macro Name
-						str += DesktopContent.htmlOpen("td",{},"<b>Macro Name:</b>" /*innerHTML*/,true /*doCloseTag*/);
-						str += DesktopContent.htmlOpen("td");
-						{
-							str += DesktopContent.htmlOpen(
-									"select",
-									{
-											"id": "macroNameSelect-row-" + r + "-col-" + c,
-											"class":"macroNameSelect",
-											"onchange":"handleSelectedMacroName(" +
-											r + "," + c + ");",
-									});
-							str += "</select>";
-						}
-						str += "</td></tr>"; //end row for Macro Name
-					} //end Macro Name html
-					
-					{ //Macro Detail html
-						str += DesktopContent.htmlOpen("tr"); //start row for Macro Detail
-						str += DesktopContent.htmlOpen("td",{
-								"colspan":"2",
-								"id": "macroDetail-row-" + r + "-col-" + c,
-								"class":"macroDetail",
-								},"" /*innerHTML*/,true /*doCloseTag*/);
-						str += "</tr>"; //end row for Macro Detail
-					} //end Macro Detail html
-
-					el = document.getElementById("macroModule-row-" + 
-							r + "-col-" + c);
-					el.innerHTML = str;
-
-					handleSelectedFEClass(r,c);
-				} //end macro module loop
-			
-		} //end redraw()
-
-		//=====================================================================================
-		//handleSelectedFEClass ~~		
-		function handleSelectedFEClass(r,c)
-		{
-			Debug.log("handleSelectedFEClass(" + r + "," + c + ")");
-			
-			var feClassSelected = document.getElementById("feClassSelect-row-" + 
-					r + "-col-" + c).value;
-			console.log("feClassSelected",feClassSelected);
-
-			if(!macroModules_[r])
-			{
-				Debug.log("Invalid row " + r + " specified for layout module.",
-						Debug.HIGH_PRIORITY);
-				console.log("macroModules_",macroModules_);
-				return;
-			}
-			if(!macroModules_[r][c])
-			{
-				Debug.log("Invalid column " + c + " specified for layout module.",
-						Debug.HIGH_PRIORITY);
-				console.log("macroModules_",macroModules_);
-				return;
-			}
-			if(feClassSelected != "*" && !feClassToFEsMap_[feClassSelected])
-			{
-				Debug.log("Invalid FE Class '" + feClassSelected + "' specified for layout module.",
-						Debug.HIGH_PRIORITY);
-				console.log("feClassToFEsMap_",feClassToFEsMap_);
-				return;
-			}
-			
-			macroModules_[r][c].feClassSelected = feClassSelected;
-			var feUIDSelected = macroModules_[r][c].feUIDSelected;
-			var feMacroTypeSelected = macroModules_[r][c].feMacroTypeSelected;
-			var feMacroNameSelected = macroModules_[r][c].feMacroNameSelected;
-
-			console.log("feUIDSelected",feUIDSelected);
-			
-			var str = "";
-			
-			str +=  DesktopContent.htmlOpen(
-					"option",
-					{},
-					"*" /*innerHTML*/,true /*doCloseTag*/);
-			
-			var selectedIndex = 0;
-			var i = 1;
-			var feUIDObject = feClassSelected == "*"?
-					feToMacrosMap_:feClassToFEsMap_[feClassSelected];
-			for(var feUIDptr in feUIDObject) //go through FE UIDs
-			{
-				var feUID = feClassSelected == "*"?
-						feUIDptr:feClassToFEsMap_[feClassSelected][feUIDptr];
-				
-				console.log(feUID);
-				str +=  DesktopContent.htmlOpen(
-						"option" ,
-						{},
-						feUID /*innerHTML*/,true /*doCloseTag*/);
-				
-				if(feUID == feUIDSelected)
-					selectedIndex = i;
-				++i;
-			} //end FE UID loop		
-			
-			if(feUIDSelected != "*" && selectedIndex == 0)
-			{
-				Debug.log("Invalid FE UID '" + feUIDSelected + "' specified for layout module.",
-						Debug.WARN_PRIORITY);
-				console.log("feUIDObject",feUIDObject);
-			}			
-			
-			el = document.getElementById("feUIDSelect-row-" + 
-					r + "-col-" + c);
-			el.innerHTML = str;			
-			
-			el.selectedIndex =  selectedIndex;
-			
-			handleSelectedFEUID(r,c);
-		} //end handleSelectedFEClass()
-
-		//=====================================================================================
-		//handleSelectedFEUID ~~		
-		function handleSelectedFEUID(r,c)
-		{
-			Debug.log("handleSelectedFEUID(" + r + "," + c + ")");
-			
-			var feUIDSelected = document.getElementById("feUIDSelect-row-" + 
-					r + "-col-" + c).value;
-			console.log("feUIDSelected",feUIDSelected);
-
-			if(!macroModules_[r])
-			{
-				Debug.log("Invalid row " + r + " specified for layout module.",
-						Debug.HIGH_PRIORITY);
-				console.log("macroModules_",macroModules_);
-				return;
-			}
-			if(!macroModules_[r][c])
-			{
-				Debug.log("Invalid column " + c + " specified for layout module.",
-						Debug.HIGH_PRIORITY);
-				console.log("macroModules_",macroModules_);
-				return;
-			}
-			if(feUIDSelected != "*" && !feToMacrosMap_[feUIDSelected])
-			{
-				Debug.log("Invalid FE UID '" + feUIDSelected + "' specified for layout module.",
-						Debug.HIGH_PRIORITY);
-				console.log("feToMacrosMap_",feToMacrosMap_);
-				return;
-			}
-			
-			macroModules_[r][c].feUIDSelected = feUIDSelected;
-			var feMacroTypeSelected = macroModules_[r][c].feMacroTypeSelected;
-			var feMacroNameSelected = macroModules_[r][c].feMacroNameSelected;
-
-			console.log("feMacroTypeSelected",feMacroTypeSelected);
-			console.log("feMacroNameSelected",feMacroNameSelected);
-			
-			if(MAP_FROM_LAYOUT_TO_MACRO_TYPES_[feMacroTypeSelected] === undefined)
-			{
-				Debug.log("Invalid Macro Type '" + feMacroTypeSelected + "' specified for layout module.",
-						Debug.WARN_PRIORITY);
-				console.log("MAP_FROM_LAYOUT_TO_MACRO_TYPES_",MAP_FROM_LAYOUT_TO_MACRO_TYPES_);
-			}	
-			
-			var selectedIndex = 
-					MAP_FROM_LAYOUT_TO_MACRO_TYPES_[feMacroTypeSelected];
-					
-			selectedIndex = selectedIndex|0; //force to int
-			Debug.log("Macro Type selected index: " + selectedIndex);
-			
-			el = document.getElementById("macroTypeSelect-row-" + 
-					r + "-col-" + c);
-			el.selectedIndex =  selectedIndex;
-
-			handleSelectedMacroType(r,c);
-
-		} //end handleSelectedFEUID
-
-		//=====================================================================================
-		//handleSelectedMacroType ~~		
-		function handleSelectedMacroType(r,c)
-		{
-			Debug.log("handleSelectedMacroType(" + r + "," + c + ")");
-			
-
-			if(!macroModules_[r])
-			{
-				Debug.log("Invalid row " + r + " specified for layout module.",
-						Debug.HIGH_PRIORITY);
-				console.log("macroModules_",macroModules_);
-				return;
-			}
-			if(!macroModules_[r][c])
-			{
-				Debug.log("Invalid column " + c + " specified for layout module.",
-						Debug.HIGH_PRIORITY);
-				console.log("macroModules_",macroModules_);
-				return;
-			}
-			
-			var feMacroTypeSelected = document.getElementById("macroTypeSelect-row-" + 
-					r + "-col-" + c).value;			
-			feMacroTypeSelected = MACRO_TYPES_[feMacroTypeSelected]; //convert from readable to encoded macro type
-			console.log("feMacroTypeSelected",feMacroTypeSelected);
-			if(MAP_FROM_LAYOUT_TO_MACRO_TYPES_[feMacroTypeSelected] === undefined)
-			{
-				Debug.log("Invalid Macro Type '" + feMacroTypeSelected + "' specified for layout module.",
-						Debug.HIGH_PRIORITY);
-				console.log("MAP_FROM_LAYOUT_TO_MACRO_TYPES_",MAP_FROM_LAYOUT_TO_MACRO_TYPES_);
-				return;
-			}
-
-			macroModules_[r][c].feMacroTypeSelected = feMacroTypeSelected;	
-			var feClassSelected = macroModules_[r][c].feClassSelected;
-			var feUIDSelected = macroModules_[r][c].feUIDSelected;	
-			var feMacroNameSelected = macroModules_[r][c].feMacroNameSelected;
-
-			console.log("feMacroNameSelected",feMacroNameSelected);
-			
-			var str = "";
-
-			var selectedIndex = -1;
-			var i = 0;
-			var macroNameObject;
-			
-			if(feMacroTypeSelected == MACRO_TYPE_PUBLIC_)
-				macroNameObject = publicMacros_;
-			else if(feMacroTypeSelected == MACRO_TYPE_PRIVATE_)
-				macroNameObject = privateMacros_;
-			else if(feUIDSelected != "*")
-				macroNameObject = feToMacrosMap_[feUIDSelected];
-			else if(feClassSelected != "*" && feClassToFEsMap_[feClassSelected])
-			{
-				//do not assume all instances of a class are the same
-				//	it may be true.. but instances have control of their registered macros
-				//Need to explicitly check for set of common functions
-				var macroNameCounter = {};	
-				var countToMatch = 0;
-				for(var fe in feClassToFEsMap_[feClassSelected])
-				{
-					for(var macroName in feToMacrosMap_[
-								feClassToFEsMap_[feClassSelected][fe]])
-						if(macroNameCounter[macroName])
-							macroNameCounter[macroName].count++;
-						else //init
-							macroNameCounter[macroName] = {  
-									"count":1,
-									"macroObj":feToMacrosMap_[
-									feClassToFEsMap_[feClassSelected][fe]][macroName]								
-							};
-					
-					console.log("macroNameCounter",macroNameCounter);
-					++countToMatch;
-				}
-				
-				macroNameObject = {}; //make obj and set keys if count indicates common macro name
-
-				for(var macroName in macroNameCounter)
-				{
-					if(macroNameCounter[macroName].count == countToMatch)
-						macroNameObject[macroName] = 
-								macroNameCounter[macroName].macroObj; //point to macro object
-				}				
-			}
-			else if(feClassSelected == "*")
-			{
-				//find the global common function set
-				var macroNameCounter = {};	
-				var countToMatch = 0;
-				for(var feClass in feClassToFEsMap_)
-					for(var fe in feClassToFEsMap_[feClass])
-					{
-						for(var macroName in feToMacrosMap_[
-							feClassToFEsMap_[feClass][fe]])
-							if(macroNameCounter[macroName])
-								macroNameCounter[macroName].count++;
-							else	//init
-								macroNameCounter[macroName] = {
-										"count":1,
-										"macroObj":feToMacrosMap_[
-										feClassToFEsMap_[feClass][fe]][macroName]
-								};
-	
-						console.log("macroNameCounter",macroNameCounter);
-						++countToMatch;
-					}
-
-				macroNameObject = {}; //make obj and set keys if count indicates common macro name
-
-				for(var macroName in macroNameCounter)
-				{
-					if(macroNameCounter[macroName].count == countToMatch)
-						macroNameObject[macroName] = 
-								macroNameCounter[macroName].macroObj; //use this one
-				}		
-			}
-			macroModules_[r][c].feMacroNameObject = macroNameObject;
-			
-			console.log("macroNameObject",macroNameObject);
-			
-			for(var macroName in macroNameObject) //go through Macro Names
-			{
-//				var macroName = feMacroTypeSelected == MACRO_TYPE_FE_?
-//						feToMacrosMap_[feUIDSelected][macroNamePtr]:
-//						(feMacroTypeSelected == MACRO_TYPE_PUBLIC_?
-//								macroNamePtr:macroNamePtr);
-
-				console.log(macroName);
-				str +=  DesktopContent.htmlOpen(
-						"option" ,
-						{},
-						macroName /*innerHTML*/,true /*doCloseTag*/);
-
-				if(macroName == feMacroNameSelected)
-					selectedIndex = i;
-				++i;
-			} //end Macro Names loop		
-
-			if(feMacroNameSelected != "" && selectedIndex == -1)
-			{
-				Debug.log("Invalid Macro Name '" + feMacroNameSelected + "' specified for layout module.",
-						Debug.WARN_PRIORITY);
-				console.log("macroNameObject",macroNameObject);
-				selectedIndex = 0;
-			}			
-
-			el = document.getElementById("macroNameSelect-row-" + 
-					r + "-col-" + c);
-			el.innerHTML = str;			
-
-			el.selectedIndex =  selectedIndex;
-
-			handleSelectedMacroName(r,c);
-						
-		} //end handleSelectedMacroType
-
-		//=====================================================================================
-		//handleSelectedMacroName ~~		
-		function handleSelectedMacroName(r,c)
-		{
-			Debug.log("handleSelectedMacroName(" + r + "," + c + ")");
-
-			
-			if(!macroModules_[r])
-			{
-				Debug.log("Invalid row " + r + " specified for layout module.",
-						Debug.HIGH_PRIORITY);
-				console.log("macroModules_",macroModules_);
-				return;
-			}
-			if(!macroModules_[r][c])
-			{
-				Debug.log("Invalid column " + c + " specified for layout module.",
-						Debug.HIGH_PRIORITY);
-				console.log("macroModules_",macroModules_);
-				return;
-			}
-			
-			var feClassSelected = macroModules_[r][c].feClassSelected;
-			var feUIDSelected = macroModules_[r][c].feUIDSelected;	
-			var feMacroTypeSelected = macroModules_[r][c].feMacroTypeSelected;
-			
-			var feMacroNameSelected = document.getElementById("macroNameSelect-row-" + 
-					r + "-col-" + c).value;		
-			macroModules_[r][c].feMacroNameSelected = feMacroNameSelected;
-			console.log("feMacroNameSelected",feMacroNameSelected);
-
-			var macroNameObject = macroModules_[r][c].feMacroNameObject;
-			
-			if(!feMacroNameSelected || feMacroNameSelected == "")
-			{
-				Debug.log("No macro name selected.");
-				return;
-			}
-			
-			if(macroNameObject == undefined ||
-					macroNameObject[feMacroNameSelected] === undefined)
-			{
-				Debug.log("Invalid Macro Name '" + feMacroNameSelected + "' specified for layout module.",
-						Debug.HIGH_PRIORITY);
-				console.log("macroNameObject",macroNameObject);
-				return;
-			}
-			
-			//have macro specified now.. so display inputs/outputs/details
-			
-			var macroName = feMacroNameSelected;
-			
-			var macroObj = macroNameObject[macroName];
-			
-			var requiredPermissions = macroObj.requiredPermissions;			
-			var inputsArr 	= macroObj.inputs;
-			var outputsArr 	= macroObj.outputs;
-			//var supervisor 	= macroObj.supervisor;
-			//var lid 		= macroObj.lid;
-			
-			var str = "";
-
-
-			//====================== create Inputs
-			str += "<br>"
-			str += "<b>&quot;" + macroName + "()&quot;</b> RequiredPermissions=" + 
-					requiredPermissions + "<br>" +
-					"&nbsp;&nbsp;&nbsp; <b>Inputs (count=" + 
-					inputsArr.length + "):</b>" +
-					"<div style='margin-left:60px;'>";
-
-			//create input text boxes
-			if(inputsArr.length)
-			{							
-				str += "<table>";
-				for(var i=0;i<inputsArr.length;++i)
-				{													
-					str += "<tr><td class='macroInputName'>";
-					str += inputsArr[i] + ":";
-					str += "</td><td>";
-					str += DesktopContent.htmlOpen("input",{
-							"type": "text",
-							"id": "macroInput-row-" + r + "-col-" + c +
-								"-i-" + i,
-							"class":"macroInput " + "macroInput-row-" + r + "-col-" + c,
-							"value":"Default",
-							"onclick":"setCaretPosition(this,0,this.value.length);",
-							"autocomplete":"off",
-							"autocorrect":"off",
-							"autocapitalize":"off",
-					},"" /*innerHTML*/,true /*doCloseTag*/);							
-					str += "</td></tr>";
-				}
-				str += "</table>";
-			}
-			else
-				str += " No inputs.";
-
-			str += "</div>";	//end inputs
-			
-
-			//====================== create Outputs
-			str += "&nbsp;&nbsp;&nbsp; <b>Outputs (count=" + 
-					outputsArr.length + "):</b>";
-
-			str += DesktopContent.htmlOpen("div",{
-					"id": "macroOutputs-row-" + r + "-col-" + c,
-					"class":"macroOutputs",
-					"style": "margin-left:60px;",
-			});
-
-			//create output representatives
-			if(outputsArr.length)
-			{			
-				for(var i=0;i<outputsArr.length;++i)
-				{			
-					str += "<label class='macroOutputName'>" +
-							outputsArr[i] + "</label><br>";				
-				}
-			}
-			else
-				str += " No outputs.<br>";
-
-			str += "</div>"; 		//end outputs
-			
-			//====================== create Run button
-			//create hidden div that will have output args persistently		
-
-			var targetString = "";
-			if(feClassSelected == "*" && feUIDSelected == "*")
-				targetString = "all front-ends.";
-			else if(feUIDSelected == "*")
-				targetString = "all front-ends of type &apos;" +
-					feClassSelected + ".&apos;";
-			else if(feMacroTypeSelected == MACRO_TYPE_FE_)
-				targetString = "FE &apos;" + feUIDSelected + "&apos; of type &apos;" +
-					macroObj.feClass + ".&apos;";
-			else
-				targetString = "FE &apos;" + feUIDSelected + ".&apos;";
-
-			str += "<br>";
-			str += DesktopContent.htmlOpen("input",{
-					"id": "runMacroButton-row-" + r + "-col-" + c,
-					"class":"runMacroButton",
-					"type":"button",					
-					"onclick": "runMacro(" +					
-						r + "," + c + ");",
-					"value": "Run",
-					"title": "Run the " + 
-						Object.keys(MACRO_TYPES_)[MAP_FROM_LAYOUT_TO_MACRO_TYPES_[feMacroTypeSelected]] + 
-						" &apos;" + macroName + "&apos; on " + targetString,
-			},"" /*innerHTML*/,true /*doCloseTag*/);
-			
-			str += DesktopContent.htmlOpen("input",{
-					"id": "outputMacroToFile-row-" + r + "-col-" + c,
-					"class":"outputMacroToFile",
-					"type":"checkbox",
-					"title": "When checked, output from Macro will be saved to file.",
-			},"Save output to file" /*innerHTML*/,true /*doCloseTag*/);
-			
-			//end Run button
-			
-			str += DesktopContent.htmlOpen("div",{
-					"id": "macroResults-row-" + r + "-col-" + c,
-					"class":"macroResults",
-			},"" /*innerHTML*/,true /*doCloseTag*/);
-			
-			
-			el = document.getElementById("macroDetail-row-" + 
-					r + "-col-" + c);
-			el.innerHTML = str;
-		} //end handleSelectedMacroName
-		
-		//=====================================================================================				
-		//setCaretPosition ~~
-		function setCaretPosition(el, caretPos, endPos) {
-			el.focus();
-			el.setSelectionRange(caretPos, endPos);
-		} //end setCaretPosition()
-		
-		</script>
-		
+    <title>FE Macros</title>
+
+    <link href='/WebPath/css/fonts.css?family=Inconsolata:400' rel='stylesheet' type='text/css'>
+
+    <link rel="stylesheet" type="text/css" href="/WebPath/css/ConfigurationGUI.css">
+
+    <!-- MultiSelectBox: Must include .css style sheet and .js functionality -->
+    <link rel="stylesheet" type="text/css" href="/WebPath/css/MultiSelectBox.css">
+    <script type="text/JavaScript" src="/WebPath/js/js_lib/MultiSelectBox.js"></script>
+
+    <style type="text/css">
+
+        /*fix margin for this page in Multi-Select (must have changed because of font/font-size)*/
+        .multiselectbox input, textarea {
+            margin: 14px 5px 5px 12px;
+        }
+
+        /* make buttons and inputs have a hand cursor */
+        input, button, select, a {
+            cursor: pointer;
+        }
+
+        #popUpDialog {
+            position: absolute;
+            z-index: 1000;
+            border: 1px solid #770000;
+            background-color: #efeaea;
+            text-align: center;
+            padding: 10px;
+        }
+
+
+        #clearDiv {
+            clear: both;
+        }
+
+        #display {
+            padding: 0;
+        }
+
+        #macroModulesTable, .macroModuleTable {
+            border: 0;
+        }
+
+        .macroModule {
+            border: 1px solid grey;
+            padding: 10px;
+        }
+
+        td {
+            white-space: nowrap;
+            vertical-align: top;
+        }
+
+        .macroOutputName, .macroInputName {
+            font-weight: bold;
+        }
+    </style>
+
+
+    <script type="text/JavaScript" src="/WebPath/js/Globals.js"></script>
+    <script type="text/JavaScript" src="/WebPath/js/Debug.js"></script>
+    <script type="text/JavaScript" src="/WebPath/js/DesktopContent.js"></script>
+    <script type="text/JavaScript" src="/WebPath/js/js_lib/SimpleContextMenu.js"></script>
+
+    <script>
+
+
+        /////////////////////////////////////////////////////////////////////////////////////////
+        /////////////////////////////////////////////////////////////////////////////////////////
+
+        //functions:
+        //init()
+        //runMacro(r,c)
+        //getDateString(date)
+        //redraw()
+        //handleSelectedFEClass(r,c)
+        //handleSelectedFEUID(r,c)
+        //handleSelectedMacroType(r,c)
+        //handleSelectedMacroName(r,c)
+        //setCaretPosition(el, caretPos, endPos)
+
+        var feClassToFEsMap_; 	//map of FE Classes to FE UIDs
+        var feToMacrosMap_;		//map of FE UIDs to FE Macro structure
+        //{requiredPermissions,inputs,outputs,supervisor,lid, feClass}
+        var publicMacros_;		//map of macro name to macro structure
+        //{requiredPermissions,inputs,outputs}
+        var privateMacros_;		//map of macro name to macro structure
+        //{requiredPermissions,inputs,outputs}
+
+        var macroModuleLayoutString_ = ""; //row,
+        //col,
+        //class or *,
+        //UID or *,
+        //macroType:=fe|public|private:username,
+        //macroName;
+        //macroModuleLayoutString_ += "0,1,DTCFrontEndInterface,ExampleInterface0,fe,ROC_Read;";
+        //macroModuleLayoutString_ += "1,0,DTCFrontEndInterface,*,private,testPrivate;";
+
+        macroModuleLayoutString_ += "0,0,*,*,fe,;";
+        //		macroModuleLayoutString_ += "1,0,*,*,fe,;";
+        //		macroModuleLayoutString_ += "0,1,*,*,fe,;";
+        //		macroModuleLayoutString_ += "1,1,*,*,fe,;";
+
+        var macroModules_; //row col to module struct
+        //			macroModules_[r][c]["feClassSelected"] = feClassSelected;
+        //			macroModules_[r][c]["feUIDSelected"] = feUIDSelected;
+        //			macroModules_[r][c]["feMacroTypeSelected"] = feMacroTypeSelected;
+        //			macroModules_[r][c]["feMacroNameSelected"] = feMacroNameSelected;
+        //			macroModules_[r][c]["feMacroNameObject"] = feMacroNameObject;
+        var layoutMaxRow_, layoutMaxCol_;
+
+        var MACRO_TYPE_FE_ = "fe";
+        var MACRO_TYPE_PUBLIC_ = "public";
+        var MACRO_TYPE_PRIVATE_ = "private";
+        var MACRO_TYPES_ = {
+            "FE Macro Function": MACRO_TYPE_FE_,
+            "Public MacroMaker Macro": MACRO_TYPE_PUBLIC_,
+            "Private MacroMaker Macro": MACRO_TYPE_PRIVATE_,
+        };
+        var MAP_FROM_LAYOUT_TO_MACRO_TYPES_ = {}
+        MAP_FROM_LAYOUT_TO_MACRO_TYPES_[MACRO_TYPE_FE_] = 0;
+        MAP_FROM_LAYOUT_TO_MACRO_TYPES_[MACRO_TYPE_PUBLIC_] = 1;
+        MAP_FROM_LAYOUT_TO_MACRO_TYPES_[MACRO_TYPE_PRIVATE_] = 2;
+
+        /////////////////////////////////////////////////////////////////////////////////////////
+        /////////////////////////////////////////////////////////////////////////////////////////
+
+
+
+        //=====================================================================================
+        //init ~~
+        //init called once body has loaded
+        function init() {
+
+            Debug.log("CfgGUI init ");
+
+
+            //get FE Macros
+            DesktopContent.XMLHttpRequest("Request?RequestType=getFEMacroList", "",
+                function (req) {
+
+                    var str = "";
+
+                    //var user = DesktopContent.getXMLValue(req,"UserDisplayName");
+                    //Debug.log("user = " + user);
+
+                    var macroVar;
+                    var macroInArgs, macroOutArgs;
+                    var FEMACROS_HEADER_FIELDS = 4;
+
+                    feClassToFEsMap_ = {}; //reset
+                    feToMacrosMap_ = {}; //reset
+                    publicMacros_ = {}; //reset
+                    privateMacros_ = {}; //reset
+
+                    /////////////////////
+                    //FE Macros
+                    var feMacros = req.responseXML.getElementsByTagName("FEMacros");
+                    Debug.log("feMacros.length = " + feMacros.length);
+                    for (var i = 0; i < feMacros.length; ++i) {
+                        macroVar = feMacros[i].getAttribute("value");
+                        Debug.log(macroVar);
+                        macroVar = macroVar.split(":");
+
+                        var supervisor = macroVar[0];
+                        var lid = macroVar[1];
+                        var feClass = macroVar[2];
+                        var feUID = macroVar[3];
+
+                        if (macroVar.length > FEMACROS_HEADER_FIELDS) //at least one function, so display name
+                        {
+                            //add FE UID to FE Class in global map ---------------
+                            if (!feClassToFEsMap_[feClass]) {
+                                Debug.log("Need to create FE Class to FE map entry.");
+                                feClassToFEsMap_[feClass] = [];
+                            }
+                            feClassToFEsMap_[feClass].push(feUID);
+                        }
+
+                        var c = FEMACROS_HEADER_FIELDS;
+                        while (c < macroVar.length) {
+                            var macroName = macroVar[c];
+
+                            //add FE Macro name to FE in global map ---------------
+                            if (!feToMacrosMap_[feUID]) {
+                                Debug.log("Need to create FE to FE Macro map entry.");
+                                feToMacrosMap_[feUID] = {};
+                            }
+                            feToMacrosMap_[feUID][macroName] =
+                            {
+                                "requiredPermissions": macroVar[c + 1],
+                                "inputs": [],
+                                "outputs": [],
+                                "supervisor": supervisor,
+                                "lid": lid,
+                                "feClass": feClass,
+                            };
+                            c += 2;
+                            for (var j = 0; j < (macroVar[c] | 0); ++j)
+                                feToMacrosMap_[feUID][macroName].inputs.push(macroVar[c + 1 + j]);
+                            c += 1 + (macroVar[c] | 0);
+                            for (var j = 0; j < (macroVar[c] | 0); ++j)
+                                feToMacrosMap_[feUID][macroName].outputs.push(macroVar[c + 1 + j]);
+
+
+                            c += 1 + (macroVar[c] | 0);
+                        } //end FE macro loop
+
+                    } //end FE supervisor loop
+
+                    /////////////////////
+                    //Public Macros
+                    FEMACROS_HEADER_FIELDS = 2;
+                    var publicMacros = req.responseXML.getElementsByTagName("PublicMacro");
+                    Debug.log("publicMacros.length = " + publicMacros.length);
+                    for (var i = 0; i < publicMacros.length; ++i) {
+                        macroVar = publicMacros[i].getAttribute("value");
+                        Debug.log(macroVar);
+                        macroVar = macroVar.split(":");
+
+                        var macroName = macroVar[0];
+                        var requiredPermissions = macroVar[1];
+
+                        publicMacros_[macroName] =
+                        {
+                            "requiredPermissions": requiredPermissions,
+                            "inputs": [],
+                            "outputs": [],
+                        };
+
+
+                        var c = FEMACROS_HEADER_FIELDS;
+                        for (var j = 0; j < (macroVar[c] | 0); ++j)
+                            publicMacros_[macroName].inputs.push(macroVar[c + 1 + j]);
+                        c += 1 + (macroVar[c] | 0);
+                        for (var j = 0; j < (macroVar[c] | 0); ++j)
+                            publicMacros_[macroName].outputs.push(macroVar[c + 1 + j]);
+                    } //end public macro loop
+
+                    /////////////////////
+                    //Private Macros
+                    var privateMacros = req.responseXML.getElementsByTagName("PrivateMacro");
+                    Debug.log("privateMacros.length = " + privateMacros.length);
+                    for (var i = 0; i < privateMacros.length; ++i) {
+                        macroVar = privateMacros[i].getAttribute("value");
+                        Debug.log(macroVar);
+                        macroVar = macroVar.split(":");
+
+                        var macroName = macroVar[0];
+                        var requiredPermissions = macroVar[1];
+
+                        privateMacros_[macroName] =
+                        {
+                            "requiredPermissions": requiredPermissions,
+                            "inputs": [],
+                            "outputs": [],
+                        };
+
+
+                        var c = FEMACROS_HEADER_FIELDS;
+                        for (var j = 0; j < (macroVar[c] | 0); ++j)
+                            privateMacros_[macroName].inputs.push(macroVar[c + 1 + j]);
+                        c += 1 + (macroVar[c] | 0);
+                        for (var j = 0; j < (macroVar[c] | 0); ++j)
+                            privateMacros_[macroName].outputs.push(macroVar[c + 1 + j]);
+                    } //end public macro loop
+
+
+                    console.log("feClassToFEsMap_", feClassToFEsMap_);
+                    console.log("feToMacrosMap_", feToMacrosMap_);
+                    console.log("privateMacros_", privateMacros_);
+                    console.log("publicMacros_", publicMacros_);
+
+
+                    if (Object.keys(feClassToFEsMap_).length == 0) {
+                        Debug.log("No FE Macros were found, have you Configured the State Machine? " +
+                            "Try configuring and then <a onclick='init()'>Refresh</a> this window.",
+                            Debug.WARN_PRIORITY);
+                    }
+
+                    //construct macro module layout
+                    console.log("macroModuleLayoutString_", macroModuleLayoutString_);
+
+                    macroModules_ = {}; //reset
+                    layoutMaxRow_ = 0;
+                    layoutMaxCol_ = 0;
+                    var layoutModules = macroModuleLayoutString_.split(';');
+                    for (var i = 0; i < layoutModules.length; ++i) {
+                        var layoutArgs = layoutModules[i].split(',');
+                        if (layoutArgs.length != 6)
+                            continue;
+                        console.log(i, ":", "layoutArgs", layoutArgs);
+
+                        //layout args:
+                        //			row,
+                        //			col,
+                        //			class or *,
+                        //			UID or *,
+                        //			macroType:=fe|public|private:username,
+                        //			macroName;
+                        var r = layoutArgs[0] | 0;
+                        var c = layoutArgs[1] | 0;
+                        var feClassSelected = layoutArgs[2];
+                        var feUIDSelected = layoutArgs[3];
+                        var feMacroTypeSelected = layoutArgs[4];
+                        var feMacroNameSelected = layoutArgs[5];
+
+                        if (r > layoutMaxRow_)
+                            layoutMaxRow_ = r;
+                        if (c > layoutMaxCol_)
+                            layoutMaxCol_ = c;
+
+                        if (!macroModules_[r])
+                            macroModules_[r] = {};
+                        if (!macroModules_[r][c])
+                            macroModules_[r][c] = {};
+                        macroModules_[r][c]["feClassSelected"] = feClassSelected;
+                        macroModules_[r][c]["feUIDSelected"] = feUIDSelected;
+                        macroModules_[r][c]["feMacroTypeSelected"] = feMacroTypeSelected;
+                        macroModules_[r][c]["feMacroNameSelected"] = feMacroNameSelected;
+                        macroModules_[r][c]["feMacroNameObject"] = undefined;
+
+                    } //end macro module extraction loop
+
+
+                    console.log("macroModules_", macroModules_);
+
+                    redraw();
+                    return;
+
+                }); //end getFEMacroList handler
+        } //end init()
+
+        //=====================================================================================
+        //runMacro ~~
+        function runMacro(r, c) {
+            Debug.log("runMacro(" + r + "," + c + ")");
+
+
+            if (!macroModules_[r]) {
+                Debug.log("Invalid row " + r + " specified for layout module.",
+                    Debug.HIGH_PRIORITY);
+                console.log("macroModules_", macroModules_);
+                return;
+            }
+            if (!macroModules_[r][c]) {
+                Debug.log("Invalid column " + c + " specified for layout module.",
+                    Debug.HIGH_PRIORITY);
+                console.log("macroModules_", macroModules_);
+                return;
+            }
+
+            var feClassSelected = macroModules_[r][c].feClassSelected;
+            var feUIDSelected = macroModules_[r][c].feUIDSelected;
+            var feMacroTypeSelected = macroModules_[r][c].feMacroTypeSelected;
+            var macroName = macroModules_[r][c].feMacroNameSelected;
+
+            var macroObj = macroModules_[r][c].feMacroNameObject[macroName];
+
+            var saveOutputs = document.getElementById("outputMacroToFile-row-" + r + "-col-" + c).checked ? 1 : 0;
+            var inputsArr = macroObj.inputs;
+            var outputsArr = macroObj.outputs;
+
+            var inEls = document.getElementsByClassName(
+                "macroInput-row-" + r + "-col-" + c
+            );
+            var postData = "";
+
+            postData += "inputArgs=";
+            for (var i = 0; i < inputsArr.length; ++i) {
+                Debug.log("inputArgs " + inputsArr[i]);
+                Debug.log("inputArgs.value " + inEls[i].value);
+                if (i) postData += ";";
+                postData += inputsArr[i] + "," + inEls[i].value;
+            }
+
+            postData += "&outputArgs=";
+            for (var i = 0; i < outputsArr.length; ++i) {
+                Debug.log("outputArgs " + outputsArr[i]);
+                if (i) postData += ",";
+                postData += outputsArr[i];
+            }
+
+            console.log("postData", postData);
+
+            var str = "";
+            str += "Launched... " + getDateString(new Date) +
+                ".. waiting for response...";
+            var el = document.getElementById(
+                "macroResults-row-" + r + "-col-" + c);
+            el.innerHTML = str;
+
+            DesktopContent.XMLHttpRequest("Request?RequestType=runFEMacro" +
+                //"&feSupervisorID=" + feSupervisorID +
+                "&feClassSelected=" + feClassSelected +
+                "&feUIDSelected=" + feUIDSelected +
+                "&macroType=" + feMacroTypeSelected +
+                "&macroName=" + macroName +
+                "&saveOutputs=" + saveOutputs
+                , postData,
+                function (req, reqParam, errStr) {
+
+                    var str = "";
+
+                    if (!errStr)
+                        errStr = "";
+                    var err = DesktopContent.getXMLValue(req, "Error");
+                    if (err && err != "")
+                        errStr += "\n" + err;
+                    if (errStr != "") {
+                        str += "Received error... " + getDateString(new Date);
+                        str += "<br>";
+                        Debug.log("Error while running FE Macro: " + errStr,
+                            Debug.HIGH_PRIORITY);
+                        el.innerHTML = str;
+                        return;
+                    }
+
+                    var outputArgNames = req.responseXML.getElementsByTagName("outputArgs_name");
+                    var outputArgValues = req.responseXML.getElementsByTagName("outputArgs_value");
+                    Debug.log("outputArgNames.length = " + outputArgNames.length);
+
+                    str += "Last ran... " + getDateString(new Date);
+                    str += "<br>";
+                    for (var i = 0; i < outputArgNames.length; ++i) {
+                        var name = outputArgNames[i].getAttribute("value");
+                        var value = outputArgValues[i].getAttribute("value");
+                        if (name == "Filename" || name == "filename")
+                            str += name + " = " +
+                                //if filename, add link to CodeEditor
+                                DesktopContent.htmlOpen("a", //start macro module table
+                                    {
+                                        "title": "Open file in a new browser tab: \n" +
+                                            value,
+                                        "onclick": "DesktopContent.openNewBrowserTab(" +
+                                            "\"Code Editor\",undefined /*subname undefined for LID lookup*/," +
+                                            "\"?" +
+                                            "startFilePrimary=" +
+                                            value + "\",undefined /*unique undefined for LID lookup*/);' ", //end onclick
+                                    },
+                                    value /*innerHTML*/,
+                                    true /*doCloseTag*/) + "<br>";
+
+                        else
+                            str += name + " = " +
+                                value + "<br>";
+                    }
+
+                    el.innerHTML = str;
+                },
+                0 /*reqParam*/, 0 /*progressHandler*/,
+                true /*callHandlerOnErr*/
+            );
+        } //end runMacro()
+
+        //=====================================================================================
+        //getDateString ~~
+        var dayArr_ = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+        var monthArr_ = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+        function getDateString(date) {
+            var dateStr = "";
+
+            dateStr += dayArr_[date.getDay()];
+            dateStr += " ";
+            dateStr += monthArr_[date.getMonth()];
+            dateStr += " ";
+            dateStr += date.getDate();
+            dateStr += " ";
+            dateStr += date.getHours();
+            dateStr += ":";
+            dateStr += ((date.getMinutes() < 10) ? "0" : "") + date.getMinutes();
+            dateStr += ":";
+            dateStr += ((date.getSeconds() < 10) ? "0" : "") + date.getSeconds();
+            dateStr += " ";
+            dateStr += date.getFullYear();
+            dateStr += " ";
+            dateStr += date.toLocaleTimeString([], { timeZoneName: "short" }).split(" ")[2];
+            return dateStr;
+        } //end getDateString()
+
+        //=====================================================================================
+        //redraw ~~
+        function redraw() {
+            Debug.log("redraw()");
+
+            var maxRow = layoutMaxRow_;
+            var maxCol = layoutMaxCol_;
+
+            console.log("maxRow", maxRow);
+            console.log("maxCol", maxCol);
+
+            //make module grid
+            var str = "";
+            str += DesktopContent.htmlOpen("table",
+                {
+                    "id": "macroModulesTable",
+                });
+            for (var c = 0; c <= maxCol; ++c) {
+                str += DesktopContent.htmlOpen("tr");
+                for (var r = 0; r <= maxRow; ++r) {
+                    str += DesktopContent.htmlOpen(
+                        "td",
+                        {
+                            "id": "macroModule-row-" + r + "-col-" + c,
+                            "class": "macroModule",
+                        },
+                        "" /*innerHTML*/, true /*doCloseTag*/);
+                }
+                str += "</tr>";
+            }
+            str += "</table>";
+
+
+            var el = document.getElementById("display");
+            el.innerHTML = str;
+
+            for (var row in macroModules_)
+                for (var col in macroModules_[row]) {
+                    //layout args:
+                    //			row,
+                    //			col,
+                    //			class or *,
+                    //			UID or *,
+                    //			macroType:=fe|public|private:username,
+                    //			macroName;
+                    var r = row | 0;
+                    var c = col | 0;
+                    var feClassSelected = macroModules_[r][c].feClassSelected;
+                    var feUIDSelected = macroModules_[r][c].feUIDSelected;
+                    var feMacroTypeSelected = macroModules_[r][c].feMacroTypeSelected;
+                    var feMacroNameSelected = macroModules_[r][c].feMacroNameSelected;
+
+                    //make drop down for class, UID
+                    //	then inputs and outpus
+
+                    str = "";
+
+                    str += DesktopContent.htmlOpen("table", //start macro module table
+                        {
+                            "class": "macroModuleTable",
+                        });
+                    { //FE Class html
+                        str += DesktopContent.htmlOpen("tr"); //start row for FE Class
+                        str += DesktopContent.htmlOpen("td", {}, "<b>FE Type:</b>" /*innerHTML*/, true /*doCloseTag*/);
+                        str += DesktopContent.htmlOpen("td");
+                        {
+                            str += DesktopContent.htmlOpen(
+                                "select",
+                                {
+                                    "id": "feClassSelect-row-" + r + "-col-" + c,
+                                    "class": "feClassSelect",
+                                    "onchange": "handleSelectedFEClass(" +
+                                        r + "," + c + ");",
+                                });
+                            str += DesktopContent.htmlOpen(
+                                "option" + ("*" == feClassSelected ? " selected" : ""),
+                                {},
+                                "*" /*innerHTML*/, true /*doCloseTag*/);
+                            for (var feClass in feClassToFEsMap_) //go through class keys
+                            {
+                                console.log(feClass);
+                                str += DesktopContent.htmlOpen(
+                                    "option" + (feClass == feClassSelected ? " selected" : ""),
+                                    {},
+                                    feClass /*innerHTML*/, true /*doCloseTag*/);
+                            } //end class key loop
+                            str += "</select>";
+                        }
+                        str += "</td></tr>"; //end row for FE Class
+                    } //end FE Class html
+
+                    { //FE UID html
+                        str += DesktopContent.htmlOpen("tr"); //start row for FE UID
+                        str += DesktopContent.htmlOpen("td", {}, "<b>FE Target UID:</b>" /*innerHTML*/, true /*doCloseTag*/);
+                        str += DesktopContent.htmlOpen("td");
+                        {
+                            str += DesktopContent.htmlOpen(
+                                "select",
+                                {
+                                    "id": "feUIDSelect-row-" + r + "-col-" + c,
+                                    "class": "feUIDSelect",
+                                    "onchange": "handleSelectedFEUID(" +
+                                        r + "," + c + ");",
+                                });
+                            str += "</select>";
+                        }
+                        str += "</td></tr>"; //end row for FE Class
+                    } //end FE Class html
+
+                    { //Macro Type html
+                        str += DesktopContent.htmlOpen("tr"); //start row for Macro Type
+                        str += DesktopContent.htmlOpen("td", {}, "<b>Macro Type:</b>" /*innerHTML*/, true /*doCloseTag*/);
+                        str += DesktopContent.htmlOpen("td");
+                        {
+                            str += DesktopContent.htmlOpen(
+                                "select",
+                                {
+                                    "id": "macroTypeSelect-row-" + r + "-col-" + c,
+                                    "class": "macroTypeSelect",
+                                    "onchange": "handleSelectedMacroType(" +
+                                        r + "," + c + ");",
+                                });
+
+                            for (var macroType in MACRO_TYPES_) //go through class keys
+                            {
+                                console.log(macroType);
+                                str += DesktopContent.htmlOpen(
+                                    "option" + (MACRO_TYPES_[macroType] ==
+                                        feMacroTypeSelected ? " selected" : ""),
+                                    {},
+                                    macroType /*innerHTML*/, true /*doCloseTag*/);
+                            } //end class key loop
+                            str += "</select>";
+                        }
+                        str += "</td></tr>"; //end row for Macro Type
+                    } //end Macro Type html
+
+                    { //Macro Name html
+                        str += DesktopContent.htmlOpen("tr"); //start row for Macro Name
+                        str += DesktopContent.htmlOpen("td", {}, "<b>Macro Name:</b>" /*innerHTML*/, true /*doCloseTag*/);
+                        str += DesktopContent.htmlOpen("td");
+                        {
+                            str += DesktopContent.htmlOpen(
+                                "select",
+                                {
+                                    "id": "macroNameSelect-row-" + r + "-col-" + c,
+                                    "class": "macroNameSelect",
+                                    "onchange": "handleSelectedMacroName(" +
+                                        r + "," + c + ");",
+                                });
+                            str += "</select>";
+                        }
+                        str += "</td></tr>"; //end row for Macro Name
+                    } //end Macro Name html
+
+                    { //Macro Detail html
+                        str += DesktopContent.htmlOpen("tr"); //start row for Macro Detail
+                        str += DesktopContent.htmlOpen("td", {
+                            "colspan": "2",
+                            "id": "macroDetail-row-" + r + "-col-" + c,
+                            "class": "macroDetail",
+                        }, "" /*innerHTML*/, true /*doCloseTag*/);
+                        str += "</tr>"; //end row for Macro Detail
+                    } //end Macro Detail html
+
+                    el = document.getElementById("macroModule-row-" +
+                        r + "-col-" + c);
+                    el.innerHTML = str;
+
+                    handleSelectedFEClass(r, c);
+                } //end macro module loop
+
+        } //end redraw()
+
+        //=====================================================================================
+        //handleSelectedFEClass ~~
+        function handleSelectedFEClass(r, c) {
+            Debug.log("handleSelectedFEClass(" + r + "," + c + ")");
+
+            var feClassSelected = document.getElementById("feClassSelect-row-" +
+                r + "-col-" + c).value;
+            console.log("feClassSelected", feClassSelected);
+
+            if (!macroModules_[r]) {
+                Debug.log("Invalid row " + r + " specified for layout module.",
+                    Debug.HIGH_PRIORITY);
+                console.log("macroModules_", macroModules_);
+                return;
+            }
+            if (!macroModules_[r][c]) {
+                Debug.log("Invalid column " + c + " specified for layout module.",
+                    Debug.HIGH_PRIORITY);
+                console.log("macroModules_", macroModules_);
+                return;
+            }
+            if (feClassSelected != "*" && !feClassToFEsMap_[feClassSelected]) {
+                Debug.log("Invalid FE Class '" + feClassSelected + "' specified for layout module.",
+                    Debug.HIGH_PRIORITY);
+                console.log("feClassToFEsMap_", feClassToFEsMap_);
+                return;
+            }
+
+            macroModules_[r][c].feClassSelected = feClassSelected;
+            var feUIDSelected = macroModules_[r][c].feUIDSelected;
+            var feMacroTypeSelected = macroModules_[r][c].feMacroTypeSelected;
+            var feMacroNameSelected = macroModules_[r][c].feMacroNameSelected;
+
+            console.log("feUIDSelected", feUIDSelected);
+
+            var str = "";
+
+            str += DesktopContent.htmlOpen(
+                "option",
+                {},
+                "*" /*innerHTML*/, true /*doCloseTag*/);
+
+            var selectedIndex = 0;
+            var i = 1;
+            var feUIDObject = feClassSelected == "*" ?
+                feToMacrosMap_ : feClassToFEsMap_[feClassSelected];
+            for (var feUIDptr in feUIDObject) //go through FE UIDs
+            {
+                var feUID = feClassSelected == "*" ?
+                    feUIDptr : feClassToFEsMap_[feClassSelected][feUIDptr];
+
+                console.log(feUID);
+                str += DesktopContent.htmlOpen(
+                    "option",
+                    {},
+                    feUID /*innerHTML*/, true /*doCloseTag*/);
+
+                if (feUID == feUIDSelected)
+                    selectedIndex = i;
+                ++i;
+            } //end FE UID loop
+
+            if (feUIDSelected != "*" && selectedIndex == 0) {
+                Debug.log("Invalid FE UID '" + feUIDSelected + "' specified for layout module.",
+                    Debug.WARN_PRIORITY);
+                console.log("feUIDObject", feUIDObject);
+            }
+
+            el = document.getElementById("feUIDSelect-row-" +
+                r + "-col-" + c);
+            el.innerHTML = str;
+
+            el.selectedIndex = selectedIndex;
+
+            handleSelectedFEUID(r, c);
+        } //end handleSelectedFEClass()
+
+        //=====================================================================================
+        //handleSelectedFEUID ~~
+        function handleSelectedFEUID(r, c) {
+            Debug.log("handleSelectedFEUID(" + r + "," + c + ")");
+
+            var feUIDSelected = document.getElementById("feUIDSelect-row-" +
+                r + "-col-" + c).value;
+            console.log("feUIDSelected", feUIDSelected);
+
+            if (!macroModules_[r]) {
+                Debug.log("Invalid row " + r + " specified for layout module.",
+                    Debug.HIGH_PRIORITY);
+                console.log("macroModules_", macroModules_);
+                return;
+            }
+            if (!macroModules_[r][c]) {
+                Debug.log("Invalid column " + c + " specified for layout module.",
+                    Debug.HIGH_PRIORITY);
+                console.log("macroModules_", macroModules_);
+                return;
+            }
+            if (feUIDSelected != "*" && !feToMacrosMap_[feUIDSelected]) {
+                Debug.log("Invalid FE UID '" + feUIDSelected + "' specified for layout module.",
+                    Debug.HIGH_PRIORITY);
+                console.log("feToMacrosMap_", feToMacrosMap_);
+                return;
+            }
+
+            macroModules_[r][c].feUIDSelected = feUIDSelected;
+            var feMacroTypeSelected = macroModules_[r][c].feMacroTypeSelected;
+            var feMacroNameSelected = macroModules_[r][c].feMacroNameSelected;
+
+            console.log("feMacroTypeSelected", feMacroTypeSelected);
+            console.log("feMacroNameSelected", feMacroNameSelected);
+
+            if (MAP_FROM_LAYOUT_TO_MACRO_TYPES_[feMacroTypeSelected] === undefined) {
+                Debug.log("Invalid Macro Type '" + feMacroTypeSelected + "' specified for layout module.",
+                    Debug.WARN_PRIORITY);
+                console.log("MAP_FROM_LAYOUT_TO_MACRO_TYPES_", MAP_FROM_LAYOUT_TO_MACRO_TYPES_);
+            }
+
+            var selectedIndex =
+                MAP_FROM_LAYOUT_TO_MACRO_TYPES_[feMacroTypeSelected];
+
+            selectedIndex = selectedIndex | 0; //force to int
+            Debug.log("Macro Type selected index: " + selectedIndex);
+
+            el = document.getElementById("macroTypeSelect-row-" +
+                r + "-col-" + c);
+            el.selectedIndex = selectedIndex;
+
+            handleSelectedMacroType(r, c);
+
+        } //end handleSelectedFEUID
+
+        //=====================================================================================
+        //handleSelectedMacroType ~~
+        function handleSelectedMacroType(r, c) {
+            Debug.log("handleSelectedMacroType(" + r + "," + c + ")");
+
+
+            if (!macroModules_[r]) {
+                Debug.log("Invalid row " + r + " specified for layout module.",
+                    Debug.HIGH_PRIORITY);
+                console.log("macroModules_", macroModules_);
+                return;
+            }
+            if (!macroModules_[r][c]) {
+                Debug.log("Invalid column " + c + " specified for layout module.",
+                    Debug.HIGH_PRIORITY);
+                console.log("macroModules_", macroModules_);
+                return;
+            }
+
+            var feMacroTypeSelected = document.getElementById("macroTypeSelect-row-" +
+                r + "-col-" + c).value;
+            feMacroTypeSelected = MACRO_TYPES_[feMacroTypeSelected]; //convert from readable to encoded macro type
+            console.log("feMacroTypeSelected", feMacroTypeSelected);
+            if (MAP_FROM_LAYOUT_TO_MACRO_TYPES_[feMacroTypeSelected] === undefined) {
+                Debug.log("Invalid Macro Type '" + feMacroTypeSelected + "' specified for layout module.",
+                    Debug.HIGH_PRIORITY);
+                console.log("MAP_FROM_LAYOUT_TO_MACRO_TYPES_", MAP_FROM_LAYOUT_TO_MACRO_TYPES_);
+                return;
+            }
+
+            macroModules_[r][c].feMacroTypeSelected = feMacroTypeSelected;
+            var feClassSelected = macroModules_[r][c].feClassSelected;
+            var feUIDSelected = macroModules_[r][c].feUIDSelected;
+            var feMacroNameSelected = macroModules_[r][c].feMacroNameSelected;
+
+            console.log("feMacroNameSelected", feMacroNameSelected);
+
+            var str = "";
+
+            var selectedIndex = -1;
+            var i = 0;
+            var macroNameObject;
+
+            if (feMacroTypeSelected == MACRO_TYPE_PUBLIC_)
+                macroNameObject = publicMacros_;
+            else if (feMacroTypeSelected == MACRO_TYPE_PRIVATE_)
+                macroNameObject = privateMacros_;
+            else if (feUIDSelected != "*")
+                macroNameObject = feToMacrosMap_[feUIDSelected];
+            else if (feClassSelected != "*" && feClassToFEsMap_[feClassSelected]) {
+                //do not assume all instances of a class are the same
+                //	it may be true.. but instances have control of their registered macros
+                //Need to explicitly check for set of common functions
+                var macroNameCounter = {};
+                var countToMatch = 0;
+                for (var fe in feClassToFEsMap_[feClassSelected]) {
+                    for (var macroName in feToMacrosMap_[
+                        feClassToFEsMap_[feClassSelected][fe]])
+                        if (macroNameCounter[macroName])
+                            macroNameCounter[macroName].count++;
+                        else //init
+                            macroNameCounter[macroName] = {
+                                "count": 1,
+                                "macroObj": feToMacrosMap_[
+                                    feClassToFEsMap_[feClassSelected][fe]][macroName]
+                            };
+
+                    console.log("macroNameCounter", macroNameCounter);
+                    ++countToMatch;
+                }
+
+                macroNameObject = {}; //make obj and set keys if count indicates common macro name
+
+                for (var macroName in macroNameCounter) {
+                    if (macroNameCounter[macroName].count == countToMatch)
+                        macroNameObject[macroName] =
+                            macroNameCounter[macroName].macroObj; //point to macro object
+                }
+            }
+            else if (feClassSelected == "*") {
+                //find the global common function set
+                var macroNameCounter = {};
+                var countToMatch = 0;
+                for (var feClass in feClassToFEsMap_)
+                    for (var fe in feClassToFEsMap_[feClass]) {
+                        for (var macroName in feToMacrosMap_[
+                            feClassToFEsMap_[feClass][fe]])
+                            if (macroNameCounter[macroName])
+                                macroNameCounter[macroName].count++;
+                            else	//init
+                                macroNameCounter[macroName] = {
+                                    "count": 1,
+                                    "macroObj": feToMacrosMap_[
+                                        feClassToFEsMap_[feClass][fe]][macroName]
+                                };
+
+                        console.log("macroNameCounter", macroNameCounter);
+                        ++countToMatch;
+                    }
+
+                macroNameObject = {}; //make obj and set keys if count indicates common macro name
+
+                for (var macroName in macroNameCounter) {
+                    if (macroNameCounter[macroName].count == countToMatch)
+                        macroNameObject[macroName] =
+                            macroNameCounter[macroName].macroObj; //use this one
+                }
+            }
+            macroModules_[r][c].feMacroNameObject = macroNameObject;
+
+            console.log("macroNameObject", macroNameObject);
+
+            for (var macroName in macroNameObject) //go through Macro Names
+            {
+                //				var macroName = feMacroTypeSelected == MACRO_TYPE_FE_?
+                //						feToMacrosMap_[feUIDSelected][macroNamePtr]:
+                //						(feMacroTypeSelected == MACRO_TYPE_PUBLIC_?
+                //								macroNamePtr:macroNamePtr);
+
+                console.log(macroName);
+                str += DesktopContent.htmlOpen(
+                    "option",
+                    {},
+                    macroName /*innerHTML*/, true /*doCloseTag*/);
+
+                if (macroName == feMacroNameSelected)
+                    selectedIndex = i;
+                ++i;
+            } //end Macro Names loop
+
+            if (feMacroNameSelected != "" && selectedIndex == -1) {
+                Debug.log("Invalid Macro Name '" + feMacroNameSelected + "' specified for layout module.",
+                    Debug.WARN_PRIORITY);
+                console.log("macroNameObject", macroNameObject);
+                selectedIndex = 0;
+            }
+
+            el = document.getElementById("macroNameSelect-row-" +
+                r + "-col-" + c);
+            el.innerHTML = str;
+
+            el.selectedIndex = selectedIndex;
+
+            handleSelectedMacroName(r, c);
+
+        } //end handleSelectedMacroType
+
+        //=====================================================================================
+        //handleSelectedMacroName ~~
+        function handleSelectedMacroName(r, c) {
+            Debug.log("handleSelectedMacroName(" + r + "," + c + ")");
+
+
+            if (!macroModules_[r]) {
+                Debug.log("Invalid row " + r + " specified for layout module.",
+                    Debug.HIGH_PRIORITY);
+                console.log("macroModules_", macroModules_);
+                return;
+            }
+            if (!macroModules_[r][c]) {
+                Debug.log("Invalid column " + c + " specified for layout module.",
+                    Debug.HIGH_PRIORITY);
+                console.log("macroModules_", macroModules_);
+                return;
+            }
+
+            var feClassSelected = macroModules_[r][c].feClassSelected;
+            var feUIDSelected = macroModules_[r][c].feUIDSelected;
+            var feMacroTypeSelected = macroModules_[r][c].feMacroTypeSelected;
+
+            var feMacroNameSelected = document.getElementById("macroNameSelect-row-" +
+                r + "-col-" + c).value;
+            macroModules_[r][c].feMacroNameSelected = feMacroNameSelected;
+            console.log("feMacroNameSelected", feMacroNameSelected);
+
+            var macroNameObject = macroModules_[r][c].feMacroNameObject;
+
+            if (!feMacroNameSelected || feMacroNameSelected == "") {
+                Debug.log("No macro name selected.");
+                return;
+            }
+
+            if (macroNameObject == undefined ||
+                macroNameObject[feMacroNameSelected] === undefined) {
+                Debug.log("Invalid Macro Name '" + feMacroNameSelected + "' specified for layout module.",
+                    Debug.HIGH_PRIORITY);
+                console.log("macroNameObject", macroNameObject);
+                return;
+            }
+
+            //have macro specified now.. so display inputs/outputs/details
+
+            var macroName = feMacroNameSelected;
+
+            var macroObj = macroNameObject[macroName];
+
+            var requiredPermissions = macroObj.requiredPermissions;
+            var inputsArr = macroObj.inputs;
+            var outputsArr = macroObj.outputs;
+            //var supervisor 	= macroObj.supervisor;
+            //var lid 		= macroObj.lid;
+
+            var str = "";
+
+
+            //====================== create Inputs
+            str += "<br>"
+            str += "<b>&quot;" + macroName + "()&quot;</b> RequiredPermissions=" +
+                requiredPermissions + "<br>" +
+                "&nbsp;&nbsp;&nbsp; <b>Inputs (count=" +
+                inputsArr.length + "):</b>" +
+                "<div style='margin-left:60px;'>";
+
+            //create input text boxes
+            if (inputsArr.length) {
+                str += "<table>";
+                for (var i = 0; i < inputsArr.length; ++i) {
+                    str += "<tr><td class='macroInputName'>";
+                    str += inputsArr[i] + ":";
+                    str += "</td><td>";
+                    str += DesktopContent.htmlOpen("input", {
+                        "type": "text",
+                        "id": "macroInput-row-" + r + "-col-" + c +
+                            "-i-" + i,
+                        "class": "macroInput " + "macroInput-row-" + r + "-col-" + c,
+                        "value": "Default",
+                        "onclick": "setCaretPosition(this,0,this.value.length);",
+                        "autocomplete": "off",
+                        "autocorrect": "off",
+                        "autocapitalize": "off",
+                    }, "" /*innerHTML*/, true /*doCloseTag*/);
+                    str += "</td></tr>";
+                }
+                str += "</table>";
+            }
+            else
+                str += " No inputs.";
+
+            str += "</div>";	//end inputs
+
+
+            //====================== create Outputs
+            str += "&nbsp;&nbsp;&nbsp; <b>Outputs (count=" +
+                outputsArr.length + "):</b>";
+
+            str += DesktopContent.htmlOpen("div", {
+                "id": "macroOutputs-row-" + r + "-col-" + c,
+                "class": "macroOutputs",
+                "style": "margin-left:60px;",
+            });
+
+            //create output representatives
+            if (outputsArr.length) {
+                for (var i = 0; i < outputsArr.length; ++i) {
+                    str += "<label class='macroOutputName'>" +
+                        outputsArr[i] + "</label><br>";
+                }
+            }
+            else
+                str += " No outputs.<br>";
+
+            str += "</div>"; 		//end outputs
+
+            //====================== create Run button
+            //create hidden div that will have output args persistently
+
+            var targetString = "";
+            if (feClassSelected == "*" && feUIDSelected == "*")
+                targetString = "all front-ends.";
+            else if (feUIDSelected == "*")
+                targetString = "all front-ends of type &apos;" +
+                    feClassSelected + ".&apos;";
+            else if (feMacroTypeSelected == MACRO_TYPE_FE_)
+                targetString = "FE &apos;" + feUIDSelected + "&apos; of type &apos;" +
+                    macroObj.feClass + ".&apos;";
+            else
+                targetString = "FE &apos;" + feUIDSelected + ".&apos;";
+
+            str += "<br>";
+            str += DesktopContent.htmlOpen("input", {
+                "id": "runMacroButton-row-" + r + "-col-" + c,
+                "class": "runMacroButton",
+                "type": "button",
+                "onclick": "runMacro(" +
+                    r + "," + c + ");",
+                "value": "Run",
+                "title": "Run the " +
+                    Object.keys(MACRO_TYPES_)[MAP_FROM_LAYOUT_TO_MACRO_TYPES_[feMacroTypeSelected]] +
+                    " &apos;" + macroName + "&apos; on " + targetString,
+            }, "" /*innerHTML*/, true /*doCloseTag*/);
+
+            str += DesktopContent.htmlOpen("input", {
+                "id": "outputMacroToFile-row-" + r + "-col-" + c,
+                "class": "outputMacroToFile",
+                "type": "checkbox",
+                "title": "When checked, output from Macro will be saved to file.",
+            }, "Save output to file" /*innerHTML*/, true /*doCloseTag*/);
+
+            //end Run button
+
+            str += DesktopContent.htmlOpen("div", {
+                "id": "macroResults-row-" + r + "-col-" + c,
+                "class": "macroResults",
+            }, "" /*innerHTML*/, true /*doCloseTag*/);
+
+
+            el = document.getElementById("macroDetail-row-" +
+                r + "-col-" + c);
+            el.innerHTML = str;
+        } //end handleSelectedMacroName
+
+        //=====================================================================================
+        //setCaretPosition ~~
+        function setCaretPosition(el, caretPos, endPos) {
+            el.focus();
+            el.setSelectionRange(caretPos, endPos);
+        } //end setCaretPosition()
+
+    </script>
+
 </head>
-	
 
-<body onload='//init() called by DesktopContent.js'>	
-		
-	<h1>Front-End Macros</h1>
-		<div style='width:550px'></div>		
 
-	<!--<a onclick='init();'>Refresh</a>
-		<br>-->
-	<div id='display'></div>
-	
+<body onload='//init() called by DesktopContent.js'>
+
+    <h1>Front-End Macros</h1>
+    <div style='width:550px'></div>
+
+    <!--<a onclick='init();'>Refresh</a>
+        <br>-->
+    <div id='display'></div>
+
 </body>
-	
+
 </html>
