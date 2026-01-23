@@ -46,14 +46,14 @@ void SubsystemCalorimeterParametersTable::init(ConfigurationManager* configManag
 		try {
 			std::ofstream out(offlineTableFileName);
 			if(!out) {
-				__COUTT__ << "Failed to open file: " << offlineTableFileName;
-				return;
+				__SS__ << "Failed to open file: " << offlineTableFileName << __E__;
+				__SS_THROW__;
 			}
 			out << offlineTable.second;
 			out.close();
 		} catch(const std::exception& e) {
-			__COUT__ << "Failed to write offline table " << offlineTable.first << " to file.";
-			__COUT__ << e.what() << __E__;
+			__SS__ << "Failed to write offline table " << offlineTable.first << " to file: " << e.what() << __E__;
+			__SS_THROW__;
 		}
 	}
 
@@ -104,6 +104,7 @@ std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(const
 			OfflineTable << ((bitmap.get(0, j).size() == 0) ? "0" : bitmap.get(0, j));
 			OfflineTable << ((j + 1 == bitmap.numberOfColumns(0)) ? "" : "\n");
 		}
+		OfflineTable << "\n";
 	}
 	return OfflineTable.str();
 }  // end getStatusTableInCSVFormat()
@@ -134,7 +135,7 @@ std::string SubsystemCalorimeterParametersTable::getStructureAsJSON(const Config
 	outstream << "\t\"custom\": ";
 	outstream << "{" << __E__;
 	outstream << "\t\"Number of rows\": " << channelStatusRecords.size() << "," << __E__;
-	outstream << "\t[" << __E__;
+	outstream << "\t\"Rows\": [" << __E__;
 
 	uint16_t statusPairIdx = 0;
 	for(auto& channelStatusPair : channelStatusRecords) {
