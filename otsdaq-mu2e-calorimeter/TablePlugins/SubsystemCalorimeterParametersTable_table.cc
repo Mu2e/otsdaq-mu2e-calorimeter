@@ -134,7 +134,7 @@ std::string SubsystemCalorimeterParametersTable::getStructureAsJSON(const Config
 	outstream << "\t\"custom\": ";
 	outstream << "{" << __E__;
 	outstream << "\t\"Number of rows\": " << channelStatusRecords.size() << "," << __E__;
-	outstream << "\t[" << __E__;
+	outstream << "\t\"Rows\": [" << __E__;
 
 	uint16_t statusPairIdx = 0;
 	for(auto& channelStatusPair : channelStatusRecords) {
