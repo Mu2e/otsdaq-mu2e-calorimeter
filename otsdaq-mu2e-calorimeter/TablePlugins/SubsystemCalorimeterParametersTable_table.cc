@@ -46,14 +46,14 @@ void SubsystemCalorimeterParametersTable::init(ConfigurationManager* configManag
 		try {
 			std::ofstream out(offlineTableFileName);
 			if(!out) {
-				__COUTT__ << "Failed to open file: " << offlineTableFileName;
-				return;
+				__SS__ << "Failed to open file: " << offlineTableFileName << __E__;
+				__SS_THROW__;
 			}
 			out << offlineTable.second;
 			out.close();
 		} catch(const std::exception& e) {
-			__COUT__ << "Failed to write offline table " << offlineTable.first << " to file.";
-			__COUT__ << e.what() << __E__;
+			__SS__ << "Failed to write offline table " << offlineTable.first << " to file: " << e.what() << __E__;
+			__SS_THROW__;
 		}
 	}
 
