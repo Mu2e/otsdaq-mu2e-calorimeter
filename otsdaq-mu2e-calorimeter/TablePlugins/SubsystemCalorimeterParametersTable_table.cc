@@ -104,6 +104,7 @@ std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(const
 			OfflineTable << ((bitmap.get(0, j).size() == 0) ? "0" : bitmap.get(0, j));
 			OfflineTable << ((j + 1 == bitmap.numberOfColumns(0)) ? "" : "\n");
 		}
+		OfflineTable << "\n";
 	}
 	return OfflineTable.str();
 }  // end getStatusTableInCSVFormat()
