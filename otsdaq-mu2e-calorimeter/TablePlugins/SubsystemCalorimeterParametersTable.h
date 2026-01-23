@@ -58,7 +58,7 @@ class SubsystemCalorimeterParametersTable : public TableBase {
 
 	struct ColChannelThreshold // LinkToChannelThresholdTableInfo
 	{
-		std::string const colStatus_ 				= "BoardID";
+		std::string const colBoardId_ 				= "BoardID";
 		std::string const colROCGroupID_			= "Thresholds";
 		std::string const colROCInterfacePluginName_= "Baseline";
 		std::string const colLinkToSlowControlsChannelTable_ 	= "LinkToSlowControlsChannelTable";
