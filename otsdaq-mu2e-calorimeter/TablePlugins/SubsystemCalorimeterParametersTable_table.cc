@@ -95,7 +95,7 @@ std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(const
 
 	// start main fe/DTC record loop
 	for(auto& channelStatusPair : channelStatusRecords) {
-		uint32_t                               boardID = channelStatusPair.second.getNode(ColChannelStatus.colBoardId_).getValue<uint32_t>();
+		uint16_t                               boardID = channelStatusPair.second.getNode(ColChannelStatus.colBoardId_).getValue<uint16_t>();
 		ConfigurationTree::BitMap<std::string> bitmap  = channelStatusPair.second.getNode(ColChannelStatus.colStatus_).getValueAsBitMap();
 
 		// assume data is 1-dimensional
