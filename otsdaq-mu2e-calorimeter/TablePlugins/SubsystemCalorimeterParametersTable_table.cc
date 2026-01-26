@@ -100,7 +100,7 @@ std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(const
 
 		// assume data is 1-dimensional
 		for(uint32_t j = 0; j < bitmap.numberOfColumns(0); j++) {
-			OfflineTable << mapChannels_.at(boardID * CHANNELS_PER_BOARD + j) << ", ";
+			OfflineTable << mapChannels_.at(boardID * mu2e::CaloConst::_nChPerDIRAC + j) << ", ";
 			OfflineTable << ((bitmap.get(0, j).size() == 0) ? "0" : bitmap.get(0, j));
 			OfflineTable << ((j + 1 == bitmap.numberOfColumns(0)) ? "" : "\n");
 		}
