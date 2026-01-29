@@ -4,6 +4,8 @@
 #include "otsdaq/ConfigurationInterface/ConfigurationManager.h"
 #include "otsdaq/TableCore/TableBase.h"
 
+#include "Offline/CalorimeterGeom/inc/CaloConst.hh"
+
 namespace ots {
 class SubsystemCalorimeterParametersTable : public TableBase {
 	// clang-format off
@@ -31,7 +33,6 @@ class SubsystemCalorimeterParametersTable : public TableBase {
 	const static std::string PATH_TO_TRIGGER_OFFLINE_DB;
 	const static std::string CHANNEL_STATUS_TABLE;
 	const static std::string CHANNEL_MAP_TABLE;
-	const static uint32_t CHANNELS_PER_BOARD = 20;
 
 	std::map<std::string, std::string> mapOfflineTables_;
 	std::map<uint16_t, uint16_t> mapChannels_;
