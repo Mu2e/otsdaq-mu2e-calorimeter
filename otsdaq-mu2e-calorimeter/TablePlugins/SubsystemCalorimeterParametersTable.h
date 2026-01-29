@@ -23,8 +23,6 @@ class SubsystemCalorimeterParametersTable : public TableBase {
 
 	void 					generateOfflineTableMap		(const ConfigurationManager* configManager);
 
-	void 					loadNominalChannelMap		();
-
 
   private:
 
