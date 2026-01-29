@@ -4,8 +4,6 @@
 #include "otsdaq/ConfigurationInterface/ConfigurationManager.h"
 #include "otsdaq/TableCore/TableBase.h"
 
-#include "Offline/CalorimeterGeom/inc/CaloConst.hh"
-
 namespace ots {
 class SubsystemCalorimeterParametersTable : public TableBase {
 	// clang-format off
