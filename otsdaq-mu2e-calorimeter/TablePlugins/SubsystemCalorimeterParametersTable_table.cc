@@ -27,7 +27,7 @@ SubsystemCalorimeterParametersTable::~SubsystemCalorimeterParametersTable(void) 
 void SubsystemCalorimeterParametersTable::init(ConfigurationManager* configManager) {
 	// use isFirstAppInContext to only run once per context, for example to avoid
 	//	generating files on local disk multiple times.
-	bool isFirstAppInContext_ = configManager->isOwnerFirstAppInContext();
+	isFirstAppInContext_ = configManager->isOwnerFirstAppInContext();
 
 	__COUTV__(isFirstAppInContext_);
 	if(!isFirstAppInContext_)
