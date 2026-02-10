@@ -27,7 +27,7 @@ SubsystemCalorimeterParametersTable::~SubsystemCalorimeterParametersTable(void) 
 void SubsystemCalorimeterParametersTable::init(ConfigurationManager* configManager) {
 	// use isFirstAppInContext to only run once per context, for example to avoid
 	//	generating files on local disk multiple times.
-	bool isFirstAppInContext_ = configManager->isOwnerFirstAppInContext();
+	isFirstAppInContext_ = configManager->isOwnerFirstAppInContext();
 
 	__COUTV__(isFirstAppInContext_);
 	if(!isFirstAppInContext_)
@@ -105,7 +105,12 @@ std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(const
 			const uint32_t onlineID = boardID * mu2e::CaloConst::_nChPerDIRAC + j;
 			auto           it       = mapChannels_.find(onlineID);
 			if(it == mapChannels_.end()) {
-				__SS__ << "No channel map entry found for online ID " << onlineID << " (boardID=" << boardID << ", channel=" << j << "). Tables may be inconsistent." << __E__;
+				__SS__ << "No channel map entry found for online ID " << onlineID << " (boardID=" << boardID << ", channel=" << j << "). Tables may be inconsistent - check "
+				       << SubsystemCalorimeterParametersTable::CHANNEL_STATUS_TABLE << " vs " << SubsystemCalorimeterParametersTable::CHANNEL_MAP_TABLE << "." << __E__;
+				ss << "Here is the channel map:\n";
+				for(const auto& channelPair : mapChannels_)
+					ss << channelPair.first << ": " << channelPair.second << ", ";
+				ss << __E__;
 				__SS_THROW__;
 			}
 			OfflineTable << it->second << ", ";
