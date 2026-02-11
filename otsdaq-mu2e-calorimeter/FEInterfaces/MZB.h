@@ -113,6 +113,7 @@ typedef enum MZB_OSCMDCODE_t {
 	DIRACWDG,          // Set and show the DIRAC Watchdog status
 	DIRACRST,          // Pulse the DIRAC RESET REQUEST line (0.1s)
 	WATCHDOG,          // Show status for the all implemented watchdog
+	CPULED,            // Blink LEDs
 	RESERVED           //
 } MZB_OSCMDCODE_t;
 
@@ -192,6 +193,7 @@ MZB_OSCMDCODE_MAP_t code_map[] = {{SYNTAX_ERROR, "SYNTAX_ERROR"},
                                   {DIRACWDG, "DIRACWDG"},
                                   {DIRACRST, "DIRACRST"},
                                   {WATCHDOG, "WATCHDOG"},
+                                  {CPULED, "CPULED"},
                                   {RESERVED, "RESERVED"}};
 
 #ifdef GNU_COMP
