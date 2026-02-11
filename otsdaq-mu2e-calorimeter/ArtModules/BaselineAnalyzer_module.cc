@@ -7,7 +7,6 @@
 #include "messagefacility/MessageLogger/MessageLogger.h"
 
 #include "TRACE/tracemf.h"
-#include "artdaq/DAQdata/Globals.hh"
 #define TRACE_NAME "BaselineAnalyzer"
 
 #include "canvas/Utilities/Exception.h"
