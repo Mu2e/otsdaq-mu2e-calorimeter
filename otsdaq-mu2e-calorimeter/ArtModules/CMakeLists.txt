@@ -14,20 +14,6 @@ cet_build_plugin(CaloDataVerifier art::module LIBRARIES REG
  artdaq::DAQdata
 )
 
-cet_build_plugin(BaselineAnalyzer art::module
-    REG_SOURCE BaselineAnalyzer_module.cc
-    LIBRARIES REG
-     art_root_io::TFileService_service
-     Offline::DAQ
-     Offline::DataProducts
-     Offline::CaloConditions
-     Offline::CaloVisualizer
-     Offline::CaloVisualizer_dict
-     ROOT::Hist
-     ROOT::Tree
-     BTrk_ProbTools
-)
-
 cet_build_plugin(CaloDataAnalyzer art::module
     REG_SOURCE CaloDataAnalyzer_module.cc
     LIBRARIES REG

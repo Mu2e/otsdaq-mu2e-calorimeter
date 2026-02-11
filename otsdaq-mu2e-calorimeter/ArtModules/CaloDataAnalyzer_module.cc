@@ -265,9 +265,8 @@ void mu2e::CaloDataVerifier::processCaloData(mu2e::DTCEventFragment& eventFragme
 					mu2e::CalorimeterDataDecoder::CalorimeterHitDataPacket hit          = caloHits->at(ihit).first;
 					std::vector<uint16_t>                                  hit_waveform = caloHits->at(ihit).second;
 					if(hit_waveform.size() == 0) {
-						TLOG(TLVL_WARNING) << "[CaloDataAnalyzer::filter] found empty waveform! DTC " << dtcID << " ROC " << iroc
-						                   << " hit " << ihit << " BoardID " << hit.BoardID
-										   << " ChannelID " << hit.ChannelID;
+						TLOG(TLVL_WARNING) << "[CaloDataAnalyzer::filter] found empty waveform! DTC " << dtcID << " ROC " << iroc << " hit " << ihit << " BoardID " << hit.BoardID << " ChannelID "
+						                   << hit.ChannelID;
 					}
 					nCaloHits++;
 				}
