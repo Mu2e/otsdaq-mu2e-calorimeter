@@ -5,7 +5,10 @@
 
 #include "cetlib/filepath_maker.h"
 
+#include <chrono>
 #include <cstring>
+#include <ctime>
+#include <filesystem>
 #include <fstream>
 
 using namespace ots;
@@ -20,7 +23,7 @@ using namespace ots;
 
 // 259 (and others) ==> the number of words in block read is written first as a block
 // write
-const std::set<DTCLib::roc_address_t> ROCCalorimeterInterface::SPECIAL_BLOCK_READ_ADDRS_({263, 256, 257, 261, 262, 264, 260, 265, 266});
+const std::set<DTCLib::roc_address_t> ROCCalorimeterInterface::SPECIAL_BLOCK_READ_ADDRS_({263, 256, 257, 261, 262, 264, 260, 265, 266, 267});
 
 //=========================================================================================
 ROCCalorimeterInterface::ROCCalorimeterInterface(const std::string& rocUID, const ConfigurationTree& theXDAQContextConfigTree, const std::string& theConfigurationPath)
@@ -78,6 +81,12 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(const std::string& rocUID, cons
 	                        std::vector<std::string>{},                                                                   // output parameters
 	                        1);                                                                                           // requiredUserPermissions
 
+	registerFEMacroFunction("Enable/Disable MZB Leds",
+	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::EnableDisableLEDs),
+	                        std::vector<std::string>{"Enable LEDs, Default := 0]"},
+	                        std::vector<std::string>{},  // output parameters
+	                        1);
+
 	registerFEMacroFunction("Set Board Voltages",
 	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::SetBoardVoltages),
 	                        std::vector<std::string>{"configuration folder, Default:= nominal",
@@ -126,11 +135,12 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(const std::string& rocUID, cons
 	                        std::vector<std::string>{"Status"},                          // output parameters
 	                        1);                                                          // requiredUserPermissions
 
-	registerFEMacroFunction("Setup for ADCs Data Taking",
-	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::SetupForADCsDataTaking),
-	                        std::vector<std::string>{"Set Threshold? [bool, Default := 0]", "Threshold [units of adccounts, Default := 2300]"},  // inputs parameters
-	                        std::vector<std::string>{},                                                                                          // output parameters
-	                        1);                                                                                                                  // requiredUserPermissions
+	registerFEMacroFunction(
+	    "Setup for ADCs Data Taking",
+	    static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::SetupForADCsDataTaking),
+	    std::vector<std::string>{"Set Threshold? [bool, Default := 0]", "Threshold [units of adccounts, Default := 2300]", "Is new Firmware? [bool, Default := 0]"},  // inputs parameters
+	    std::vector<std::string>{},                                                                                                                                   // output parameters
+	    1);                                                                                                                                                           // requiredUserPermissions
 
 	registerFEMacroFunction("Toggle MB Busy for Noise",
 	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::ToggleMBBusy),
@@ -140,6 +150,12 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(const std::string& rocUID, cons
 
 	registerFEMacroFunction("ROC Status",
 	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::GetStatus),
+	                        std::vector<std::string>{},          // inputs parameters
+	                        std::vector<std::string>{"Status"},  // output parameters
+	                        1);                                  // requiredUserPermissions
+
+	registerFEMacroFunction("MZB Status",
+	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::GetMZBStatus),
 	                        std::vector<std::string>{},          // inputs parameters
 	                        std::vector<std::string>{"Status"},  // output parameters
 	                        1);                                  // requiredUserPermissions
@@ -264,6 +280,78 @@ void ROCCalorimeterInterface::universalBlockRead(char* address, char* returnValu
 //==================================================================================================
 void ROCCalorimeterInterface::ROCSlowControl(__ARGS__) {
 	std::stringstream os;
+
+	DTCLib::roc_address_t address = 147;
+	DTCLib::roc_data_t    readVal;
+	readVal = readRegister(address);
+
+	std::string confFile = "boardMap.config";
+
+	cet::filepath_lookup lookup_policy("MU2E_CALORIMETER_CONFIG_PATH");
+	auto                 filename = lookup_policy(confFile);
+
+	std::ifstream confMap(filename);
+	if(!confMap.is_open()) {
+		__FE_SS__ << "Could not open file: " << filename << __E__;
+		__FE_SS_THROW__;
+		;
+	}
+
+	int boardid = -1;
+
+	for(int iboard = 0; iboard < 161; iboard++) {
+		int nboard;
+		int notused;
+		int buid;
+
+		confMap >> nboard >> notused >> buid;
+		if(readVal == buid) {
+			boardid = nboard;
+			break;
+		}
+	}
+	confMap.close();
+
+	const char* env_path = std::getenv("MU2E_CALORIMETER_CONFIG_PATH");
+	if(!env_path) {
+		__FE_SS__ << "MU2E_CALORIMETER_CONFIG_PATH not defined";
+		__FE_SS_THROW__;
+		;
+	}
+
+	std::string full_path(env_path);
+	std::string first_path = full_path.substr(0, full_path.find(':'));
+
+	namespace fs              = std::filesystem;
+	fs::path slow_control_dir = fs::path(first_path) / "slowControl";
+
+	std::error_code ec;
+	if(!fs::exists(slow_control_dir)) {
+		if(!fs::create_directories(slow_control_dir, ec)) {
+			__FE_SS__ << "Error in directory creation: " << ec.message();
+			__FE_SS_THROW__;
+			;
+		}
+	}
+
+	char filename_buff[50];
+	std::snprintf(filename_buff, sizeof(filename_buff), "slowControl%03d.log", boardid);
+	fs::path      output_file = slow_control_dir / filename_buff;
+	std::ofstream file(output_file, std::ios::app);
+
+	if(!file.is_open()) {
+		__FE_SS__ << "Error in opening slow control file!";
+		__FE_SS_THROW__;
+		;
+	}
+
+	auto        now   = std::chrono::system_clock::now();
+	std::time_t now_c = std::chrono::system_clock::to_time_t(now);
+
+	std::string timestamp = std::ctime(&now_c);
+	timestamp.pop_back();
+	file << "[" << timestamp << "] " << boardid << " ";
+
 	os << __E__;
 
 	os << "Board unique ID:" << __E__;
@@ -312,6 +400,7 @@ void ROCCalorimeterInterface::ROCSlowControl(__ARGS__) {
 
 	for(size_t i = 0; i < data3.size(); i++) {
 		os << "Word " << i << ": 0x" << ((float)data3[i]) / 100. << __E__;
+		file << ((float)data3[i]) / 100. << " ";
 	}
 
 	os << __E__;
@@ -343,6 +432,11 @@ void ROCCalorimeterInterface::ROCSlowControl(__ARGS__) {
 	for(size_t i = 0; i < data5.size(); i++) {
 		os << "Word " << i << ": 0x" << ((float)data5[i]) / 100. << __E__;
 	}
+
+	file << std::endl;
+
+	// Chiudi il file
+	file.close();
 
 	/*if(data3.size() != 7)	{
 	  __FE_SS__ << "Illegal number of bytes: "  <<  data3.size() << " not " << 7 << __E__;
@@ -551,6 +645,14 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 			address   = 261;
 			break;
 
+		case 267:
+			address   = offsetof(EE_DATABUF_t, biasVreq_tag);
+			wordCount = 2;
+			writeROCBlock({wordCount, address}, 261, false /* incrementAddress*/);
+			wordCount = wordCount / 2;
+			address   = 261;
+			break;
+
 		case 257:
 			writeROCBlock({wordCount}, address, false /* incrementAddress*/);
 			break;
@@ -568,29 +670,27 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 			break;
 		}
 
-		// uint16_t j = 0;
+		uint16_t j = 0;
 		while((u = thisDTC_->ReadROCRegister(linkID_, 128, 100)) == 0) {
-			/*			usleep(100);
-			          j++;
-			          if(j == 100)
-			          {
-			          __FE_SS__ << "ROC block failed at 128"  << __E__;
-			          __FE_SS_THROW__;
-			          }*/
+			usleep(100);
+			j++;
+			if(j == 100) {
+				__FE_SS__ << "ROC block failed at 128" << __E__;
+				__FE_SS_THROW__;
+			}
 		}  // when the write operation ends the micropro
 		// cessor writes 0x8000 to register 0x128
 		__COUT__ << "r_128: 0x" << std::hex << u << __E__;
 		usleep(1000);
 
-		// j = 0;
+		j = 0;
 		while((u = thisDTC_->ReadROCRegister(linkID_, 129, 100)) == 0) {
-			/*usleep(100);
-			  j++;
-			  if(j == 100)
-			  {
-			  __FE_SS__ << "ROC block failed at 129"  << __E__;
-			  __FE_SS_THROW__;
-			  }*/
+			usleep(100);
+			j++;
+			if(j == 100) {
+				__FE_SS__ << "ROC block failed at 129" << __E__;
+				__FE_SS_THROW__;
+			}
 		}
 
 		__COUT__ << "r_129: 0x" << std::hex << u << __E__;
@@ -683,6 +783,23 @@ void ROCCalorimeterInterface::configure(void) try {
 
 	runSequenceOfCommands("ROCTypeLinkTable/LinkToConfigureSequence"); /*Run Configure Sequence Commands*/
 
+	__COUT_INFO__ << "Enter ROC configuration.." << __E__;
+
+	int readVal = 0;
+	int ntries  = 0;
+	while(readVal != 0x1234 || ntries < 3) {
+		try {
+			readVal = readRegister(0);
+		} catch(const std::exception& e) {}
+		ntries++;
+		__COUT_INFO__ << "Attempt number " << ntries << __E__;
+	}
+
+	if(readVal == 0x1234)
+		__COUT_INFO__ << "Configuration correct! :)" << __E__;
+	else
+		__COUT_INFO__ << "Configuration failed! :(" << __E__;
+
 	//    int myTemp = GetTemperature(1);
 	// 	__COUTV__(myTemp);
 	// 	__COUT__<<"my temp"<<myTemp<<__E__;
@@ -705,7 +822,7 @@ void ROCCalorimeterInterface::configure(void) try {
 //==================================================================================================
 bool ROCCalorimeterInterface::running(void) {
 	// SetupForPatternFixedLengthDataTaking(40);
-	SetupForADCsDataTaking(0, 2300);
+	SetupForADCsDataTaking(0, 0, 2300);
 
 	return false;
 }
@@ -833,6 +950,30 @@ void ROCCalorimeterInterface::SendMzCommand(std::string command, float paramVect
 
 	__COUT_INFO__ << "end SendMzCommand()" << __E__;
 }  // end SendMzCommand()
+
+//==================================================================================================
+
+void ROCCalorimeterInterface::EnableDisableLEDs(__ARGS__) {
+	__COUT_INFO__ << "EnableDisableLEDs()" << __E__;
+
+	bool ledonoff = __GET_ARG_IN__("Enable LEDs, Default := 0]", bool, 0);
+
+	std::string command = "CPULED";
+	float       paramVect[9];
+	paramVect[0] = ledonoff;
+	paramVect[1] = NAN;
+	paramVect[2] = NAN;
+	paramVect[3] = NAN;
+	paramVect[4] = NAN;
+	paramVect[5] = NAN;
+	paramVect[6] = NAN;
+	paramVect[7] = NAN;
+	paramVect[8] = NAN;
+
+	SendMzCommand(command, paramVect);
+
+	__COUT_INFO__ << "end EnableDisableLEDs()" << __E__;
+}
 
 //==================================================================================================
 
@@ -1287,9 +1428,10 @@ void ROCCalorimeterInterface::ReadROCErrorCounter(__ARGS__) {
 
 void ROCCalorimeterInterface::SetupForADCsDataTaking(__ARGS__) {
 	bool         setThr    = __GET_ARG_IN__("Set Threshold? [bool, Default := 0]", bool, 0);
+	bool         isNfw     = __GET_ARG_IN__("Is new Firmware? [bool, Default := 0]", bool, 0);
 	unsigned int threshold = __GET_ARG_IN__("Threshold [units of adccounts, Default := 2300]", uint32_t, 2300);
 
-	SetupForADCsDataTaking(setThr, threshold);
+	SetupForADCsDataTaking(setThr, isNfw, threshold);
 
 }  // end SetupForADCsDataTaking()
 
@@ -1335,7 +1477,7 @@ void ROCCalorimeterInterface::SetupForNoiseTaking(unsigned int numberOfsamples) 
 
 //==================================================================================================
 
-void ROCCalorimeterInterface::SetupForADCsDataTaking(bool setThr, unsigned int threshold) {
+void ROCCalorimeterInterface::SetupForADCsDataTaking(bool setThr, bool isNFw, unsigned int threshold) {
 	__COUT_INFO__ << "SetupForADCsDataTaking()" << __E__;
 
 	__FE_COUTV__(threshold);
@@ -1380,6 +1522,13 @@ void ROCCalorimeterInterface::SetupForADCsDataTaking(bool setThr, unsigned int t
 
 	writeRegister(ROC_ADDRESS_MASK_A, 1023);
 	writeRegister(ROC_ADDRESS_MASK_B, 1023);
+
+	if(isNFw) {
+		writeRegister(ROC_ADDRESS_SIMWF_ENABLE_A, 0);
+		writeRegister(ROC_ADDRESS_SIMWF_ENABLE_B, 0);
+		writeRegister(ROC_ADDRESS_SIMWF_MULTI_A, 0);
+		writeRegister(ROC_ADDRESS_SIMWF_MULTI_B, 0);
+	}
 
 	writeRegister(ROC_ADDRESS_IS_PATTERN, 0);
 	writeRegister(ROC_ADDRESS_IS_COUNTER, 0);
@@ -1527,6 +1676,193 @@ void ROCCalorimeterInterface::GetStatus(__ARGS__) {
 
 }  // end GetStatus()
 
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+#define hrdFmt                                                                                  \
+	"Ch#   errcnt |  HVDAC errcnt |  ADC1  ADC2  ADC3  ADC4  ADC5  ADC6  ADC7  ADC8 errcnt |\n" \
+	"             |   [V]         |  [V]  [uA]   [C]   [V]   [V]   [V]   [V]   [V]         |\n"
+#define enCard1 "Ch#%02d %6d | "
+#define enCard2 "%5.1f %6d  | "
+#define enCard3 "%6d |\n"
+#define dsCard "Ch#%02d disabled --------------+---------------------------------------------------------+\n"
+#define outtext_1(x) \
+	sprintf(buf, x); \
+	os << buf;
+#define outtext_2(x, y) \
+	sprintf(buf, x, y); \
+	os << buf;
+#define outtext_3(x, y, z) \
+	sprintf(buf, x, y, z); \
+	os << buf;
+#define outtext_4(x, y, z, t) \
+	sprintf(buf, x, y, z, t); \
+	os << buf;
+#define outtext_5(x, y, z, t, u) \
+	sprintf(buf, x, y, z, t, u); \
+	os << buf;
+#define outtext_6(x, y, z, t, u, v) \
+	sprintf(buf, x, y, z, t, u, v); \
+	os << buf;
+
+typedef struct MZB_STATUS_REG_tag {
+	// SOFTWARE flags
+	unsigned char flashConfig : 1;     // bit #0   - 1=configuration from flash, 0=factory default
+	unsigned char autoConfigFlag : 1;  // bit #1   - 1=AD auto configuration in progress
+	unsigned char rampActive : 1;      // bit #2   - Ramp active flag
+	unsigned char feeRef_enabled : 1;  // bit #3   - 1=enable DAQ on FEE reference channels (4 to 8)
+	unsigned char image : 2;           // bit #4-5 - 1= IMAGE1, 2= IMAGE2
+	unsigned char validImages : 2;     // bit #6-7 - 1= IMAGE1, 2= IMAGE2
+
+	unsigned char AD_enabled : 1;      // bit #8
+	unsigned char AD_pendingRead : 1;  // bit #9
+	unsigned char : 2;                 // bit #10-11 reserved
+	unsigned char diracHbtIn : 1;      // bit #12   - Heartbeat from DIRAC enabled
+	unsigned char diracHbtOut : 1;     // bit #13   - Heartbeat to DIRAC enabled
+	unsigned char hwWdg : 1;           // bit #14   - Set if wdg is active
+	unsigned char swWdg : 1;           // bit #15   - Set if wdg is active
+
+	unsigned char rstsrc : 8;  // bit #16-23 Reset source
+
+	unsigned char : 5;             // bit #24..28
+	unsigned char cpuLedFlag : 1;  // bit #29  - CPU active will flash
+	unsigned char wrnflag : 1;     // bit #30
+	unsigned char errflag : 1;     // bit #31
+} MZB_STATUS_REG_t;
+
+std::stringstream formatCardStatus(EE_DATABUF_t* pbuf) {
+	char              buf[512];
+	std::stringstream os;
+	MZB_STATUS_REG_t  stsreg;
+
+	std::memcpy(&stsreg, &pbuf->stsreg, sizeof(pbuf->stsreg));
+
+	outtext_2("config from flash: %d\n", stsreg.flashConfig);
+	outtext_2("ramp active      : %d\n", stsreg.rampActive);
+	outtext_2("FEE ref enable   : %d\n", stsreg.feeRef_enabled);
+	outtext_2("current image    : %d\n", stsreg.image);
+	outtext_2("valid images     : %d\n", stsreg.validImages);
+	outtext_2("HW watchdog      : %d\n", stsreg.hwWdg);
+	outtext_2("SW watchdog      : %d\n", stsreg.swWdg);
+
+	outtext_2("CPU led flash    : %d\n", stsreg.cpuLedFlag);
+	outtext_2("MZB error flag   : %d\n", stsreg.errflag);
+
+	outtext_2("MZB error count  : %d\n", pbuf->errcnt);
+	outtext_2("MZB last error   : %d\n", pbuf->lastError);
+
+	return os;
+
+	/*
+	MZB_DATA_t mzb;                  // Application specific data
+
+	outtext_2("FEE status, total conversion %d\n", mzb.mzbconv);
+
+	// Report card data
+	outtext_2("FEE status, total conversion %d\n", mzb.mzbconv);
+	outtext_2("HV switch: O%s", mzb.____ ? "N" : "FF");
+	outtext_2(", HVS fsm: %s\n", mzb.____);
+	outtext_1(hrdFmt);
+	card = &mzb.card[i];
+	for(; i<ch; i++, card++) {
+	outtext_3(enCard1, i+1, card->errcnt);
+	outtext_3(enCard2, card->edac.phvreq, card->edac.errcnt);
+	for(j=0; j<3; j++) {
+	    outtext_2("%5.2f ", card->eads.adch[j].phv);
+	}
+	for(; j<FEE_ADC_CHANNELS; j++) {
+	    outtext_2("%5.3f ", card->eads.adch[j].phv);
+	}
+	outtext_2(enCard3, card->eads.errcnt);
+	}
+	outtext_6("FUSES: %d\t%d\t%d\t%d\t%d\n",
+	mzb.inpp.FUSE1, mzb.inpp.FUSE2, mzb.inpp.FUSE3,
+	mzb.inpp.FUSE4, mzb.inpp.FUSE5);
+
+	outtext_5("GPIO: HV_%d\tBACK_%d\tRST_%d\tATTN_%d\n",
+	    mzb.outp.bits.HVDACEN,
+	    mzb.outp.bits.BUSYACK,
+	    mzb.outp.bits.RSTCPU,
+	    mzb.outp.bits.ATTNO);
+
+	outtext_6("AUX_1: %.1f\t%.1f\t%.1f\t%.1f\t%.1f\n",
+	mzb.ladc.adch[0].phv, mzb.ladc.adch[1].phv, mzb.ladc.adch[2].phv,
+	mzb.ladc.adch[3].phv, mzb.ladc.adch[4].phv);
+
+	// Display AUX_IN0 data & status
+	adch = mzb.auxadc.adch;
+	outtext_3("AUX_2: %.0f_(%d)",
+	adch->phv, adch->sts.flipCount);
+	// Display AUX_IN1 data & status
+	adch++;
+	outtext_2("\t%.1f", adch->phv);
+	// Display AUX_IN2 data & status
+	adch++;
+	outtext_2("\t%.1f", adch->phv);
+	// Display AUX_IN3 data & status
+	adch++;
+	outtext_3("\t%.0f_(%d)", adch->phv, adch->sts.flipCount);
+	// Display AUX_IN4 data & status
+	adch++;
+	outtext_3("\t%.0f_(%d)", adch->phv, adch->sts.flipCount);
+	// Display AUX_IN5 data & status
+	adch++;
+	outtext_3("\t%.0f_(%d)", adch->phv, adch->sts.flipCount);
+	// Display AUX_IN6 data & status
+	adch++;
+	outtext_2("\t%.1f", adch->phv);
+	// Display AUX_IN7 data & status
+	adch++;
+	outtext_2("\t%.1f\n", adch->phv);
+	*/
+}
+
+//==================================================================================================
+void ROCCalorimeterInterface::GetMZBStatus(__ARGS__) {
+	EE_DATABUF_t buf;
+
+	std::stringstream os;
+	std::stringstream os1;
+	os << "Reading MB registers:" << __E__;
+	os << __E__;
+
+	std::vector<DTCLib::roc_data_t> payload;
+
+	int nwords = offsetof(EE_DATABUF_t, apdBiasV_tag) / 2;
+	readROCBlock(payload, 261, nwords, false /*incAddress*/);
+
+	memcpy(&buf, payload.data(), nwords * 2);
+
+	os << formatCardStatus(&buf).str();
+
+	os << std::hex << std::showbase;
+
+	os << "ridx: " << buf.ridx << "\n";
+	os << "reserved1[0]: " << buf.reserved1[0] << "\n";
+	os << "reserved1[1]: " << buf.reserved1[1] << "\n";
+	os << "reserved1[2]: " << buf.reserved1[2] << "\n";
+
+	os << "updateCounter_tag: " << buf.updateCounter_tag << "\n";
+	os << "reserved2: " << buf.reserved2 << "\n";
+	os << "updateCounter: " << buf.updateCounter << "\n";
+	os << "stsreg: " << buf.stsreg << "\n";
+	os << "errreg: " << buf.errreg << "\n";
+	os << "errcnt: " << buf.errcnt << "\n";
+	os << "ch_ensts: " << buf.ch_ensts << "\n";
+	os << "gpi: " << buf.gpi << "\n";
+	os << "gpo: " << buf.gpo << "\n";
+	os << "ladc[0]: " << buf.ladc[0] << "\n";
+	os << "ladc[1]: " << buf.ladc[1] << "\n";
+	// Se MZB_LADC_CHANNELS > 2 stamperesti altri, altrimenti continua:
+	os << "lastError: " << buf.lastError << "\n";
+
+	// Contiamo già 17 campi, aggiungiamo due di auxadc:
+	os << "slewRate: " << +buf.slewRate << "\n";
+	os << "hvmfsm: " << +buf.hvmfsm << "\n";
+
+	__SET_ARG_OUT__("Status", os.str());
+
+}  // end GetStatus()
+
 /**
  *  @brief   Write the the SiPM HV set command to the MEZZANINE slave
  *  @param   ch    FEE channel to set
@@ -1586,6 +1922,29 @@ void ROCCalorimeterInterface::GetStatus(__ARGS__) {
 
   } */
 
+unsigned ees_chksum_test(void* ptr, int len) {
+	unsigned* src = (unsigned*)ptr;
+	unsigned  sum;
+	unsigned  tmp;
+
+	__COUT_INFO__ << "checksum check : " << len << __E__;
+	for(sum = 0; len >= 4; len -= 4, src++) {
+		sum += *src;
+		__COUT_INFO__ << "0x" << std::hex << *src << " --<< "
+		              << "0x" << std::hex << sum << " " << __E__;
+	}
+
+	if(len) {
+		tmp = 0;
+		memcpy(&tmp, src, len);
+		sum += tmp;
+	}
+
+	__COUT_INFO__ << "0x" << std::hex << sum << " sum)fine=" << __E__;
+
+	return sum;
+}
+
 void ROCCalorimeterInterface::RMZB_writeAllSiPMbias(float* hv) {
 	struct __attribute__((packed, aligned(4))) {
 		short dummy;
@@ -1616,15 +1975,24 @@ void ROCCalorimeterInterface::RMZB_writeAllSiPMbias(float* hv) {
 		input_data.push_back(bm.bias.biasVreq[ch]);
 	}
 
-	bm.chksum = 1 + (~ees_chksum((void*)&bm.bias, sizeof(bm.bias)));
-	input_data.push_back((uint16_t)(bm.chksum >> 16));
+	bm.chksum = -ees_chksum_test((void*)&bm.bias, sizeof(bm.bias));
+
+	ees_chksum_test((void*)&bm.bias, 4 + sizeof(bm.bias));
 	input_data.push_back((uint16_t)(bm.chksum & 0xFFFF));
+	input_data.push_back((uint16_t)(bm.chksum >> 16));
 
 	for(auto& value : input_data) {
 		value = (value >> 8) | (value << 8);  // Scambia i due byte
 	}
 
 	writeROCBlock(input_data, MZ_ADDRESS, false /* incrementAddress*/);
+
+	// usleep(10000);
+
+	// std::vector<DTCLib::roc_data_t> check;
+	// readROCBlock(check, 267, 1, false);
+
+	// if (check[0] != 0x7668) writeROCBlock(input_data, MZ_ADDRESS, false /* incrementAddress*/);
 }
 
 DEFINE_OTS_INTERFACE(ROCCalorimeterInterface)

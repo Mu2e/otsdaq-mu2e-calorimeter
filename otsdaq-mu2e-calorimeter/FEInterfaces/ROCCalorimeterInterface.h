@@ -78,8 +78,12 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface {
 
         ROC_ADDRESS_BOARD_U_ID_LSB           = 145,
         ROC_ADDRESS_BOARD_U_ID_CSB           = 146,
-        ROC_ADDRESS_BOARD_U_ID_MSB           = 147
+        ROC_ADDRESS_BOARD_U_ID_MSB           = 147,
 
+        ROC_ADDRESS_SIMWF_ENABLE_A           = 150,
+        ROC_ADDRESS_SIMWF_ENABLE_B           = 151,
+        ROC_ADDRESS_SIMWF_MULTI_A            = 152,
+        ROC_ADDRESS_SIMWF_MULTI_B            = 153
 
 
       };
@@ -115,7 +119,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface {
     void SetupForPatternFixedLengthDataTaking		(__ARGS__);
     void SetupForPatternFixedLengthDataTaking       (unsigned int numberOfWords);
     void SetupForADCsDataTaking		(__ARGS__);
-    void SetupForADCsDataTaking		(bool setThr, unsigned int threshold);
+    void SetupForADCsDataTaking		(bool setThr, bool isNfw, unsigned int threshold);
 
     void SendMzCommand(__ARGS__);
     void EvaluateBlockWriteErrorRate(__ARGS__);
@@ -128,6 +132,8 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface {
     void SetupForNoiseTaking(__ARGS__);
     void SetupForNoiseTaking(unsigned int numberOfsamples);
     void RMZB_writeAllSiPMbias(float *hv);
+    void EnableDisableLEDs(__ARGS__);
+
 
     void ConfigureLink(__ARGS__);
     void ConfigureLink(std::string conf, std::string confFile, bool hvonoff, bool doCalibration, bool setThresholds, int offset);
@@ -142,6 +148,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface {
 
     void ReadROCErrorCounter		(__ARGS__);
     void ReadMBRegisters		(__ARGS__);
+    void GetMZBStatus		(__ARGS__);
 
 
 
