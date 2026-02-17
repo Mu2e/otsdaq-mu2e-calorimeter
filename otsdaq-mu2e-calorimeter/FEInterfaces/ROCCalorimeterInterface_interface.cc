@@ -514,6 +514,9 @@ void ROCCalorimeterInterface::EvaluateBlockWriteErrorRate(__ARGS__) {
 void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data, DTCLib::roc_address_t address, uint16_t wordCount, bool incrementAddress) {
 	__FE_COUT__ << "Calling read ROC block: link number " << std::dec << linkID_ << ", address = " << address << ", wordCount = " << wordCount << ", incrementAddress = " << incrementAddress << __E__;
 
+	if(ROCCalorimeterInterface::SPECIAL_BLOCK_READ_ADDRS_.find(address) == ROCCalorimeterInterface::SPECIAL_BLOCK_READ_ADDRS_.end())
+		return ROCCoreVInterface::readROCBlock(data, address, wordCount, incrementAddress);
+
 	uint16_t u;
 	u = thisDTC_->ReadROCRegister(linkID_, 0, 100);
 
