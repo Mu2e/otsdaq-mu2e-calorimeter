@@ -26,7 +26,7 @@ class SubsystemCalorimeterParametersTable : public TableBase {
 
   private:
 
-	const static std::string PATH_TO_TRIGGER_OFFLINE_DB;
+	const static std::string DBSERVICE_ONLINE_PATH;
 	const static std::string CHANNEL_STATUS_TABLE;
 	const static std::string CHANNEL_MAP_TABLE;
 

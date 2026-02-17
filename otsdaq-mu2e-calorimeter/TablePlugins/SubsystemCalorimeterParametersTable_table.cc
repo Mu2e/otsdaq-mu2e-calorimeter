@@ -11,8 +11,8 @@
 
 using namespace ots;
 
-const std::string SubsystemCalorimeterParametersTable::PATH_TO_TRIGGER_OFFLINE_DB = getenv("PATH_TO_TRIGGER_OFFLINE_DB") ? getenv("PATH_TO_TRIGGER_OFFLINE_DB") : "";
-const std::string SubsystemCalorimeterParametersTable::CHANNEL_MAP_TABLE          = "SubsystemCalorimeterMapTable";
+const std::string SubsystemCalorimeterParametersTable::DBSERVICE_ONLINE_PATH = getenv("DBSERVICE_ONLINE_PATH") ? getenv("DBSERVICE_ONLINE_PATH") : "";
+const std::string SubsystemCalorimeterParametersTable::CHANNEL_MAP_TABLE     = "SubsystemCalorimeterMapTable";
 const std::string SubsystemCalorimeterParametersTable::CHANNEL_STATUS_TABLE       = "SubsystemCalorimeterStatusTable";
 
 //==============================================================================
@@ -33,8 +33,8 @@ void SubsystemCalorimeterParametersTable::init(ConfigurationManager* configManag
 	if(!isFirstAppInContext_)
 		return;
 
-	__COUTV__(SubsystemCalorimeterParametersTable::PATH_TO_TRIGGER_OFFLINE_DB);
-	if(SubsystemCalorimeterParametersTable::PATH_TO_TRIGGER_OFFLINE_DB.size() == 0)
+	__COUTV__(SubsystemCalorimeterParametersTable::DBSERVICE_ONLINE_PATH);
+	if(SubsystemCalorimeterParametersTable::DBSERVICE_ONLINE_PATH.size() == 0)
 		return;
 
 	__COUT__ << "*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*" << __E__;
@@ -43,7 +43,7 @@ void SubsystemCalorimeterParametersTable::init(ConfigurationManager* configManag
 	generateOfflineTableMap(configManager);
 
 	for(const auto& offlineTable : mapOfflineTables_) {
-		std::string offlineTableFileName = PATH_TO_TRIGGER_OFFLINE_DB + "/" + offlineTable.first + ".txt";
+		std::string offlineTableFileName = DBSERVICE_ONLINE_PATH + "/" + offlineTable.first + ".txt";
 
 		try {
 			std::ofstream out(offlineTableFileName);
@@ -136,16 +136,17 @@ std::string SubsystemCalorimeterParametersTable::getStructureAsJSON(const Config
 	outstream << "{";
 
 	// Write all cat-3 tables converted from MongoDB
-	outstream << "\t\"cat3\": {" << __E__;
+	outstream << "\t\"DBServiceTables\": {" << __E__;
 	std::map<std::string, std::string>::iterator it;
 	for(it = mapOfflineTables_.begin(); it != mapOfflineTables_.end(); ++it) {
-		outstream << "\"" << it->first << "\":" << it->second;
+		outstream << "\"" << it->first << "\": \"" 
+		          << StringMacros::escapeJSONStringEntities(it->second) << "\"";
 		outstream << (std::next(it) == mapOfflineTables_.end() ? "" : ",");
 	}
 	outstream << "},";
 
 	// Write any desired table in a custom format for user-friendly quick reading
-	outstream << "\t\"custom\": ";
+	outstream << "\t\"ChannelStatus\": ";
 	outstream << "{" << __E__;
 	outstream << "\t\"Number of rows\": " << channelStatusRecords.size() << "," << __E__;
 	outstream << "\t\"Rows\": [" << __E__;
@@ -163,7 +164,7 @@ std::string SubsystemCalorimeterParametersTable::getStructureAsJSON(const Config
 
 		// assume data is 1-dimensional
 		for(uint32_t j = 0; j < bitmap.numberOfColumns(0); j++) {
-			outstream << ((bitmap.get(0, j).size() == 0) ? "0" : bitmap.get(0, j));
+			outstream << "\"" << ((bitmap.get(0, j).size() == 0) ? "0" : bitmap.get(0, j)) << "\"";
 			outstream << ((j + 1 == bitmap.numberOfColumns(0)) ? "" : ", ");
 		}
 		outstream << "]" << __E__;
