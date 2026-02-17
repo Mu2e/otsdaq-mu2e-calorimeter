@@ -300,7 +300,7 @@ void ROCCalorimeterInterface::ROCSlowControl(__ARGS__) {
     	return;
     }
 
-	if(boardID >= 160)
+	if(boardID > 160)
     {
         __FE_SS__ << "Skipping upload MZB parameters to board " << boardID
                       << ", boardID out of range!" << __E__;
@@ -608,7 +608,6 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 		return ROCCoreVInterface::readROCBlock(data, address, wordCount, incrementAddress);
 
 	uint16_t u;
-	u = thisDTC_->ReadROCRegister(linkID_, 0, 100);
 
 	// check if special Block Write required
 	if(ROCCalorimeterInterface::SPECIAL_BLOCK_READ_ADDRS_.find(address) != ROCCalorimeterInterface::SPECIAL_BLOCK_READ_ADDRS_.end()) {
@@ -708,7 +707,8 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 	if(emulatedInDTC_)  // fix count for emulated ROC to survive
 		u = wordCount + 4;
 	if(data.size() != (long unsigned int)u - 4) {
-		__FE_SS__ << "ROC block read failed, expecting " << u - 4 << " words, and read " << data.size() << " words." << __E__;
+		__FE_SS__ << "ROC block read of address " << address << "(0x" << std::hex << address << std::dec << 
+			") failed, expecting " << u - 4 << " words, and read " << data.size() << " words." << __E__;
 		__FE_SS_THROW__;
 	}
 
@@ -733,7 +733,7 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 
     const ots::ConfigurationManager* cfgMgr = getConfigurationManager();
 
-	if(boardID >= 160) {
+	if(boardID > 160) {
 		os << "Skipping setting thresholds to board " << boardID <<  ", boardID out of range!" << __E__;
         __SET_ARG_OUT__("Status", os.str());
 		return;
@@ -909,7 +909,7 @@ void ROCCalorimeterInterface::configure(void) try {
 
     updateBoardIdFromSerial_();
 	SetADCsThresholds(50);
-    CalibrateMZB();
+    //CalibrateMZB();
 
 } catch(const std::runtime_error& e) {
 	__FE_COUT__ << "Error caught: " << e.what() << __E__;
@@ -1175,7 +1175,7 @@ void ROCCalorimeterInterface::ConfigureLink(std::string conf, std::string confFi
 		}
     }
 
-	if(boardID >= 160)
+	if(boardID > 160)
     {
         __FE_SS__ << "Skipping configuring board " << boardID
                       << ", boardID out of range!" << __E__;
@@ -1220,7 +1220,7 @@ void ROCCalorimeterInterface::CalibrateMZB() {
     	return;
     }
 
-	if(boardID >= 160)
+	if(boardID > 160)
     {
         __FE_SS__ << "Skipping upload MZB parameters to board " << boardID
                       << ", boardID out of range!" << __E__;
@@ -1287,7 +1287,7 @@ void ROCCalorimeterInterface::SetADCsThresholds(int offset)
     const int boardID = static_cast<int>(cachedBoardIdFromDB_);
     __COUT_INFO__ << "Target BoardID = " << boardID << __E__;
 
-	if(boardID >= 160)
+	if(boardID > 160)
     {
         __COUT_ERR__ << "Skipping setting thresholds to board " << boardID
                       << ", boardID out of range!" << __E__;
