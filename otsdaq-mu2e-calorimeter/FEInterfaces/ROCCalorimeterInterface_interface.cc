@@ -1,8 +1,8 @@
 #include "otsdaq-mu2e-calorimeter/FEInterfaces/MZB.h"
 #include "otsdaq-mu2e-calorimeter/FEInterfaces/ROCCalorimeterInterface.h"
 
+#include "otsdaq/ConfigurationInterface/ConfigurationManager.h"
 #include "otsdaq/Macros/InterfacePluginMacros.h"
-#include "otsdaq/ConfigurationInterface/ConfigurationManager.h"  
 
 #include "cetlib/filepath_maker.h"
 
@@ -88,11 +88,11 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(const std::string& rocUID, cons
 	                        std::vector<std::string>{},  // output parameters
 	                        1);
 
-registerFEMacroFunction("Find BoardID From Serial",
-                            static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::FindBoardIDFromSerial),
-							std::vector<std::string>{},              // input
-							std::vector<std::string>{"Status"},      // output
-							1);
+	registerFEMacroFunction("Find BoardID From Serial",
+	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::FindBoardIDFromSerial),
+	                        std::vector<std::string>{},          // input
+	                        std::vector<std::string>{"Status"},  // output
+	                        1);
 
 	registerFEMacroFunction("Set Board Voltages",
 	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::SetBoardVoltages),
@@ -121,14 +121,14 @@ registerFEMacroFunction("Find BoardID From Serial",
 	registerFEMacroFunction("Calibrate Mzb",
 	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::CalibrateMZB),
 	                        std::vector<std::string>{},  // inputs parameters
-	                        std::vector<std::string>{},                           // output parameters
-	                        1);                                                   // requiredUserPermissions
+	                        std::vector<std::string>{},  // output parameters
+	                        1);                          // requiredUserPermissions
 
 	registerFEMacroFunction("SetADCsThresholds",
 	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::SetADCsThresholds),
 	                        std::vector<std::string>{"Offset, Default := 0]"},  // inputs parameters
-	                        std::vector<std::string>{},                                                    // output parameters
-	                        1);                                                                            // requiredUserPermissions
+	                        std::vector<std::string>{},                         // output parameters
+	                        1);                                                 // requiredUserPermissions
 
 	registerFEMacroFunction("SetupForNoiseTaking",
 	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::SetupForNoiseTaking),
@@ -288,25 +288,20 @@ void ROCCalorimeterInterface::universalBlockRead(char* address, char* returnValu
 void ROCCalorimeterInterface::ROCSlowControl(__ARGS__) {
 	std::stringstream os;
 
+	const int boardID = static_cast<int>(cachedBoardIdFromDB_);
+	__COUT_INFO__ << "Target BoardID = " << boardID << __E__;
 
-   const int boardID = static_cast<int>(cachedBoardIdFromDB_);
-    __COUT_INFO__ << "Target BoardID = " << boardID << __E__;
-
-	if(!cachedBoardIdFromDB_)
-    {
-		__FE_SS__ << "Skipping tag slow control for board " << boardID
-                     << ", boardID not initialized correctly!" << __E__;
+	if(!cachedBoardIdFromDB_) {
+		__FE_SS__ << "Skipping tag slow control for board " << boardID << ", boardID not initialized correctly!" << __E__;
 		__FE_SS_THROW__;
-    	return;
-    }
+		return;
+	}
 
-	if(boardID > MAX_BOARD_ID)
-    {
-        __FE_SS__ << "Skipping upload MZB parameters to board " << boardID
-                      << ", boardID out of range!" << __E__;
-  		__FE_SS_THROW__;
-        return;
-    }
+	if(boardID > MAX_BOARD_ID) {
+		__FE_SS__ << "Skipping upload MZB parameters to board " << boardID << ", boardID out of range!" << __E__;
+		__FE_SS_THROW__;
+		return;
+	}
 
 	const char* env_path = std::getenv("MU2E_CALORIMETER_CONFIG_PATH");
 	if(!env_path) {
@@ -707,8 +702,7 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 	if(emulatedInDTC_)  // fix count for emulated ROC to survive
 		u = wordCount + 4;
 	if(data.size() != (long unsigned int)u - 4) {
-		__FE_SS__ << "ROC block read of address " << address << "(0x" << std::hex << address << std::dec << 
-			") failed, expecting " << u - 4 << " words, and read " << data.size() << " words." << __E__;
+		__FE_SS__ << "ROC block read of address " << address << "(0x" << std::hex << address << std::dec << ") failed, expecting " << u - 4 << " words, and read " << data.size() << " words." << __E__;
 		__FE_SS_THROW__;
 	}
 
@@ -716,113 +710,97 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 
 //==================================================================================================
 
+void ots::ROCCalorimeterInterface::FindBoardIDFromSerial(__ARGS__) {
+	std::stringstream os;
 
-	 void ots::ROCCalorimeterInterface::FindBoardIDFromSerial(__ARGS__)
-{
-    std::stringstream os;
+	//   updateBoardIdFromSerial_();
 
- //   updateBoardIdFromSerial_();
+	os << "haveBoardIdFromSerial_ = " << (haveBoardIdFromSerial_ ? "true" : "false") << "\n";
+	os << "cachedSerialReg147_    = 0x" << std::hex << cachedSerialReg147_ << std::dec << "\n";
+	os << "cachedBoardIdFromDB_   = " << cachedBoardIdFromDB_ << "\n";
 
+	const int boardID = static_cast<int>(cachedBoardIdFromDB_);
+	os << "Target BoardID = " << boardID << "\n";
 
-    os << "haveBoardIdFromSerial_ = " << (haveBoardIdFromSerial_ ? "true" : "false") << "\n";
-    os << "cachedSerialReg147_    = 0x" << std::hex << cachedSerialReg147_ << std::dec << "\n";
-    os << "cachedBoardIdFromDB_   = " << cachedBoardIdFromDB_ << "\n";
-
-    const int boardID = static_cast<int>(cachedBoardIdFromDB_);
-    os << "Target BoardID = " << boardID << "\n";
-
-    const ots::ConfigurationManager* cfgMgr = getConfigurationManager();
+	const ots::ConfigurationManager* cfgMgr = getConfigurationManager();
 
 	if(boardID > 160) {
-		os << "Skipping setting thresholds to board " << boardID <<  ", boardID out of range!" << __E__;
-        __SET_ARG_OUT__("Status", os.str());
+		os << "Skipping setting thresholds to board " << boardID << ", boardID out of range!" << __E__;
+		__SET_ARG_OUT__("Status", os.str());
 		return;
 	}
 
-    auto rows = cfgMgr->getNode("SubsystemCalorimeterThresholdsTable").getChildren();
-    os << "SubsystemCalorimeterThresholdsTable rows=" << rows.size() << "\n";
+	auto rows = cfgMgr->getNode("SubsystemCalorimeterThresholdsTable").getChildren();
+	os << "SubsystemCalorimeterThresholdsTable rows=" << rows.size() << "\n";
 
-    const ots::ConfigurationTree* rec = nullptr;
-    std::string recUID;
+	const ots::ConfigurationTree* rec = nullptr;
+	std::string                   recUID;
 
-    for(const auto& row : rows)
-    {
-        const auto& r = row.second;
-        const uint64_t tableBoardId = r.getNode("BoardID").getValue<uint64_t>();
+	for(const auto& row : rows) {
+		const auto&    r            = row.second;
+		const uint64_t tableBoardId = r.getNode("BoardID").getValue<uint64_t>();
 
-        if(static_cast<int>(tableBoardId) != boardID)
-            continue;
+		if(static_cast<int>(tableBoardId) != boardID)
+			continue;
 
-        rec = &r;
-        recUID = row.first;
-        break;
-    }
+		rec    = &r;
+		recUID = row.first;
+		break;
+	}
 
-    if(!rec)
-    {
-        os << "ERROR: BoardID=" << boardID << " not found in SubsystemCalorimeterThresholdsTable\n";
-        __SET_ARG_OUT__("Status", os.str());
-        return;
-    }
+	if(!rec) {
+		os << "ERROR: BoardID=" << boardID << " not found in SubsystemCalorimeterThresholdsTable\n";
+		__SET_ARG_OUT__("Status", os.str());
+		return;
+	}
 
-    os << "FOUND record UID=" << recUID << " for BoardID=" << boardID << "\n";
+	os << "FOUND record UID=" << recUID << " for BoardID=" << boardID << "\n";
 
-    auto thrBmp = rec->getNode("Thresholds").getValueAsBitMap();
-    os << "Thresholds bitmap: rows=" << thrBmp.numberOfRows()
-       << " cols(0)=" << thrBmp.numberOfColumns(0) << "\n";
+	auto thrBmp = rec->getNode("Thresholds").getValueAsBitMap();
+	os << "Thresholds bitmap: rows=" << thrBmp.numberOfRows() << " cols(0)=" << thrBmp.numberOfColumns(0) << "\n";
 
-    const uint32_t thrCols = thrBmp.numberOfColumns(0);
-    const uint32_t thrToPrint = std::min<uint32_t>(thrCols, 20);
-    for(uint32_t ch = 0; ch < thrToPrint; ++ch)
-    {
-        std::string v = thrBmp.get(0, ch);
-        if(v.empty()) v = "0";
-        os << "Thr[" << ch << "]=" << v << "\n";
-    }
+	const uint32_t thrCols    = thrBmp.numberOfColumns(0);
+	const uint32_t thrToPrint = std::min<uint32_t>(thrCols, 20);
+	for(uint32_t ch = 0; ch < thrToPrint; ++ch) {
+		std::string v = thrBmp.get(0, ch);
+		if(v.empty())
+			v = "0";
+		os << "Thr[" << ch << "]=" << v << "\n";
+	}
 
-
-    __SET_ARG_OUT__("Status", os.str());
+	__SET_ARG_OUT__("Status", os.str());
 }
-
-
-
 
 ///////////////////////
 
-void ROCCalorimeterInterface::updateBoardIdFromSerial_()
-{
-    haveBoardIdFromSerial_ = false;
-    cachedSerialReg147_    = 0;
-    cachedBoardIdFromDB_   = 0;
+void ROCCalorimeterInterface::updateBoardIdFromSerial_() {
+	haveBoardIdFromSerial_ = false;
+	cachedSerialReg147_    = 0;
+	cachedBoardIdFromDB_   = 0;
 
-    cachedSerialReg147_ = readRegister(147);
+	cachedSerialReg147_ = readRegister(147);
 
-    const ots::ConfigurationManager* cfgMgr = getConfigurationManager();
+	const ots::ConfigurationManager* cfgMgr = getConfigurationManager();
 
-    auto rows = cfgMgr->getNode("SubsystemCalorimeterParametersTable").getChildren();
-    for(const auto& row : rows)
-    {
-        const auto& rec = row.second;
-        const uint64_t tableSerial = rec.getNode("SerialNumber").getValue<uint64_t>();
+	auto rows = cfgMgr->getNode("SubsystemCalorimeterParametersTable").getChildren();
+	for(const auto& row : rows) {
+		const auto&    rec         = row.second;
+		const uint64_t tableSerial = rec.getNode("SerialNumber").getValue<uint64_t>();
 
-        if(static_cast<uint16_t>(tableSerial) != cachedSerialReg147_)
-            continue;
+		if(static_cast<uint16_t>(tableSerial) != cachedSerialReg147_)
+			continue;
 
-        cachedBoardIdFromDB_   = static_cast<uint16_t>(rec.getNode("BoardId").getValue<uint64_t>());
-   		writeRegister(ROC_ADDRESS_BOARD_ID, cachedBoardIdFromDB_);
+		cachedBoardIdFromDB_ = static_cast<uint16_t>(rec.getNode("BoardId").getValue<uint64_t>());
+		writeRegister(ROC_ADDRESS_BOARD_ID, cachedBoardIdFromDB_);
 		haveBoardIdFromSerial_ = true;
-        break;
-    }
+		break;
+	}
 
-    if(haveBoardIdFromSerial_)
-        __FE_COUT__ << "Mapped serial 0x" << std::hex << cachedSerialReg147_ << std::dec
-                  << " -> BoardId=" << cachedBoardIdFromDB_ << __E__;
-    else
-        __FE_COUT__ << "No match in ParametersTable for serial 0x"
-                      << std::hex << cachedSerialReg147_ << std::dec << __E__;
-    
+	if(haveBoardIdFromSerial_)
+		__FE_COUT__ << "Mapped serial 0x" << std::hex << cachedSerialReg147_ << std::dec << " -> BoardId=" << cachedBoardIdFromDB_ << __E__;
+	else
+		__FE_COUT__ << "No match in ParametersTable for serial 0x" << std::hex << cachedSerialReg147_ << std::dec << __E__;
 }
-
 
 /*
 
@@ -907,9 +885,9 @@ void ROCCalorimeterInterface::configure(void) try {
 	else
 		__COUT_INFO__ << "Configuration failed! :(" << __E__;
 
-    updateBoardIdFromSerial_();
+	updateBoardIdFromSerial_();
 	SetADCsThresholds(50);
-    //CalibrateMZB();
+	// CalibrateMZB();
 
 } catch(const std::runtime_error& e) {
 	__FE_COUT__ << "Error caught: " << e.what() << __E__;
@@ -928,7 +906,7 @@ void ROCCalorimeterInterface::configure(void) try {
 //==================================================================================================
 bool ROCCalorimeterInterface::running(void) {
 	// SetupForPatternFixedLengthDataTaking(40);
-	//SetupForADCsDataTaking(0, 0, 2300);
+	// SetupForADCsDataTaking(0, 0, 2300);
 
 	return false;
 }
@@ -1158,30 +1136,23 @@ void ROCCalorimeterInterface::ConfigureLink(__ARGS__) {
 //==================================================================================================
 
 void ROCCalorimeterInterface::ConfigureLink(std::string conf, std::string confFile, bool hvonoff, bool doCalibration, bool setThresholds, int offset) {
-	
-    const int boardID = static_cast<int>(cachedBoardIdFromDB_);
-    __COUT_INFO__ << "Target BoardID = " << boardID << __E__;
+	const int boardID = static_cast<int>(cachedBoardIdFromDB_);
+	__COUT_INFO__ << "Target BoardID = " << boardID << __E__;
 
-
-	if(!cachedBoardIdFromDB_)
-    {
-	    updateBoardIdFromSerial_();
-     	if(!cachedBoardIdFromDB_){
-
-			__FE_SS__ << "Skipping configuring board " << boardID
-      	              << ", boardID not initialized correctly!" << __E__;
+	if(!cachedBoardIdFromDB_) {
+		updateBoardIdFromSerial_();
+		if(!cachedBoardIdFromDB_) {
+			__FE_SS__ << "Skipping configuring board " << boardID << ", boardID not initialized correctly!" << __E__;
 			__FE_SS_THROW__;
-    		return;
+			return;
 		}
-    }
+	}
 
-	if(boardID > 160)
-    {
-        __FE_SS__ << "Skipping configuring board " << boardID
-                      << ", boardID out of range!" << __E__;
-  		__FE_SS_THROW__;
-        return;
-    }
+	if(boardID > 160) {
+		__FE_SS__ << "Skipping configuring board " << boardID << ", boardID out of range!" << __E__;
+		__FE_SS_THROW__;
+		return;
+	}
 
 	if(doCalibration)
 		CalibrateMZB();
@@ -1195,39 +1166,30 @@ void ROCCalorimeterInterface::ConfigureLink(std::string conf, std::string confFi
 
 //==================================================================================================
 
-void ROCCalorimeterInterface::CalibrateMZB(__ARGS__) {
-
-	CalibrateMZB();
-
-}  // end ConfigureLink()
+void ROCCalorimeterInterface::CalibrateMZB(__ARGS__) { CalibrateMZB(); }  // end ConfigureLink()
 
 //==================================================================================================
 
 //==================================================================================================
 
 void ROCCalorimeterInterface::CalibrateMZB() {
-	
 	char buff[50];
 
-    const int boardID = static_cast<int>(cachedBoardIdFromDB_);
-    __COUT_INFO__ << "Target BoardID = " << boardID << __E__;
+	const int boardID = static_cast<int>(cachedBoardIdFromDB_);
+	__COUT_INFO__ << "Target BoardID = " << boardID << __E__;
 
-	if(!cachedBoardIdFromDB_)
-    {
-		__FE_SS__ << "Skipping upload MZB parameters to board " << boardID
-                     << ", boardID not initialized correctly!" << __E__;
+	if(!cachedBoardIdFromDB_) {
+		__FE_SS__ << "Skipping upload MZB parameters to board " << boardID << ", boardID not initialized correctly!" << __E__;
 		__FE_SS_THROW__;
-    	return;
-    }
+		return;
+	}
 
-	if(boardID > 160)
-    {
-        __FE_SS__ << "Skipping upload MZB parameters to board " << boardID
-                      << ", boardID out of range!" << __E__;
-  		__FE_SS_THROW__;
-        return;
-    }
-	
+	if(boardID > 160) {
+		__FE_SS__ << "Skipping upload MZB parameters to board " << boardID << ", boardID out of range!" << __E__;
+		__FE_SS_THROW__;
+		return;
+	}
+
 	sprintf(buff, "mzb%03d.config", boardID);
 
 	cet::filepath_lookup lookup_policy("MU2E_CALORIMETER_CONFIG_PATH");
@@ -1275,164 +1237,140 @@ void ROCCalorimeterInterface::CalibrateMZB() {
 //==================================================================================================
 
 void ROCCalorimeterInterface::SetADCsThresholds(__ARGS__) {
-	int offset  = __GET_ARG_IN__("Offset, Default := 0]", int, 0);
+	int offset = __GET_ARG_IN__("Offset, Default := 0]", int, 0);
 
 	SetADCsThresholds(offset);
 }  // end ConfigureLink()
 
+void ROCCalorimeterInterface::SetADCsThresholds(int offset) {
+	const int boardID = static_cast<int>(cachedBoardIdFromDB_);
+	__COUT_INFO__ << "Target BoardID = " << boardID << __E__;
 
-void ROCCalorimeterInterface::SetADCsThresholds(int offset)
-{
-
-    const int boardID = static_cast<int>(cachedBoardIdFromDB_);
-    __COUT_INFO__ << "Target BoardID = " << boardID << __E__;
-
-	if(boardID > 160)
-    {
-        __COUT_ERR__ << "Skipping setting thresholds to board " << boardID
-                      << ", boardID out of range!" << __E__;
-        return;
-    }
-
-	if(!cachedBoardIdFromDB_)
-    {
-		__COUT_ERR__ << "Skipping setting thresholds to board " << boardID
-                     << ", boardID not initialized correctly!" << __E__;
-        return;
-    }
-
-    const ots::ConfigurationManager* cfgMgr = getConfigurationManager();
-    if(!cfgMgr)
-    {
-        __COUT_ERR__ << "ERROR: getConfigurationManager() returned nullptr" << __E__;
-        return;
-    }
-
-    auto rows = cfgMgr->getNode("SubsystemCalorimeterThresholdsTable").getChildren();
-    const ots::ConfigurationTree* rec = nullptr;
-    std::string recUID;
-
-    for(const auto& row : rows)
-    {
-        const auto& r = row.second;
-        const uint64_t tableBoardId = r.getNode("BoardID").getValue<uint64_t>();
-        if(static_cast<int>(tableBoardId) != boardID)
-            continue;
-        rec    = &r;
-        recUID = row.first;
-        break;
-    }
-
-    if(!rec)
-    {
-        __COUT_ERR__ << "ERROR: BoardID=" << boardID
-                     << " not found in SubsystemCalorimeterThresholdsTable. "
-                     << "Setting default thresholds=2300 for 20 channels." << __E__;
-
-        for(int ichan = 0; ichan < 20; ++ichan)
-            writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ichan, 2300);
-        return;
-    }
-
-    __COUT_INFO__ << "FOUND record UID=" << recUID << " for BoardID=" << boardID << __E__;
-
-    auto thrBmp = rec->getNode("Thresholds").getValueAsBitMap();
-    for(int ichan = 0; ichan < 20; ++ichan)
-    {
-        int thr = 2300;
-        if(thrBmp.numberOfRows() > 0 && thrBmp.numberOfColumns(0) > static_cast<uint32_t>(ichan))
-        {
-            std::string s = thrBmp.get(0, ichan);
-            if(!s.empty())
-            {
-                char* endp = nullptr;
-                double v = std::strtod(s.c_str(), &endp);
-                if(endp != s.c_str())
-                    thr = static_cast<int>(v + (v >= 0 ? 0.5 : -0.5));  
-            }
-        }
-
-        int thr2set = thr + offset;
-
-        for(auto pin : _pin_diode_list)
-        {
-            if(boardID * 100 + ichan == pin)
-            {
-                thr2set = thr;
-                __COUT_INFO__ << "Board " << boardID << " Channel " << ichan
-                              << " detected as pin diode. Ignoring requested offset. "
-                              << "Threshold: " << thr2set << __E__;
-                break;
-            }
-        }
-
-        __COUT_INFO__ << "Board " << boardID << " ch " << ichan
-                      << " thr=" << thr << " offset=" << offset
-                      << " -> set " << thr2set << __E__;
-
-        writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ichan, thr2set);
-    }
-
-    __COUT_INFO__ << "Thresholds set done from SubsystemCalorimeterThresholdsTable (UID="
-                  << recUID << ") for boardID=" << boardID << __E__;
-}
-
-
-
-
-
-/*void ROCCalorimeterInterface::SetADCsThresholds(int boardID, int offset) {
-	char buff[50];
-	sprintf(buff, "dirac%03d.baseline", boardID);
-
-	if(boardID >= 160) {
-		__COUT_INFO__ << "Skipping setting thresholds to board " << boardID << __E__;
+	if(boardID > 160) {
+		__COUT_ERR__ << "Skipping setting thresholds to board " << boardID << ", boardID out of range!" << __E__;
 		return;
 	}
 
-	cet::filepath_lookup lookup_policy("MU2E_CALORIMETER_CONFIG_PATH");
-	auto                 filename = lookup_policy(std::string("diracCalib/") + buff);  // FIXME! THIS NEEDS TO BE A VARIABLE
-
-	std::ifstream confFile(filename);
-	if(!confFile.is_open()) {
-		__FE_SS__ << "Could not open file: " << filename << __E__;
-
-		for(int ichan = 0; ichan < 20; ichan++) {
-			writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ichan, 2300);
-		}
-	} else {
-		__COUT_INFO__ << "Opening file: " << filename << __E__;
-
-		for(int ichan = 0; ichan < 20; ichan++) {
-			int   chindex;
-			float baseline;
-			float sigma;
-			int   thr;
-			int   thr2set;
-
-			confFile >> chindex >> baseline >> sigma >> thr;
-
-			thr2set = thr + offset;
-
-			for(auto pin : _pin_diode_list) {
-				if(boardID * 100 + chindex == pin) {
-					thr2set = thr;
-					__COUT_INFO__ << "Board " << boardID << " Channel " << chindex
-					              << " detected as pin diode. Ignoring requested offset. "
-					                 "Threshold: "
-					              << thr2set << __E__;
-					break;
-				}
-			}
-
-			__COUT_INFO__ << chindex << "  " << baseline << "  " << sigma << "  " << thr2set << __E__;
-			writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ichan, thr2set);
-		}
-
-		confFile.close();
+	if(!cachedBoardIdFromDB_) {
+		__COUT_ERR__ << "Skipping setting thresholds to board " << boardID << ", boardID not initialized correctly!" << __E__;
+		return;
 	}
 
-	__COUT_INFO__ << "Thresholds set done.." << filename << __E__;
+	const ots::ConfigurationManager* cfgMgr = getConfigurationManager();
+	if(!cfgMgr) {
+		__COUT_ERR__ << "ERROR: getConfigurationManager() returned nullptr" << __E__;
+		return;
+	}
+
+	auto                          rows = cfgMgr->getNode("SubsystemCalorimeterThresholdsTable").getChildren();
+	const ots::ConfigurationTree* rec  = nullptr;
+	std::string                   recUID;
+
+	for(const auto& row : rows) {
+		const auto&    r            = row.second;
+		const uint64_t tableBoardId = r.getNode("BoardID").getValue<uint64_t>();
+		if(static_cast<int>(tableBoardId) != boardID)
+			continue;
+		rec    = &r;
+		recUID = row.first;
+		break;
+	}
+
+	if(!rec) {
+		__COUT_ERR__ << "ERROR: BoardID=" << boardID << " not found in SubsystemCalorimeterThresholdsTable. "
+		             << "Setting default thresholds=2300 for 20 channels." << __E__;
+
+		for(int ichan = 0; ichan < 20; ++ichan)
+			writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ichan, 2300);
+		return;
+	}
+
+	__COUT_INFO__ << "FOUND record UID=" << recUID << " for BoardID=" << boardID << __E__;
+
+	auto thrBmp = rec->getNode("Thresholds").getValueAsBitMap();
+	for(int ichan = 0; ichan < 20; ++ichan) {
+		int thr = 2300;
+		if(thrBmp.numberOfRows() > 0 && thrBmp.numberOfColumns(0) > static_cast<uint32_t>(ichan)) {
+			std::string s = thrBmp.get(0, ichan);
+			if(!s.empty()) {
+				char*  endp = nullptr;
+				double v    = std::strtod(s.c_str(), &endp);
+				if(endp != s.c_str())
+					thr = static_cast<int>(v + (v >= 0 ? 0.5 : -0.5));
+			}
+		}
+
+		int thr2set = thr + offset;
+
+		for(auto pin : _pin_diode_list) {
+			if(boardID * 100 + ichan == pin) {
+				thr2set = thr;
+				__COUT_INFO__ << "Board " << boardID << " Channel " << ichan << " detected as pin diode. Ignoring requested offset. "
+				              << "Threshold: " << thr2set << __E__;
+				break;
+			}
+		}
+
+		__COUT_INFO__ << "Board " << boardID << " ch " << ichan << " thr=" << thr << " offset=" << offset << " -> set " << thr2set << __E__;
+
+		writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ichan, thr2set);
+	}
+
+	__COUT_INFO__ << "Thresholds set done from SubsystemCalorimeterThresholdsTable (UID=" << recUID << ") for boardID=" << boardID << __E__;
+}
+
+/*void ROCCalorimeterInterface::SetADCsThresholds(int boardID, int offset) {
+    char buff[50];
+    sprintf(buff, "dirac%03d.baseline", boardID);
+
+    if(boardID >= 160) {
+        __COUT_INFO__ << "Skipping setting thresholds to board " << boardID << __E__;
+        return;
+    }
+
+    cet::filepath_lookup lookup_policy("MU2E_CALORIMETER_CONFIG_PATH");
+    auto                 filename = lookup_policy(std::string("diracCalib/") + buff);  // FIXME! THIS NEEDS TO BE A VARIABLE
+
+    std::ifstream confFile(filename);
+    if(!confFile.is_open()) {
+        __FE_SS__ << "Could not open file: " << filename << __E__;
+
+        for(int ichan = 0; ichan < 20; ichan++) {
+            writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ichan, 2300);
+        }
+    } else {
+        __COUT_INFO__ << "Opening file: " << filename << __E__;
+
+        for(int ichan = 0; ichan < 20; ichan++) {
+            int   chindex;
+            float baseline;
+            float sigma;
+            int   thr;
+            int   thr2set;
+
+            confFile >> chindex >> baseline >> sigma >> thr;
+
+            thr2set = thr + offset;
+
+            for(auto pin : _pin_diode_list) {
+                if(boardID * 100 + chindex == pin) {
+                    thr2set = thr;
+                    __COUT_INFO__ << "Board " << boardID << " Channel " << chindex
+                                  << " detected as pin diode. Ignoring requested offset. "
+                                     "Threshold: "
+                                  << thr2set << __E__;
+                    break;
+                }
+            }
+
+            __COUT_INFO__ << chindex << "  " << baseline << "  " << sigma << "  " << thr2set << __E__;
+            writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ichan, thr2set);
+        }
+
+        confFile.close();
+    }
+
+    __COUT_INFO__ << "Thresholds set done.." << filename << __E__;
 
 }  // end SetADCsThresholds()*/
 
