@@ -88,6 +88,9 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface {
 
       };
 
+    bool     hasBoardIdFromSerial() const { return haveBoardIdFromSerial_; }
+    uint16_t getCachedSerialReg147() const { return cachedSerialReg147_; }
+    uint16_t getCachedBoardIdFromDB() const { return cachedBoardIdFromDB_; }
 
     int GetTemperature(int idchannel);
     //	temperature--
@@ -133,18 +136,18 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface {
     void SetupForNoiseTaking(unsigned int numberOfsamples);
     void RMZB_writeAllSiPMbias(float *hv);
     void EnableDisableLEDs(__ARGS__);
-
+    void FindBoardIDFromSerial(__ARGS__);
 
     void ConfigureLink(__ARGS__);
     void ConfigureLink(std::string conf, std::string confFile, bool hvonoff, bool doCalibration, bool setThresholds, int offset);
     void CalibrateMZB(__ARGS__);
-    void CalibrateMZB(int boardid);
+    void CalibrateMZB();
 
 
     void ToggleMBBusy(__ARGS__);
     void ToggleMBBusy(bool busyonoff);
     void SetADCsThresholds(__ARGS__);
-    void SetADCsThresholds(int boardid, int offset);
+    void SetADCsThresholds(int offset);
 
     void ReadROCErrorCounter		(__ARGS__);
     void ReadMBRegisters		(__ARGS__);
@@ -156,7 +159,12 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface {
 
   private:
 
+    bool     haveBoardIdFromSerial_ = false;
+    uint16_t cachedSerialReg147_    = 0;
+    uint16_t cachedBoardIdFromDB_   = 0;
+    void updateBoardIdFromSerial_();
 
+    static constexpr int MAX_BOARD_ID = 160;  // Maximum valid board ID for calorimeter DIRACs, see also CaloConst::_nDIRAC from Offline/DataProducts/inc/CaloConst.hh
     static const std::set<DTCLib::roc_address_t>		SPECIAL_BLOCK_READ_ADDRS_;
 
     std::set<int> _pin_diode_list;

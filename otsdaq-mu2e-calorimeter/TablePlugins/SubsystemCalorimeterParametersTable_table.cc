@@ -13,7 +13,7 @@ using namespace ots;
 
 const std::string SubsystemCalorimeterParametersTable::DBSERVICE_ONLINE_PATH = getenv("DBSERVICE_ONLINE_PATH") ? getenv("DBSERVICE_ONLINE_PATH") : "";
 const std::string SubsystemCalorimeterParametersTable::CHANNEL_MAP_TABLE     = "SubsystemCalorimeterMapTable";
-const std::string SubsystemCalorimeterParametersTable::CHANNEL_STATUS_TABLE       = "SubsystemCalorimeterStatusTable";
+const std::string SubsystemCalorimeterParametersTable::CHANNEL_STATUS_TABLE  = "SubsystemCalorimeterStatusTable";
 
 //==============================================================================
 SubsystemCalorimeterParametersTable::SubsystemCalorimeterParametersTable(void) : TableBase("SubsystemCalorimeterParametersTable") {}
@@ -139,8 +139,7 @@ std::string SubsystemCalorimeterParametersTable::getStructureAsJSON(const Config
 	outstream << "\t\"DBServiceTables\": {" << __E__;
 	std::map<std::string, std::string>::iterator it;
 	for(it = mapOfflineTables_.begin(); it != mapOfflineTables_.end(); ++it) {
-		outstream << "\"" << it->first << "\": \"" 
-		          << StringMacros::escapeJSONStringEntities(it->second) << "\"";
+		outstream << "\"" << it->first << "\": \"" << StringMacros::escapeJSONStringEntities(it->second) << "\"";
 		outstream << (std::next(it) == mapOfflineTables_.end() ? "" : ",");
 	}
 	outstream << "},";
