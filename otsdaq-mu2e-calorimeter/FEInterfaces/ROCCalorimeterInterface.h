@@ -164,6 +164,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface {
     uint16_t cachedBoardIdFromDB_   = 0;
     void updateBoardIdFromSerial_();
     
+    static constexpr int MAX_BOARD_ID = 160;  // Maximum valid board ID for calorimeter DIRACs, see also CaloConst::_nDIRAC from Offline/DataProducts/inc/CaloConst.hh
     static const std::set<DTCLib::roc_address_t>		SPECIAL_BLOCK_READ_ADDRS_;
 
     std::set<int> _pin_diode_list;

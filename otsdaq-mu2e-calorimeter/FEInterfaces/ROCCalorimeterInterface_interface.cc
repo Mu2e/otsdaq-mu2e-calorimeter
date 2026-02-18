@@ -300,7 +300,7 @@ void ROCCalorimeterInterface::ROCSlowControl(__ARGS__) {
     	return;
     }
 
-	if(boardID > 160)
+	if(boardID > MAX_BOARD_ID)
     {
         __FE_SS__ << "Skipping upload MZB parameters to board " << boardID
                       << ", boardID out of range!" << __E__;
