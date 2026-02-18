@@ -724,7 +724,7 @@ void ots::ROCCalorimeterInterface::FindBoardIDFromSerial(__ARGS__) {
 
 	const ots::ConfigurationManager* cfgMgr = getConfigurationManager();
 
-	if(boardID > 160) {
+	if(boardID > MAX_BOARD_ID) {
 		os << "Skipping setting thresholds to board " << boardID << ", boardID out of range!" << __E__;
 		__SET_ARG_OUT__("Status", os.str());
 		return;
@@ -1148,7 +1148,7 @@ void ROCCalorimeterInterface::ConfigureLink(std::string conf, std::string confFi
 		}
 	}
 
-	if(boardID > 160) {
+	if(boardID > MAX_BOARD_ID) {
 		__FE_SS__ << "Skipping configuring board " << boardID << ", boardID out of range!" << __E__;
 		__FE_SS_THROW__;
 		return;
@@ -1184,7 +1184,7 @@ void ROCCalorimeterInterface::CalibrateMZB() {
 		return;
 	}
 
-	if(boardID > 160) {
+	if(boardID > MAX_BOARD_ID) {
 		__FE_SS__ << "Skipping upload MZB parameters to board " << boardID << ", boardID out of range!" << __E__;
 		__FE_SS_THROW__;
 		return;
@@ -1246,7 +1246,7 @@ void ROCCalorimeterInterface::SetADCsThresholds(int offset) {
 	const int boardID = static_cast<int>(cachedBoardIdFromDB_);
 	__COUT_INFO__ << "Target BoardID = " << boardID << __E__;
 
-	if(boardID > 160) {
+	if(boardID > MAX_BOARD_ID) {
 		__COUT_ERR__ << "Skipping setting thresholds to board " << boardID << ", boardID out of range!" << __E__;
 		return;
 	}
@@ -1323,7 +1323,7 @@ void ROCCalorimeterInterface::SetADCsThresholds(int offset) {
     char buff[50];
     sprintf(buff, "dirac%03d.baseline", boardID);
 
-    if(boardID >= 160) {
+    if(boardID >= MAX_BOARD_ID) {
         __COUT_INFO__ << "Skipping setting thresholds to board " << boardID << __E__;
         return;
     }
