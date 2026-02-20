@@ -19,7 +19,7 @@ cet_build_plugin(ROCCalorimeterInterface
   otsdaq-mu2e-calorimeter::FEInterfaces
   otsdaq::Macros
   )
- 
- 
+
+
 install_headers()
 install_source()
