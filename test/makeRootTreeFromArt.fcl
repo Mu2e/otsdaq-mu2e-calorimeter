@@ -22,27 +22,18 @@ physics : {
   }
 
   producers : {
-    genFrags : {
-      module_type  : ProcessDTCAndCFOEvents
-      diagLevel    : 0
-      makeCaloFrag : 1
-      makeTrkFrag  : 0
-      makeCRVFrag  : 0
-    }
   }
 
   analyzers  : {
     caloAnalyzer : {
       module_type           : CaloDataAnalyzer
-      unpackerModuleLabel   : "genFrags"
-      unpackerInstanceLabel : ""
       verbosity             : 0
-      dataType              : 1
+      dataType              : 0
       SelectEvents          : [ t1 ]
     }
   }
 
-  t1 : [ filterEmptyEvents, genFrags ]
+  t1 : [ filterEmptyEvents ]
   e1 : [ caloAnalyzer ]
 
   trigger_paths  : [t1]
