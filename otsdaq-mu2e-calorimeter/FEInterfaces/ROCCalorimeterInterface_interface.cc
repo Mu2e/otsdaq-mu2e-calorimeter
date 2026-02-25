@@ -703,7 +703,13 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 		u = wordCount + 4;
 	if(data.size() != (long unsigned int)u - 4) {
 		__FE_SS__ << "ROC block read of address " << address << "(0x" << std::hex << address << std::dec << ") failed, expecting " << u - 4 << " words, and read " << data.size() << " words." << __E__;
-		__FE_SS_THROW__;
+		{
+			__FE_COUT_ERR__ << ss.str(); //demoted to error rather than exception on 19-Feb-2026 during Calo MC2 commissioning
+			//just pad with zeros for now if wrong
+			while(data.size() < wordCount)
+				data.push_back(0);
+		}
+		// __FE_SS_THROW__;
 	}
 
 }  // end readBlock()
