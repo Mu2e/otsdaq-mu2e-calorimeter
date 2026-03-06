@@ -29,16 +29,16 @@ void SubsystemCalorimeterParametersTable::init(ConfigurationManager* configManag
 	//	generating files on local disk multiple times.
 	isFirstAppInContext_ = configManager->isOwnerFirstAppInContext();
 
-	__COUTV__(isFirstAppInContext_);
+	__COUTTV__(isFirstAppInContext_);
 	if(!isFirstAppInContext_)
 		return;
 
-	__COUTV__(SubsystemCalorimeterParametersTable::DBSERVICE_ONLINE_PATH);
+	__COUTTV__(SubsystemCalorimeterParametersTable::DBSERVICE_ONLINE_PATH);
 	if(SubsystemCalorimeterParametersTable::DBSERVICE_ONLINE_PATH.size() == 0)
 		return;
 
-	__COUT__ << "*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*" << __E__;
-	__COUT__ << configManager->__SELF_NODE__ << __E__;
+	__COUTT__ << "*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*&*" << __E__;
+	__COUTT__ << configManager->__SELF_NODE__ << __E__;
 
 	generateOfflineTableMap(configManager);
 
