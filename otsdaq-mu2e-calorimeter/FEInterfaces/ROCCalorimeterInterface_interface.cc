@@ -291,7 +291,7 @@ void ROCCalorimeterInterface::ROCSlowControl(__ARGS__) {
 	const int boardID = static_cast<int>(cachedBoardIdFromDB_);
 	__COUT_INFO__ << "Target BoardID = " << boardID << __E__;
 
-	if(!cachedBoardIdFromDB_) {
+	if(cachedBoardIdFromDB_ == INVALID_BOARDID) {
 		__FE_SS__ << "Skipping tag slow control for board " << boardID << ", boardID not initialized correctly!" << __E__;
 		__FE_SS_THROW__;
 		return;
@@ -782,7 +782,7 @@ void ots::ROCCalorimeterInterface::FindBoardIDFromSerial(__ARGS__) {
 void ROCCalorimeterInterface::updateBoardIdFromSerial_() {
 	haveBoardIdFromSerial_ = false;
 	cachedSerialReg147_    = 0;
-	cachedBoardIdFromDB_   = 0;
+	cachedBoardIdFromDB_   = INVALID_BOARDID;
 
 	cachedSerialReg147_ = readRegister(147);
 
@@ -1145,9 +1145,9 @@ void ROCCalorimeterInterface::ConfigureLink(std::string conf, std::string confFi
 	const int boardID = static_cast<int>(cachedBoardIdFromDB_);
 	__COUT_INFO__ << "Target BoardID = " << boardID << __E__;
 
-	if(!cachedBoardIdFromDB_) {
+	if(cachedBoardIdFromDB_ == INVALID_BOARDID) {
 		updateBoardIdFromSerial_();
-		if(!cachedBoardIdFromDB_) {
+		if(cachedBoardIdFromDB_ == INVALID_BOARDID) {
 			__FE_SS__ << "Skipping configuring board " << boardID << ", boardID not initialized correctly!" << __E__;
 			__FE_SS_THROW__;
 			return;
@@ -1184,7 +1184,7 @@ void ROCCalorimeterInterface::CalibrateMZB() {
 	const int boardID = static_cast<int>(cachedBoardIdFromDB_);
 	__COUT_INFO__ << "Target BoardID = " << boardID << __E__;
 
-	if(!cachedBoardIdFromDB_) {
+	if(cachedBoardIdFromDB_ == INVALID_BOARDID) {
 		__FE_SS__ << "Skipping upload MZB parameters to board " << boardID << ", boardID not initialized correctly!" << __E__;
 		__FE_SS_THROW__;
 		return;
@@ -1257,7 +1257,7 @@ void ROCCalorimeterInterface::SetADCsThresholds(int offset) {
 		return;
 	}
 
-	if(!cachedBoardIdFromDB_) {
+	if(cachedBoardIdFromDB_ == INVALID_BOARDID) {
 		__COUT_ERR__ << "Skipping setting thresholds to board " << boardID << ", boardID not initialized correctly!" << __E__;
 		return;
 	}
