@@ -91,9 +91,14 @@ std::string SubsystemCalorimeterParametersTable::getChannelMapAndCSVFormat(const
 
 //==============================================================================
 std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(const ConfigurationManager* configManager, const std::string& OfflineCxxClassName) {
+
+	__COUTTV__(OfflineCxxClassName);
+
 	std::stringstream OfflineTable;
 	OfflineTable << "TABLE " << OfflineCxxClassName << __E__;
 	std::vector<std::pair<std::string, ConfigurationTree>> channelStatusRecords = configManager->getNode(SubsystemCalorimeterParametersTable::CHANNEL_STATUS_TABLE).getChildren();
+
+	__COUTTV__(channelStatusRecords.size());
 
 	// start main fe/DTC record loop
 	for(auto& channelStatusPair : channelStatusRecords) {
@@ -119,6 +124,7 @@ std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(const
 		}
 		OfflineTable << "\n";
 	}
+	__COUTTV__(OfflineTable.str().size());
 	return OfflineTable.str();
 }  // end getStatusTableInCSVFormat()
 
