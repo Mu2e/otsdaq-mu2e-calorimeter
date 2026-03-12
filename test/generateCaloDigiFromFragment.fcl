@@ -17,7 +17,6 @@ services : {
 
   #@local::Services.Reco
   GeometryService		:		{inputFile: "Offline/Mu2eG4/geom/geom_common.txt" bFieldFile: "Offline/Mu2eG4/geom/bfgeom_reco_v01.txt" simulatedDetector : {tool_type: "Mu2e"}}
-  ConditionsService		:		{ conditionsfile : "Offline/ConditionsService/data/conditions_01.txt"}
   GlobalConstantsService		:		{inputFile : "Offline/GlobalConstantsService/data/globalConstants_01.txt"}
   DbService		:		@local::DbEmpty
   ProditionsService		:		@local::Proditions
