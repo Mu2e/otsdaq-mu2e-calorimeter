@@ -153,6 +153,8 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface {
     void ReadMBRegisters		(__ARGS__);
     void GetMZBStatus		(__ARGS__);
 
+    void CreateGlobalROCTable		(__ARGS__);
+    void CreateGlobalROCTable	(std::ostream& os);
 
 
     virtual void GetStatus							(__ARGS__) override;
