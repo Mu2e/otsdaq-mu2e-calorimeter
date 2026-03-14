@@ -3,11 +3,13 @@
 
 #include "otsdaq-mu2e/FEInterfaces/ROCPolarFireCoreInterface.h"
 
-#define MZ_ADDRESS 262
+#define MZ_ADDRESS     262
 #define MZ_BUFFER_SIZE 46
 
-namespace ots {
-class ROCCalorimeterInterface : public ROCPolarFireCoreInterface {
+namespace ots
+{
+class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
+{
 	// clang-format off
   public:
     ROCCalorimeterInterface(const std::string&       rocUID,

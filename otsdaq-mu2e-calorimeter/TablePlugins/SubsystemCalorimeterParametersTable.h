@@ -4,8 +4,10 @@
 #include "otsdaq/ConfigurationInterface/ConfigurationManager.h"
 #include "otsdaq/TableCore/TableBase.h"
 
-namespace ots {
-class SubsystemCalorimeterParametersTable : public TableBase {
+namespace ots
+{
+class SubsystemCalorimeterParametersTable : public TableBase
+{
 	// clang-format off
 
   public:
