@@ -2194,10 +2194,10 @@ TableVersion ROCCalorimeterInterface::CreateGlobalROCTable(std::ostream& os, boo
 	//		- Keep OFF ROCs untouched
 	//  3. Throw and exception with mismatch and new table version
 
-	const std::string tableName   = "ROCInterfaceTable";
-	const std::string COL_LINK_ID = "linkID";
-	const std::string COL_DTC_ID  = "ROCGroupID";
-	bool boardIdMismatchFound = false;
+	const std::string tableName            = "ROCInterfaceTable";
+	const std::string COL_LINK_ID          = "linkID";
+	const std::string COL_DTC_ID           = "ROCGroupID";
+	bool              boardIdMismatchFound = false;
 
 	// Step 1. -------------------------------------
 	//	read all board IDs (register 47) and cache all local ROC config values
@@ -2276,15 +2276,14 @@ TableVersion ROCCalorimeterInterface::CreateGlobalROCTable(std::ostream& os, boo
 						}
 						__FE_COUT__ << "Output " << name << ": " << value << __E__;
 
-						if(rocCache[roc.first][name] == value) 
-						{
+						if(rocCache[roc.first][name] == value) {
 							__FE_COUT__ "Board ID already correct for ROC " << roc.first << " on DTC " << targetDTC << ": cached value = " << rocCache[roc.first][name] << ", read value = " << value
-							                 << __E__;
+							                                                << __E__;
 							os << "* Board ID already correct for " << roc.first << ": " << value << __E__;
 							continue;
 						}
-						
-						boardIdMismatchFound = true; //flag that a mismatch 
+
+						boardIdMismatchFound      = true;  // flag that a mismatch
 						rocCache[roc.first][name] = value;
 						os << "* UPDATED Board ID found for " << roc.first << ": " << value << __E__;
 					}
@@ -2301,11 +2300,10 @@ TableVersion ROCCalorimeterInterface::CreateGlobalROCTable(std::ostream& os, boo
 	// at this point all values cached
 	__FE_COUTV__(rocCache.size());
 
-	if(!boardIdMismatchFound)
-	{
+	if(!boardIdMismatchFound) {
 		__FE_COUT_INFO__ << "ROC Board IDs all validated!" << __E__;
-		os <<  "ROC Board IDs all validated!" << __E__;
-		return TableVersion(); //return invalid version to indicate no new table was created
+		os << "ROC Board IDs all validated!" << __E__;
+		return TableVersion();  // return invalid version to indicate no new table was created
 	}
 
 	// Step 2. -------------------------------------
