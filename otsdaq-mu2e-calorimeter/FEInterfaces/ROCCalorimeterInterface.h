@@ -156,7 +156,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
     void GetMZBStatus		(__ARGS__);
 
     void CreateGlobalROCTable		(__ARGS__);
-    void CreateGlobalROCTable	(std::ostream& os);
+    TableVersion CreateGlobalROCTable	(std::ostream& os, bool saveTemporaryTable = true);
 
 
     virtual void GetStatus							(__ARGS__) override;

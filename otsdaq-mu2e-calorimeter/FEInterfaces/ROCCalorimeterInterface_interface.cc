@@ -1640,7 +1640,6 @@ void ROCCalorimeterInterface::SetupForNoiseTaking(unsigned int numberOfsamples) 
 }  // end SetupForNoiseTaking()
 
 //==================================================================================================
-
 void ROCCalorimeterInterface::SetupForADCsDataTaking(bool setThr, bool isNFw, unsigned int threshold) {
 	__COUT_INFO__ << "SetupForADCsDataTaking()" << __E__;
 
@@ -1893,6 +1892,7 @@ typedef struct MZB_STATUS_REG_tag {
 	unsigned char errflag : 1;     // bit #31
 } MZB_STATUS_REG_t;
 
+//==================================================================================================
 std::stringstream formatCardStatus(EE_DATABUF_t* pbuf) {
 	char              buf[512];
 	std::stringstream os;
@@ -2035,6 +2035,7 @@ void ROCCalorimeterInterface::GetMZBStatus(__ARGS__) {
 
  */
 
+//==================================================================================================
 /*void ROCCalorimeterInterface::RMZB_writeSiPMbias(int ch, float hv) {
 
   struct __attribute__((packed, aligned(4))) {
@@ -2086,6 +2087,7 @@ void ROCCalorimeterInterface::GetMZBStatus(__ARGS__) {
 
   } */
 
+//==================================================================================================
 unsigned ees_chksum_test(void* ptr, int len) {
 	unsigned* src = (unsigned*)ptr;
 	unsigned  sum;
@@ -2109,6 +2111,7 @@ unsigned ees_chksum_test(void* ptr, int len) {
 	return sum;
 }
 
+//==================================================================================================
 void ROCCalorimeterInterface::RMZB_writeAllSiPMbias(float* hv) {
 	struct __attribute__((packed, aligned(4))) {
 		short dummy;
@@ -2165,9 +2168,9 @@ void ROCCalorimeterInterface::CreateGlobalROCTable(__ARGS__) {
 
 	std::stringstream result;
 
-	CreateGlobalROCTable(result);
+	TableVersion newVersion = CreateGlobalROCTable(result);
 
-	result << "\n\nCreateGlobalROCTable() done" << __E__;
+	result << "\n\nCreateGlobalROCTable() done, newVersion = " << newVersion << __E__;
 	__SET_ARG_OUT__("Status", result.str());
 	__FE_COUT__ << "CreateGlobalROCTable(FE) done" << __E__;
 }  // end CreateGlobalROCTable()
@@ -2175,7 +2178,7 @@ void ROCCalorimeterInterface::CreateGlobalROCTable(__ARGS__) {
 #include "otsdaq/ConfigurationInterface/ConfigurationManagerRW.h"
 //==================================================================================================
 // To be called by configure()
-void ROCCalorimeterInterface::CreateGlobalROCTable(std::ostream& os) {
+TableVersion ROCCalorimeterInterface::CreateGlobalROCTable(std::ostream& os, bool saveTemporaryTable /* = true */) {
 	__FE_COUT__ << "CreateGlobalROCTable()" << __E__;
 
 	// Steps:
@@ -2203,15 +2206,38 @@ void ROCCalorimeterInterface::CreateGlobalROCTable(std::ostream& os) {
 		}
 
 		auto rocs = getConfigurationManager()->getNode(tableName).getChildren();
-		for(const auto& roc : rocs) {
+
+		if(rocs.size() != localRocTable->getView().getDataView().size())
+		{
+			__FE_SS__ << "ROC count mismatch! Something is very wrong! Notify admins." << __E__;
+			__FE_SS_THROW__;
+		}
+
+		// cache all local values
+		for(size_t row = 0; row < localRocTable->getView().getDataView().size(); ++row)
+		{
+			auto& columnInfo = localRocTable->getView().getColumnsInfo();
+			for(size_t col = 0; col < columnInfo.size(); ++col)
+			{
+				rocCache[rocs[row].first][columnInfo[col].getName()] = 
+					localRocTable->getView().getDataView()[row][col];
+				__FE_COUTT__ << "rocCache[" << rocs[row].first << "][" << 
+					columnInfo[col].getName() << "] = " << 
+					localRocTable->getView().getDataView()[row][col] << __E__;
+			}
+		} //end cache all local values
+
+		// now read Board ID from each ROC
+		for(const auto& roc : rocs) 
+		{
 			__FE_COUTV__(roc.first);
 
-			// cache all local values
-			for(const auto& colNodePair : roc.second.getChildren()) {
-				rocCache[roc.first][colNodePair.first] = colNodePair.second.getValueAsString();
-				__FE_COUTTV__(colNodePair.first);
-				__FE_COUTTV__(rocCache[roc.first][colNodePair.first]);
-			}
+			// // cache all local values
+			// for(const auto& colNodePair : roc.second.getChildren()) {
+			// 	rocCache[roc.first][colNodePair.first] = colNodePair.second.getValueAsString();
+			// 	__FE_COUTTV__(colNodePair.first);
+			// 	__FE_COUTTV__(rocCache[roc.first][colNodePair.first]);
+			// }
 
 			// read register 47
 			{
@@ -2234,6 +2260,24 @@ void ROCCalorimeterInterface::CreateGlobalROCTable(std::ostream& os) {
 				                 argsOut);    // std::vector<FEVInterface::frontEndMacroArg_t>& outputArgs) const;
 
 				__FE_COUTV__(StringMacros::vectorToString(argsOut));
+
+				for(const auto& arg : argsOut) 
+				{
+					std::string name = StringMacros::decodeURIComponent(arg.first);
+					std::string value = StringMacros::decodeURIComponent(arg.second);
+					
+					__FE_COUT__ << "pre-Output " << name << ": " << value << __E__;
+					if(name == "readData") 
+					{						
+						name = "UID";
+						uint32_t boardIdNumber;
+						StringMacros::getNumber(value.substr(value.find(':')+2), boardIdNumber);
+						value = std::to_string(boardIdNumber);
+					}
+					__FE_COUT__ << "Output " << name << ": " << value << __E__;
+					
+					rocCache[roc.first][name] = value;
+				}
 			}
 		}  // end roc cache and read loop
 	}      // end Step 1. read all board IDs and cache all local ROC config values
@@ -2260,44 +2304,50 @@ void ROCCalorimeterInterface::CreateGlobalROCTable(std::ostream& os) {
 	TableVersion temporaryVersion = table->createTemporaryView();
 	TableView*   cfgView          = table->getTemporaryView(temporaryVersion);
 
-	const uint32_t col_UID        = cfgView->getColUID();
-	const uint32_t col_DTCgroupID = cfgView->findCol(COL_DTC_ID);
-	const uint32_t col_DTClinkID  = cfgView->findCol(COL_LINK_ID);
-
-	std::vector<std::string> ROC_boardIDs   = {"ROC_1", "ROC_2", "ROC_3", "ROC_4", "ROC_5", "ROC_6", "ROC_7", "ROC_8"};
-	std::vector<std::string> ROC_parentDTCs = {"Calo03_DTC0", "Calo03_DTC0", "Calo05_DTC0", "Calo03_DTC1", "Calo05_DTC1", "Calo04_DTC0", "Calo04_DTC0", "Calo03_DTC0"};
-	std::vector<uint32_t>    ROC_linkID     = {1, 2, 3, 4, 5, 0, 1, 2};
-
-	if(ROC_boardIDs.size() != ROC_parentDTCs.size() || ROC_boardIDs.size() != ROC_linkID.size()) {
-		__FE_SS__ << "Mismatch in ROC configuration sizes!" << __E__;
-		__FE_SS_THROW__
-	}
-	for(size_t i = 0; i < ROC_boardIDs.size(); ++i) {
+	//create records and set values based on assembled ROC cache
+	for(const auto& rocRecord : rocCache)
+	{
+		__FE_COUT__ << "Creating ROC " << rocRecord.first << __E__;
 		uint32_t row = cfgView->addRow(author);
-		cfgView->setValue(ROC_boardIDs[i], row, col_UID);
-		cfgView->setValue(ROC_parentDTCs[i], row, col_DTCgroupID);
-		cfgView->setValue(ROC_linkID[i], row, col_DTClinkID);
-	}  // end ROC table write
+		for(const auto& rocFieldPair : rocRecord.second)
+		{
+			__FE_COUTT__ << "Setting field " << rocFieldPair.first << " --> " << rocFieldPair.second << __E__;
+			const uint32_t col        = cfgView->findCol(rocFieldPair.first);
+			cfgView->setValueAsString(rocFieldPair.second, row, col);
+		}
+	} //end create and set records based on assembled ROC cache
 
 	cfgView->setComment("This table was automatically generated by the ROCCalorimeterInterface. It contains the mapping of ROC boards to their parent DTCs and link IDs.");
 
+	std::stringstream tableSs;
+	cfgView->print(tableSs);
+	__FE_COUTV__(tableSs.str());
+
+	try
 	{
-		__SS__;
-		cfgView->print(ss);
-		__FE_COUTV__(ss.str());
+		cfgView->init(); //validate table before saving
+	}
+	catch(const std::runtime_error& e)
+	{
+		__FE_SS__ << "Error validating table: " << e.what() << __E__
+			<< "\n\n" << "Here is the content of the created table with the error:\n" << tableSs.str() << __E__;
+		__FE_SS_THROW__;
 	}
 
 	bool         foundEquivalent;
 	TableVersion newAssignedVersion = cfgMgr->saveModifiedVersion(
-	    tableName, TableVersion() /* originalVersion */, true /* makeTemporary */, table, cfgView->getVersion(), false /* ignoreDuplicates */, true /* lookForEquivalent */, &foundEquivalent);
+	    tableName, TableVersion() /* originalVersion */, saveTemporaryTable /* makeTemporary */, table, cfgView->getVersion(), false /* ignoreDuplicates */, true /* lookForEquivalent */, &foundEquivalent);
 
 	__FE_COUTV__(foundEquivalent);
 	__FE_COUTV__(newAssignedVersion);
 	__FE_COUTV__(tableName);
 
 	os << "New generated " << tableName << " version = " << newAssignedVersion << __E__;
+	os << "------------------\n\n" << tableSs.str() << __E__;
 
 	__FE_COUT__ << "CreateGlobalROCTable() done" << __E__;
+
+	return newAssignedVersion;
 }  // end CreateGlobalROCTable()
 
 DEFINE_OTS_INTERFACE(ROCCalorimeterInterface)
