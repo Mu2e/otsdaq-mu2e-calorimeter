@@ -2168,9 +2168,18 @@ void ROCCalorimeterInterface::CreateGlobalROCTable(__ARGS__) {
 
 	std::stringstream result;
 
-	TableVersion newVersion = CreateGlobalROCTable(result);
+	try
+	{
+		TableVersion newVersion = CreateGlobalROCTable(result);
+		result << "\n\nCreateGlobalROCTable() done, newVersion = " << newVersion << __E__;
+	}
+	catch(const std::runtime_error& e)
+	{
+		__FE_SS__ << "CreateGlobalROCTable() Failed: " << e.what() << __E__
+			<< "\n\nHere is the detail of what happened: " << result.str() << __E__;
+		__FE_SS_THROW__;
+	}
 
-	result << "\n\nCreateGlobalROCTable() done, newVersion = " << newVersion << __E__;
 	__SET_ARG_OUT__("Status", result.str());
 	__FE_COUT__ << "CreateGlobalROCTable(FE) done" << __E__;
 }  // end CreateGlobalROCTable()
@@ -2221,6 +2230,8 @@ TableVersion ROCCalorimeterInterface::CreateGlobalROCTable(std::ostream& os, boo
 			}
 		}  // end cache all local values
 
+		os << "\n\n"; //spacer;
+
 		// now read Board ID from each ROC
 		for(const auto& roc : rocs) {
 			__FE_COUTV__(roc.first);
@@ -2247,31 +2258,44 @@ TableVersion ROCCalorimeterInterface::CreateGlobalROCTable(std::ostream& os, boo
 					targetDTC = targetDTC.substr(0, targetDTC.find("Group"));
 				}
 
-				runFrontEndMacro(targetDTC,   // const std::string& targetInterfaceID,
-				                 "ROC Read",  // const std::string& feMacroName,
-				                 argsIn,      // const std::vector<FEVInterface::frontEndMacroArg_t>& inputArgs,
-				                 argsOut);    // std::vector<FEVInterface::frontEndMacroArg_t>& outputArgs) const;
+				try
+				{
+					runFrontEndMacro(targetDTC,   // const std::string& targetInterfaceID,
+									"ROC Read",  // const std::string& feMacroName,
+									argsIn,      // const std::vector<FEVInterface::frontEndMacroArg_t>& inputArgs,
+									argsOut);    // std::vector<FEVInterface::frontEndMacroArg_t>& outputArgs) const;
 
-				__FE_COUTV__(StringMacros::vectorToString(argsOut));
+					__FE_COUTV__(StringMacros::vectorToString(argsOut));
 
-				for(const auto& arg : argsOut) {
-					std::string name  = StringMacros::decodeURIComponent(arg.first);
-					std::string value = StringMacros::decodeURIComponent(arg.second);
+					for(const auto& arg : argsOut) {
+						std::string name  = StringMacros::decodeURIComponent(arg.first);
+						std::string value = StringMacros::decodeURIComponent(arg.second);
 
-					__FE_COUT__ << "pre-Output " << name << ": " << value << __E__;
-					if(name == "readData") {
-						name = "UID";
-						uint32_t boardIdNumber;
-						StringMacros::getNumber(value.substr(value.find(':') + 2), boardIdNumber);
-						value = std::to_string(boardIdNumber);
+						__FE_COUT__ << "pre-Output " << name << ": " << value << __E__;
+						if(name == "readData") {
+							name = "UID";
+							uint32_t boardIdNumber;
+							StringMacros::getNumber(value.substr(value.find(':') + 2), boardIdNumber);
+							value = std::to_string(boardIdNumber);
+						}
+						__FE_COUT__ << "Output " << name << ": " << value << __E__;
+
+						rocCache[roc.first][name] = value;
+						os << "* Board ID found for " << roc.first << ": " << value << __E__;
 					}
-					__FE_COUT__ << "Output " << name << ": " << value << __E__;
-
-					rocCache[roc.first][name] = value;
+				}
+				catch(const std::runtime_error& e) 
+				{
+					__FE_COUT_WARN__ << "Ignoring (assuming ROC/DTC does not exist) error reading Board ID for ROC " << 
+						roc.first << " on DTC " << targetDTC << ":\n" << e.what() << __E__;
+					os << "--> Ignoring (assuming ROC/DTC does not exist) error reading Board ID for ROC " << 
+						roc.first << " on DTC " << targetDTC << "." << __E__;
 				}
 			}
 		}  // end roc cache and read loop
 	}      // end Step 1. read all board IDs and cache all local ROC config values
+
+	os << "\n\n"; //spacer;
 
 	// at this point all values cached
 	__FE_COUTV__(rocCache.size());
@@ -2316,7 +2340,7 @@ TableVersion ROCCalorimeterInterface::CreateGlobalROCTable(std::ostream& os, boo
 		cfgView->init();  // validate table before saving
 	} catch(const std::runtime_error& e) {
 		__FE_SS__ << "Error validating table: " << e.what() << __E__ << "\n\n"
-		          << "Here is the content of the created table with the error:\n"
+		          << "Here is the detail and content of the created table with the error:\n"
 		          << tableSs.str() << __E__;
 		__FE_SS_THROW__;
 	}
