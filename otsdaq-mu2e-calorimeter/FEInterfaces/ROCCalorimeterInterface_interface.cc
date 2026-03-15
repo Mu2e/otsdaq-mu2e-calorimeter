@@ -2168,15 +2168,11 @@ void ROCCalorimeterInterface::CreateGlobalROCTable(__ARGS__) {
 
 	std::stringstream result;
 
-	try
-	{
+	try {
 		TableVersion newVersion = CreateGlobalROCTable(result);
 		result << "\n\nCreateGlobalROCTable() done, newVersion = " << newVersion << __E__;
-	}
-	catch(const std::runtime_error& e)
-	{
-		__FE_SS__ << "CreateGlobalROCTable() Failed: " << e.what() << __E__
-			<< "\n\nHere is the detail of what happened: " << result.str() << __E__;
+	} catch(const std::runtime_error& e) {
+		__FE_SS__ << "CreateGlobalROCTable() Failed: " << e.what() << __E__ << "\n\nHere is the detail of what happened: " << result.str() << __E__;
 		__FE_SS_THROW__;
 	}
 
@@ -2230,7 +2226,7 @@ TableVersion ROCCalorimeterInterface::CreateGlobalROCTable(std::ostream& os, boo
 			}
 		}  // end cache all local values
 
-		os << "\n\n"; //spacer;
+		os << "\n\n";  // spacer;
 
 		// now read Board ID from each ROC
 		for(const auto& roc : rocs) {
@@ -2258,12 +2254,11 @@ TableVersion ROCCalorimeterInterface::CreateGlobalROCTable(std::ostream& os, boo
 					targetDTC = targetDTC.substr(0, targetDTC.find("Group"));
 				}
 
-				try
-				{
+				try {
 					runFrontEndMacro(targetDTC,   // const std::string& targetInterfaceID,
-									"ROC Read",  // const std::string& feMacroName,
-									argsIn,      // const std::vector<FEVInterface::frontEndMacroArg_t>& inputArgs,
-									argsOut);    // std::vector<FEVInterface::frontEndMacroArg_t>& outputArgs) const;
+					                 "ROC Read",  // const std::string& feMacroName,
+					                 argsIn,      // const std::vector<FEVInterface::frontEndMacroArg_t>& inputArgs,
+					                 argsOut);    // std::vector<FEVInterface::frontEndMacroArg_t>& outputArgs) const;
 
 					__FE_COUTV__(StringMacros::vectorToString(argsOut));
 
@@ -2283,19 +2278,15 @@ TableVersion ROCCalorimeterInterface::CreateGlobalROCTable(std::ostream& os, boo
 						rocCache[roc.first][name] = value;
 						os << "* Board ID found for " << roc.first << ": " << value << __E__;
 					}
-				}
-				catch(const std::runtime_error& e) 
-				{
-					__FE_COUT_WARN__ << "Ignoring (assuming ROC/DTC does not exist) error reading Board ID for ROC " << 
-						roc.first << " on DTC " << targetDTC << ":\n" << e.what() << __E__;
-					os << "--> Ignoring (assuming ROC/DTC does not exist) error reading Board ID for ROC " << 
-						roc.first << " on DTC " << targetDTC << "." << __E__;
+				} catch(const std::runtime_error& e) {
+					__FE_COUT_WARN__ << "Ignoring (assuming ROC/DTC does not exist) error reading Board ID for ROC " << roc.first << " on DTC " << targetDTC << ":\n" << e.what() << __E__;
+					os << "--> Ignoring (assuming ROC/DTC does not exist) error reading Board ID for ROC " << roc.first << " on DTC " << targetDTC << "." << __E__;
 				}
 			}
 		}  // end roc cache and read loop
 	}      // end Step 1. read all board IDs and cache all local ROC config values
 
-	os << "\n\n"; //spacer;
+	os << "\n\n";  // spacer;
 
 	// at this point all values cached
 	__FE_COUTV__(rocCache.size());
