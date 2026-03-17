@@ -2,6 +2,7 @@
 #include "otsdaq-mu2e-calorimeter/FEInterfaces/ROCCalorimeterInterface.h"
 
 #include "otsdaq/ConfigurationInterface/ConfigurationManager.h"
+#include "otsdaq/ConfigurationInterface/ConfigurationManagerRW.h"
 #include "otsdaq/Macros/InterfacePluginMacros.h"
 
 #include "cetlib/filepath_maker.h"
@@ -2180,7 +2181,6 @@ void ROCCalorimeterInterface::CreateGlobalROCTable(__ARGS__) {
 	__FE_COUT__ << "CreateGlobalROCTable(FE) done" << __E__;
 }  // end CreateGlobalROCTable()
 
-#include "otsdaq/ConfigurationInterface/ConfigurationManagerRW.h"
 //==================================================================================================
 // To be called by configure()
 TableVersion ROCCalorimeterInterface::CreateGlobalROCTable(std::ostream& os, bool saveTemporaryTable /* = true */) {
