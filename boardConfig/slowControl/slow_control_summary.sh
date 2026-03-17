@@ -12,6 +12,7 @@ SUMMARYVI_DATE="summaryVI_${rightnow}.log"
 
 # Cancella o crea file riepilogo
 > "$SUMMARY_FILE"
+> "$SUMMARYVI_FILE"
 
 # Trova tutti i file slowControl*.log e li ordina numericamente
 for f in $(ls "${DIR}"/slowControl[0-9]*.log 2>/dev/null | sort -V); do
