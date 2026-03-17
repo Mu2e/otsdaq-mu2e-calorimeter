@@ -5,6 +5,8 @@ DIR="./"  # puoi cambiarlo in un path assoluto
 
 # Nome del file di output
 SUMMARY_FILE="summary.log"
+rightnow=$(date +'%Y%m%d_%H%M')
+SUMMARY_DATE="summary_${rightnow}.log"
 
 # Cancella o crea file riepilogo
 > "$SUMMARY_FILE"
@@ -16,4 +18,6 @@ for f in $(ls "${DIR}"/slowControl*.log 2>/dev/null | sort -V); do
     echo "$last_line" >> "$SUMMARY_FILE"
 done
 
-echo "Creato riepilogo: $SUMMARY_FILE"
+cp $SUMMARY_FILE $SUMMARY_DATE
+
+echo "Creato riepilogo: $SUMMARY_DATE"
