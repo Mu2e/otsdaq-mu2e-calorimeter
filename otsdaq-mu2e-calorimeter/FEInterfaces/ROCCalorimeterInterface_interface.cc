@@ -2277,7 +2277,7 @@ TableVersion ROCCalorimeterInterface::CreateGlobalROCTable(std::ostream& os, boo
 						__FE_COUT__ << "Output " << name << ": " << value << __E__;
 
 						if(rocCache[roc.first][name] == value) {
-							__FE_COUT__ "Board ID already correct for ROC " << roc.first << " on DTC " << targetDTC << ": cached value = " << rocCache[roc.first][name] << ", read value = " << value
+							__FE_COUT__ << "Board ID already correct for ROC " << roc.first << " on DTC " << targetDTC << ": cached value = " << rocCache[roc.first][name] << ", read value = " << value
 							                                                << __E__;
 							os << "* Board ID already correct for " << roc.first << ": " << value << __E__;
 							continue;
