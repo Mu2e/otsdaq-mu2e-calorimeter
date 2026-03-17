@@ -21,8 +21,10 @@
 #include <map>
 #include <string>
 
-namespace ots {
-class TemplateSupervisor : public xdaq::Application, public SOAPMessenger {
+namespace ots
+{
+class TemplateSupervisor : public xdaq::Application, public SOAPMessenger
+{
   public:
 	XDAQ_INSTANTIATOR();
 

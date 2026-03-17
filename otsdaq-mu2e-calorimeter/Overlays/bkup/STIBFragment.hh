@@ -9,14 +9,16 @@
 
 // Implementation of "STIBFragment", an artdaq::Fragment overlay class
 
-namespace ots {
+namespace ots
+{
 class STIBFragment;
 
 // Let the "<<" operator dump the STIBFragment's data to stdout
 std::ostream& operator<<(std::ostream&, STIBFragment const&);
 }  // namespace ots
 
-class ots::STIBFragment {
+class ots::STIBFragment
+{
   public:
 	// The "Metadata" struct is used to store info primarily related to
 	// the upstream hardware environment from where the fragment came
@@ -26,7 +28,8 @@ class ots::STIBFragment {
 	// its size via the static "size_words" variable (
 	// STIBFragment::Metadata::size_words )
 
-	struct Metadata {
+	struct Metadata
+	{
 		typedef uint64_t data_t;
 
 		data_t port : 16;
@@ -53,7 +56,8 @@ class ots::STIBFragment {
 	// that you can't represent a fragment larger than 2**28 units of
 	// data_t, or 1,073,741,824 bytes
 
-	struct Header {
+	struct Header
+	{
 		typedef uint32_t data_t;
 
 		typedef uint32_t event_size_t;
@@ -78,7 +82,8 @@ class ots::STIBFragment {
 	// The constructor simply sets its const private member "artdaq_Fragment_"
 	// to refer to the artdaq::Fragment object
 
-	STIBFragment(artdaq::Fragment const& f) : artdaq_Fragment_(f) {}
+	STIBFragment(artdaq::Fragment const& f)
+	    : artdaq_Fragment_(f) {}
 
 	// const getter functions for the data in the header
 

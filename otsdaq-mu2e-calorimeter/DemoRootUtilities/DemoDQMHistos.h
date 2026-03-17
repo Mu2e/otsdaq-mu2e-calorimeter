@@ -8,8 +8,10 @@
 class TH1I;
 class TFile;
 
-namespace ots {
-class DemoDQMHistos {
+namespace ots
+{
+class DemoDQMHistos
+{
   public:
 	DemoDQMHistos(void);
 	virtual ~DemoDQMHistos(void);

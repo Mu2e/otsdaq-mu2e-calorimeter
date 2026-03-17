@@ -2,6 +2,7 @@
 #include "otsdaq-mu2e-calorimeter/FEInterfaces/ROCCalorimeterInterface.h"
 
 #include "otsdaq/ConfigurationInterface/ConfigurationManager.h"
+#include "otsdaq/ConfigurationInterface/ConfigurationManagerRW.h"
 #include "otsdaq/Macros/InterfacePluginMacros.h"
 
 #include "cetlib/filepath_maker.h"
@@ -214,6 +215,12 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(const std::string& rocUID, cons
 	// 	                        std::vector<std::string>{"channelNumber"}, //inputs
 	// parameters 	                        std::vector<std::string>{"readValue"},
 	// //output parameters 	                        1);  // requiredUserPermissions
+
+	registerFEMacroFunction("Create Global ROC Table",
+	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::CreateGlobalROCTable),
+	                        std::vector<std::string>{},          // inputs parameters
+	                        std::vector<std::string>{"Status"},  // output parameters
+	                        1);                                  // requiredUserPermissions
 
 }  // end constructor()
 
@@ -1634,7 +1641,6 @@ void ROCCalorimeterInterface::SetupForNoiseTaking(unsigned int numberOfsamples) 
 }  // end SetupForNoiseTaking()
 
 //==================================================================================================
-
 void ROCCalorimeterInterface::SetupForADCsDataTaking(bool setThr, bool isNFw, unsigned int threshold) {
 	__COUT_INFO__ << "SetupForADCsDataTaking()" << __E__;
 
@@ -1887,6 +1893,7 @@ typedef struct MZB_STATUS_REG_tag {
 	unsigned char errflag : 1;     // bit #31
 } MZB_STATUS_REG_t;
 
+//==================================================================================================
 std::stringstream formatCardStatus(EE_DATABUF_t* pbuf) {
 	char              buf[512];
 	std::stringstream os;
@@ -2029,6 +2036,7 @@ void ROCCalorimeterInterface::GetMZBStatus(__ARGS__) {
 
  */
 
+//==================================================================================================
 /*void ROCCalorimeterInterface::RMZB_writeSiPMbias(int ch, float hv) {
 
   struct __attribute__((packed, aligned(4))) {
@@ -2080,6 +2088,7 @@ void ROCCalorimeterInterface::GetMZBStatus(__ARGS__) {
 
   } */
 
+//==================================================================================================
 unsigned ees_chksum_test(void* ptr, int len) {
 	unsigned* src = (unsigned*)ptr;
 	unsigned  sum;
@@ -2103,6 +2112,7 @@ unsigned ees_chksum_test(void* ptr, int len) {
 	return sum;
 }
 
+//==================================================================================================
 void ROCCalorimeterInterface::RMZB_writeAllSiPMbias(float* hv) {
 	struct __attribute__((packed, aligned(4))) {
 		short dummy;
@@ -2152,5 +2162,215 @@ void ROCCalorimeterInterface::RMZB_writeAllSiPMbias(float* hv) {
 
 	// if (check[0] != 0x7668) writeROCBlock(input_data, MZ_ADDRESS, false /* incrementAddress*/);
 }
+
+//==================================================================================================
+void ROCCalorimeterInterface::CreateGlobalROCTable(__ARGS__) {
+	__FE_COUT__ << "CreateGlobalROCTable(FE)" << __E__;
+
+	std::stringstream result;
+
+	try {
+		TableVersion newVersion = CreateGlobalROCTable(result);
+		result << "\n\nCreateGlobalROCTable() done, newVersion = " << newVersion << __E__;
+	} catch(const std::runtime_error& e) {
+		__FE_SS__ << "CreateGlobalROCTable() Failed: " << e.what() << __E__ << "\n\nHere is the detail of what happened: " << result.str() << __E__;
+		__FE_SS_THROW__;
+	}
+
+	__SET_ARG_OUT__("Status", result.str());
+	__FE_COUT__ << "CreateGlobalROCTable(FE) done" << __E__;
+}  // end CreateGlobalROCTable()
+
+//==================================================================================================
+// To be called by configure()
+TableVersion ROCCalorimeterInterface::CreateGlobalROCTable(std::ostream& os, bool saveTemporaryTable /* = true */) {
+	__FE_COUT__ << "CreateGlobalROCTable()" << __E__;
+
+	// Steps:
+	//  1. Read every ROC (in system) device ID .. register 47
+	//	 	- Check every ROC device ID matches location in Configuration Tree
+	//			* The first one in the Configuration Tree is the 'one' that does all actions!
+	//  2. If mismatch, write a new table with observed location
+	//		- Keep OFF ROCs untouched
+	//  3. Throw and exception with mismatch and new table version
+
+	const std::string tableName            = "ROCInterfaceTable";
+	const std::string COL_LINK_ID          = "linkID";
+	const std::string COL_DTC_ID           = "ROCGroupID";
+	bool              boardIdMismatchFound = false;
+
+	// Step 1. -------------------------------------
+	//	read all board IDs (register 47) and cache all local ROC config values
+	std::map<std::string /* roc UID */, std::map<std::string /* colName */, std::string /* value */>> rocCache;
+	{
+		auto localRocTable = getConfigurationManager()->getTableByName(tableName);
+
+		{
+			__SS__;
+			localRocTable->getView().print(ss);
+			__FE_COUTV__(ss.str());
+		}
+
+		auto rocs = getConfigurationManager()->getNode(tableName).getChildren();
+
+		if(rocs.size() != localRocTable->getView().getDataView().size()) {
+			__FE_SS__ << "ROC count mismatch! Something is very wrong! Notify admins." << __E__;
+			__FE_SS_THROW__;
+		}
+
+		// cache all local values
+		for(size_t row = 0; row < localRocTable->getView().getDataView().size(); ++row) {
+			auto& columnInfo = localRocTable->getView().getColumnsInfo();
+			for(size_t col = 0; col < columnInfo.size(); ++col) {
+				rocCache[rocs[row].first][columnInfo[col].getName()] = localRocTable->getView().getDataView()[row][col];
+				__FE_COUTT__ << "rocCache[" << rocs[row].first << "][" << columnInfo[col].getName() << "] = " << localRocTable->getView().getDataView()[row][col] << __E__;
+			}
+		}  // end cache all local values
+
+		os << "\n\n";  // spacer;
+
+		// now read Board ID from each ROC
+		for(const auto& roc : rocs) {
+			__FE_COUTV__(roc.first);
+
+			// // cache all local values
+			// for(const auto& colNodePair : roc.second.getChildren()) {
+			// 	rocCache[roc.first][colNodePair.first] = colNodePair.second.getValueAsString();
+			// 	__FE_COUTTV__(colNodePair.first);
+			// 	__FE_COUTTV__(rocCache[roc.first][colNodePair.first]);
+			// }
+
+			// read register 47
+			{
+				std::vector<frontEndMacroArg_t> argsOut;
+				std::vector<frontEndMacroArg_t> argsIn;
+				__SET_ARG_IN__("Target ROC or Mask (Default = -1 := all ROCs, or 0x111111 := all)", roc.second.getNode(COL_LINK_ID).getValue<uint32_t>());
+				__SET_ARG_IN__("address", (unsigned int)47);
+
+				__FE_COUTV__(StringMacros::vectorToString(argsIn));
+
+				std::string targetDTC = roc.second.getNode(COL_DTC_ID).getValue();
+				if(targetDTC.find("Group") != std::string::npos) {
+					__FE_COUT__ << "Assuming 'Group' is appended to DTC UID... removing to target DTC" << __E__;
+					targetDTC = targetDTC.substr(0, targetDTC.find("Group"));
+				}
+
+				try {
+					runFrontEndMacro(targetDTC,   // const std::string& targetInterfaceID,
+					                 "ROC Read",  // const std::string& feMacroName,
+					                 argsIn,      // const std::vector<FEVInterface::frontEndMacroArg_t>& inputArgs,
+					                 argsOut);    // std::vector<FEVInterface::frontEndMacroArg_t>& outputArgs) const;
+
+					__FE_COUTV__(StringMacros::vectorToString(argsOut));
+
+					for(const auto& arg : argsOut) {
+						std::string name  = StringMacros::decodeURIComponent(arg.first);
+						std::string value = StringMacros::decodeURIComponent(arg.second);
+
+						__FE_COUT__ << "pre-Output " << name << ": " << value << __E__;
+						if(name == "readData") {
+							name = "UID";
+							uint32_t boardIdNumber;
+							StringMacros::getNumber(value.substr(value.find(':') + 2), boardIdNumber);
+							value = std::to_string(boardIdNumber);
+						}
+						__FE_COUT__ << "Output " << name << ": " << value << __E__;
+
+						if(rocCache[roc.first][name] == value) {
+							__FE_COUT__ << "Board ID already correct for ROC " << roc.first << " on DTC " << targetDTC << ": cached value = " << rocCache[roc.first][name] << ", read value = " << value
+							            << __E__;
+							os << "* Board ID already correct for " << roc.first << ": " << value << __E__;
+							continue;
+						}
+
+						boardIdMismatchFound      = true;  // flag that a mismatch
+						rocCache[roc.first][name] = value;
+						os << "* UPDATED Board ID found for " << roc.first << ": " << value << __E__;
+					}
+				} catch(const std::runtime_error& e) {
+					__FE_COUT_WARN__ << "Ignoring (assuming ROC/DTC does not exist) error reading Board ID for ROC " << roc.first << " on DTC " << targetDTC << ":\n" << e.what() << __E__;
+					os << "--> Ignoring (assuming ROC/DTC does not exist) error reading Board ID for ROC " << roc.first << " on DTC " << targetDTC << "." << __E__;
+				}
+			}
+		}  // end roc cache and read loop
+	}      // end Step 1. read all board IDs and cache all local ROC config values
+
+	os << "\n\n";  // spacer;
+
+	// at this point all values cached
+	__FE_COUTV__(rocCache.size());
+
+	if(!boardIdMismatchFound) {
+		__FE_COUT_INFO__ << "ROC Board IDs all validated!" << __E__;
+		os << "ROC Board IDs all validated!" << __E__;
+		return TableVersion();  // return invalid version to indicate no new table was created
+	}
+
+	// Step 2. -------------------------------------
+	std::string             author = "CaloROCmanager";
+	ConfigurationManagerRW  cfgMgrInst(author);
+	ConfigurationManagerRW* cfgMgr = &cfgMgrInst;
+
+	// update table info for each new configuration manager
+	//	IMPORTANTLY this also fills all configuration manager pointers with instances,
+	//	so we are not dealing with changing pointers later on
+	cfgMgr->getAllTableInfo(true /* refresh */,  // load empty instance of everything important
+	                        0 /* accumulatedWarnings */,
+	                        "" /* errorFilterName */,
+	                        false /* getGroupKeys */,
+	                        false /* getGroupInfo */,
+	                        false /* initializeActiveGroups */);
+
+	TableBase*   table            = cfgMgr->getTableByName(tableName);
+	TableVersion temporaryVersion = table->createTemporaryView();
+	TableView*   cfgView          = table->getTemporaryView(temporaryVersion);
+
+	// create records and set values based on assembled ROC cache
+	for(const auto& rocRecord : rocCache) {
+		__FE_COUT__ << "Creating ROC " << rocRecord.first << __E__;
+		uint32_t row = cfgView->addRow(author);
+		for(const auto& rocFieldPair : rocRecord.second) {
+			__FE_COUTT__ << "Setting field " << rocFieldPair.first << " --> " << rocFieldPair.second << __E__;
+			const uint32_t col = cfgView->findCol(rocFieldPair.first);
+			cfgView->setValueAsString(rocFieldPair.second, row, col);
+		}
+	}  // end create and set records based on assembled ROC cache
+
+	cfgView->setComment("This table was automatically generated by the ROCCalorimeterInterface. It contains the mapping of ROC boards to their parent DTCs and link IDs.");
+
+	std::stringstream tableSs;
+	cfgView->print(tableSs);
+	__FE_COUTV__(tableSs.str());
+
+	try {
+		cfgView->init();  // validate table before saving
+	} catch(const std::runtime_error& e) {
+		__FE_SS__ << "Error validating table: " << e.what() << __E__ << "\n\n"
+		          << "Here is the detail and content of the created table with the error:\n"
+		          << tableSs.str() << __E__;
+		__FE_SS_THROW__;
+	}
+
+	bool         foundEquivalent;
+	TableVersion newAssignedVersion = cfgMgr->saveModifiedVersion(tableName,
+	                                                              TableVersion() /* originalVersion */,
+	                                                              saveTemporaryTable /* makeTemporary */,
+	                                                              table,
+	                                                              cfgView->getVersion(),
+	                                                              false /* ignoreDuplicates */,
+	                                                              true /* lookForEquivalent */,
+	                                                              &foundEquivalent);
+
+	__FE_COUTV__(foundEquivalent);
+	__FE_COUTV__(newAssignedVersion);
+	__FE_COUTV__(tableName);
+
+	os << "New generated " << tableName << " version = " << newAssignedVersion << __E__;
+	os << "------------------\n\n" << tableSs.str() << __E__;
+
+	__FE_COUT__ << "CreateGlobalROCTable() done" << __E__;
+
+	return newAssignedVersion;
+}  // end CreateGlobalROCTable()
 
 DEFINE_OTS_INTERFACE(ROCCalorimeterInterface)

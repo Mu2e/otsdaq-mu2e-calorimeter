@@ -20,8 +20,10 @@
 #include <list>
 #include <queue>
 
-namespace ots {
-class STIBReceiver : public ots::UDPReceiver {
+namespace ots
+{
+class STIBReceiver : public ots::UDPReceiver
+{
   public:
 	explicit STIBReceiver(fhicl::ParameterSet const& ps);
 

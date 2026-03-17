@@ -3,11 +3,13 @@
 
 #include "otsdaq-mu2e/FEInterfaces/ROCPolarFireCoreInterface.h"
 
-#define MZ_ADDRESS 262
+#define MZ_ADDRESS     262
 #define MZ_BUFFER_SIZE 46
 
-namespace ots {
-class ROCCalorimeterInterface : public ROCPolarFireCoreInterface {
+namespace ots
+{
+class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
+{
 	// clang-format off
   public:
     ROCCalorimeterInterface(const std::string&       rocUID,
@@ -153,6 +155,8 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface {
     void ReadMBRegisters		(__ARGS__);
     void GetMZBStatus		(__ARGS__);
 
+    void CreateGlobalROCTable		(__ARGS__);
+    TableVersion CreateGlobalROCTable	(std::ostream& os, bool saveTemporaryTable = true);
 
 
     virtual void GetStatus							(__ARGS__) override;
