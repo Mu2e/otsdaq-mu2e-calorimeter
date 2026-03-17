@@ -129,6 +129,11 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
     void SendMzCommand(__ARGS__);
     void EvaluateBlockWriteErrorRate(__ARGS__);
     void ROCSlowControl(__ARGS__);
+
+    void TRADSlowControl(__ARGS__);
+    void TRADSetMask(__ARGS__);
+    void TRADSetMask(unsigned int TRADMask);
+
     void SendMzCommand(std::string command, float paramVect[]);
     void EnableAndPowerSiPMs(__ARGS__);
     void EnableAndPowerSiPMs(bool hvonoff, float vbias);
