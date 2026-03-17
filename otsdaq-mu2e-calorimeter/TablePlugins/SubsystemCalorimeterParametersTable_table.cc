@@ -91,7 +91,6 @@ std::string SubsystemCalorimeterParametersTable::getChannelMapAndCSVFormat(const
 
 //==============================================================================
 std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(const ConfigurationManager* configManager, const std::string& OfflineCxxClassName) {
-
 	__COUTTV__(OfflineCxxClassName);
 
 	std::stringstream OfflineTable;
