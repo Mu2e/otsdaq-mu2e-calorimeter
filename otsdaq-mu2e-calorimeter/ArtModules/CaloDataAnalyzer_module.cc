@@ -80,7 +80,7 @@ class CaloDataAnalyzer : public art::EDAnalyzer {
 	TGraph* g_eventHits;
 	TGraph* g_eventEWT;
 
-	static const int MAXNHITS    = 5500;   // 1 hit per sipm
+	static const int MAXNHITS    = 5500;    // 1 hit per sipm
 	static const int MAXNSAMPLES = 550000;  // 50 samples per hit (max!)
 
 	int                                 t_run;
