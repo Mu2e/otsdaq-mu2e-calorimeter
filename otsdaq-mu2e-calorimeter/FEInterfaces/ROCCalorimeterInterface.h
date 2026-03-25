@@ -3,11 +3,13 @@
 
 #include "otsdaq-mu2e/FEInterfaces/ROCPolarFireCoreInterface.h"
 
-#define MZ_ADDRESS 262
+#define MZ_ADDRESS     262
 #define MZ_BUFFER_SIZE 46
 
-namespace ots {
-class ROCCalorimeterInterface : public ROCPolarFireCoreInterface {
+namespace ots
+{
+class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
+{
   public:
 	ROCCalorimeterInterface(const std::string& rocUID, const ConfigurationTree& theXDAQContextConfigTree, const std::string& interfaceConfigurationPath);
 
@@ -32,7 +34,8 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface {
 
 	bool emulatorWorkLoop(void) override;
 
-	enum CaloRegisters {
+	enum CaloRegisters
+	{
 		// clang-format off
         ROC_ADDRESS_DDRRESET                 = 14,
         ROC_ADDRESS_ANALOGRESET              = 13,
@@ -83,12 +86,14 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface {
 
 	int GetTemperature(int idchannel);
 	//	temperature--
-	class Thermometer {
+	class Thermometer
+	{
 	  private:
 		double mnoiseTemp;
 
 	  public:
-		void noiseTemp(double intemp) {
+		void noiseTemp(double intemp)
+		{
 			mnoiseTemp = (double)intemp + 0.05 * (intemp * ((double)rand() / (RAND_MAX)) - 0.5);
 			return;
 		}
