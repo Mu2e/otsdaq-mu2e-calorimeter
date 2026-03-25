@@ -174,6 +174,18 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(const std::string& rocUID, cons
 	                        std::vector<std::string>{"Status"},  // output parameters
 	                        1);                                  // requiredUserPermissions
 
+	registerFEMacroFunction("TRAD Slow Control",
+	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::TRADSlowControl),
+	                        std::vector<std::string>{},          // inputs parameters
+	                        std::vector<std::string>{"Status"},  // output parameters
+	                        1);                                  // requiredUserPermissions
+
+	registerFEMacroFunction("TRAD Set Mask",
+	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::TRADSetMask),
+	                        std::vector<std::string>{"Set Mask as series of bit (0 enabled, 1 disabled) Default := 0"},  // inputs parameters
+	                        std::vector<std::string>{},                                                                  // output parameters
+	                        1);                                                                                          // requiredUserPermissions
+
 	registerFEMacroFunction("Read MB Registers",
 	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::ReadMBRegisters),
 	                        std::vector<std::string>{"Number of 16 bits words to read, Default := 20]", "Mezzanine Address, Default := 0]"},  // inputs parameters
@@ -332,12 +344,15 @@ void ROCCalorimeterInterface::ROCSlowControl(__ARGS__) {
 		}
 	}
 
-	char filename_buff[50];
+	char filename_buff[50], filename_buff_vi[50];
 	std::snprintf(filename_buff, sizeof(filename_buff), "slowControl%03d.log", boardID);
-	fs::path      output_file = slow_control_dir / filename_buff;
+	std::snprintf(filename_buff_vi, sizeof(filename_buff_vi), "slowControlVI%03d.log", boardID);
+	fs::path      output_file    = slow_control_dir / filename_buff;
+	fs::path      output_file_VI = slow_control_dir / filename_buff_vi;
 	std::ofstream file(output_file, std::ios::app);
+	std::ofstream fileVI(output_file_VI, std::ios::app);
 
-	if(!file.is_open()) {
+	if(!file.is_open() || !fileVI.is_open()) {
 		__FE_SS__ << "Error in opening slow control file!";
 		__FE_SS_THROW__;
 		;
@@ -349,6 +364,7 @@ void ROCCalorimeterInterface::ROCSlowControl(__ARGS__) {
 	std::string timestamp = std::ctime(&now_c);
 	timestamp.pop_back();
 	file << "[" << timestamp << "] " << boardID << " ";
+	fileVI << "[" << timestamp << "] " << boardID << " ";
 
 	os << __E__;
 
@@ -414,6 +430,7 @@ void ROCCalorimeterInterface::ROCSlowControl(__ARGS__) {
 
 	for(size_t i = 0; i < data4.size(); i++) {
 		os << "Word " << i << ": 0x" << ((float)data4[i]) / 10. << __E__;
+		fileVI << ((float)data4[i]) / 10. << " ";
 	}
 
 	os << __E__;
@@ -429,12 +446,15 @@ void ROCCalorimeterInterface::ROCSlowControl(__ARGS__) {
 
 	for(size_t i = 0; i < data5.size(); i++) {
 		os << "Word " << i << ": 0x" << ((float)data5[i]) / 100. << __E__;
+		fileVI << ((float)data5[i]) / 100. << " ";
 	}
 
 	file << std::endl;
+	fileVI << std::endl;
 
 	// Chiudi il file
 	file.close();
+	fileVI.close();
 
 	/*if(data3.size() != 7)	{
 	  __FE_SS__ << "Illegal number of bytes: "  <<  data3.size() << " not " << 7 << __E__;
@@ -469,6 +489,75 @@ void ROCCalorimeterInterface::ROCSlowControl(__ARGS__) {
 	}
 
 	__SET_ARG_OUT__("Status", os.str());
+}
+
+//==================================================================================================
+void ROCCalorimeterInterface::TRADSlowControl(__ARGS__) {
+	std::stringstream os;
+
+	std::vector<DTCLib::roc_data_t> data;
+	readROCBlock(data, 264, 27, false /*incAddress*/);
+	if(data.size() != 27) {
+		__FE_SS__ << "Illegal number of bytes: " << data.size() << " not " << 12 << __E__;
+		__FE_SS_THROW__;
+	}
+
+	os << std::dec << __E__;
+
+	os << "Slow control values:" << __E__;
+
+	os << __E__;
+
+	os << "Word " << 0 << ":  Sensor 0 Radfet: " << data[0] << " " << __E__;
+	os << "Word " << 1 << ":  Sensor 0 Sipm: " << data[1] << " " << __E__;
+	os << "Word " << 2 << ":  Sensor 0 Temperature: " << data[2] / 100.0 << " C " << __E__;
+
+	os << "Word " << 3 << ":  Sensor 1 Radfet: " << data[3] << " " << __E__;
+	os << "Word " << 4 << ":  Sensor 1 Sipm: " << data[4] << " " << __E__;
+	os << "Word " << 5 << ":  Sensor 1 Temperature: " << data[5] / 100.0 << " C " << __E__;
+
+	os << "Word " << 6 << ":  Sensor 2 Radfet: " << data[6] << " " << __E__;
+	os << "Word " << 7 << ":  Sensor 2 Sipm: " << data[7] << " " << __E__;
+	os << "Word " << 8 << ":  Sensor 2 Temperature: " << data[8] / 100.0 << " C " << __E__;
+
+	os << "Word " << 9 << ":  Sensor 3 Radfet: " << data[9] << " " << __E__;
+	os << "Word " << 10 << ":  Sensor 3 Sipm: " << data[10] << " " << __E__;
+	os << "Word " << 11 << ":  Sensor 3 Temperature: " << data[11] / 100.0 << " C " << __E__;
+
+	os << "Word " << 12 << ":  Sensor 4 Radfet: " << data[12] << " " << __E__;
+	os << "Word " << 13 << ":  Sensor 4 Sipm: " << data[13] << " " << __E__;
+	os << "Word " << 14 << ":  Sensor 4 Temperature: " << data[14] / 100.0 << " C " << __E__;
+
+	os << "Word " << 15 << ":  Sensor 5 Radfet: " << data[15] << " " << __E__;
+	os << "Word " << 16 << ":  Sensor 5 Sipm: " << data[16] << " " << __E__;
+	os << "Word " << 17 << ":  Sensor 5 Temperature: " << data[17] / 100.0 << " C " << __E__;
+
+	os << "Word " << 18 << ":  Sensor 6 Radfet: " << data[18] << " " << __E__;
+	os << "Word " << 19 << ":  Sensor 6 Sipm: " << data[19] << " " << __E__;
+	os << "Word " << 20 << ":  Sensor 6 Temperature: " << data[20] / 100.0 << " C " << __E__;
+
+	os << "Word " << 21 << ":  Sensor 7 Radfet: " << data[21] << " " << __E__;
+	os << "Word " << 22 << ":  Sensor 7 Sipm: " << data[22] << " " << __E__;
+	os << "Word " << 23 << ":  Sensor 7 Temperature: " << data[23] / 100.0 << " C " << __E__;
+
+	os << "Word " << 24 << ":  Sensor 8 Radfet: " << data[24] << " " << __E__;
+	os << "Word " << 25 << ":  Sensor 8 Sipm: " << data[25] << " " << __E__;
+	os << "Word " << 26 << ":  Sensor 8 Temperature: " << data[26] / 100.0 << " C " << __E__;
+
+	__SET_ARG_OUT__("Status", os.str());
+}
+
+//==================================================================================================
+void ROCCalorimeterInterface::TRADSetMask(__ARGS__) {
+	unsigned int TRADMask = __GET_ARG_IN__("Set Mask as series of bit (0 enabled, 1 disabled) [Default:=0]", unsigned int, 0);
+	TRADSetMask(TRADMask);
+}
+
+void ROCCalorimeterInterface::TRADSetMask(unsigned int TRADMask) {
+	std::vector<DTCLib::roc_data_t> TRADout;
+	TRADout.push_back(TRADMask);
+
+	writeROCBlock(TRADout, 270, false /* incrementAddress*/);
 }
 
 //==================================================================================================
@@ -2253,6 +2342,10 @@ TableVersion ROCCalorimeterInterface::CreateGlobalROCTable(std::ostream& os, boo
 				if(targetDTC.find("Group") != std::string::npos) {
 					__FE_COUT__ << "Assuming 'Group' is appended to DTC UID... removing to target DTC" << __E__;
 					targetDTC = targetDTC.substr(0, targetDTC.find("Group"));
+				}
+				if(targetDTC.find("ROCs") != std::string::npos) {
+					__FE_COUT__ << "Assuming 'ROCs' is appended to DTC UID... removing to target DTC" << __E__;
+					targetDTC = targetDTC.substr(0, targetDTC.find("ROCs"));
 				}
 
 				try {
