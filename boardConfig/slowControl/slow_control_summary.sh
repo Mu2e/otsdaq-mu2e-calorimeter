@@ -17,7 +17,7 @@ SUMMARYVI_DATE="summaryVI_${rightnow}.log"
 # Trova tutti i file slowControl*.log e li ordina numericamente
 for f in $(ls "${DIR}"/slowControl[0-9]*.log 2>/dev/null | sort -V); do
     # Estrai l'ultima riga
-    last_line=$(tail -n 1 "$f")
+    last_line=$(tail -n 1 "$f") 
     echo "$last_line" >> "$SUMMARY_FILE"
 done
 
