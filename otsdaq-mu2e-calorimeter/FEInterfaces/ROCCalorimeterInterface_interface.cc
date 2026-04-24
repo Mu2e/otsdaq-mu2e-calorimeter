@@ -991,6 +991,9 @@ void ROCCalorimeterInterface::configure(void) try {
 	SetADCsThresholds(50);
 	// CalibrateMZB();
 
+	writeRegister(ROC_ADDRESS_MASK_A, 1023);
+	writeRegister(ROC_ADDRESS_MASK_B, 1023);
+
 } catch(const std::runtime_error& e) {
 	__FE_COUT__ << "Error caught: " << e.what() << __E__;
 	throw;
@@ -1707,8 +1710,13 @@ void ROCCalorimeterInterface::SetupForNoiseTaking(__ARGS__) {
 void ROCCalorimeterInterface::SetupForNoiseTaking(unsigned int numberOfsamples) {
 	__COUT_INFO__ << "SetupForNoiseTaking()" << __E__;
 
-	writeRegister(ROC_ADDRESS_MASK_A, 1023);
-	writeRegister(ROC_ADDRESS_MASK_B, 1023);
+	//writeRegister(ROC_ADDRESS_MASK_A, 1023);
+	//writeRegister(ROC_ADDRESS_MASK_B, 1023);
+
+	writeRegister(ROC_ADDRESS_SIMWF_ENABLE_A, 0);
+	writeRegister(ROC_ADDRESS_SIMWF_ENABLE_B, 0);
+	writeRegister(ROC_ADDRESS_SIMWF_MULTI_A, 0);
+	writeRegister(ROC_ADDRESS_SIMWF_MULTI_B, 0);
 
 	writeRegister(ROC_ADDRESS_IS_PATTERN, 0);
 	writeRegister(ROC_ADDRESS_IS_COUNTER, 0);
@@ -1773,8 +1781,8 @@ void ROCCalorimeterInterface::SetupForADCsDataTaking(bool setThr, bool isNFw, un
 	  // Close file
 	  myFile.close();*/
 
-	writeRegister(ROC_ADDRESS_MASK_A, 1023);
-	writeRegister(ROC_ADDRESS_MASK_B, 1023);
+	//writeRegister(ROC_ADDRESS_MASK_A, 1023);
+	//writeRegister(ROC_ADDRESS_MASK_B, 1023);
 
 	if(isNFw) {
 		writeRegister(ROC_ADDRESS_SIMWF_ENABLE_A, 0);
