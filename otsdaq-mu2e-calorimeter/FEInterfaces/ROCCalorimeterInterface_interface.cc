@@ -1710,8 +1710,8 @@ void ROCCalorimeterInterface::SetupForNoiseTaking(__ARGS__) {
 void ROCCalorimeterInterface::SetupForNoiseTaking(unsigned int numberOfsamples) {
 	__COUT_INFO__ << "SetupForNoiseTaking()" << __E__;
 
-	//writeRegister(ROC_ADDRESS_MASK_A, 1023);
-	//writeRegister(ROC_ADDRESS_MASK_B, 1023);
+	// writeRegister(ROC_ADDRESS_MASK_A, 1023);
+	// writeRegister(ROC_ADDRESS_MASK_B, 1023);
 
 	writeRegister(ROC_ADDRESS_SIMWF_ENABLE_A, 0);
 	writeRegister(ROC_ADDRESS_SIMWF_ENABLE_B, 0);
@@ -1781,8 +1781,8 @@ void ROCCalorimeterInterface::SetupForADCsDataTaking(bool setThr, bool isNFw, un
 	  // Close file
 	  myFile.close();*/
 
-	//writeRegister(ROC_ADDRESS_MASK_A, 1023);
-	//writeRegister(ROC_ADDRESS_MASK_B, 1023);
+	// writeRegister(ROC_ADDRESS_MASK_A, 1023);
+	// writeRegister(ROC_ADDRESS_MASK_B, 1023);
 
 	if(isNFw) {
 		writeRegister(ROC_ADDRESS_SIMWF_ENABLE_A, 0);
