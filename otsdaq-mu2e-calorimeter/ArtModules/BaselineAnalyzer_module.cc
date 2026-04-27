@@ -7,7 +7,7 @@
 #include "messagefacility/MessageLogger/MessageLogger.h"
 
 #include "TRACE/tracemf.h"
-//#include "artdaq/DAQdata/Globals.hh"
+// #include "artdaq/DAQdata/Globals.hh"
 #define TRACE_NAME "BaselineAnalyzer"
 
 #include "canvas/Utilities/Exception.h"
@@ -31,16 +31,18 @@
 #include "Offline/ProditionsService/inc/ProditionsHandle.hh"
 //-------------------------------------------------
 
+#include <algorithm>
+#include <cmath>
 #include <iomanip>
 #include <map>
 #include <set>
 #include <sstream>
-#include <vector>
 #include <string>
-#include <cmath>
-#include <algorithm>
+#include <vector>
 
 #include <sys/stat.h>
+#include "TCanvas.h"
+#include "TEllipse.h"
 #include "TF1.h"
 #include "TFile.h"
 #include "TFitResult.h"
@@ -49,15 +51,13 @@
 #include "TGraphErrors.h"
 #include "TH1.h"
 #include "TH2.h"
+#include "TLatex.h"
+#include "TLegend.h"
+#include "TLine.h"
 #include "TROOT.h"
 #include "TStyle.h"
-#include "TTree.h"
-#include "TCanvas.h"
-#include "TLegend.h"
-#include "TEllipse.h"
 #include "TText.h"
-#include "TLatex.h"
-#include "TLine.h"
+#include "TTree.h"
 #include "art_root_io/TFileService.h"
 
 #include "Offline/CaloVisualizer/inc/THMu2eCaloDisk.hh"
@@ -107,7 +107,7 @@ class BaselineAnalyzer : public art::EDAnalyzer {
 
 	double xmin;
 	double xmax;
-	bool titlesSet;
+	bool   titlesSet;
 
 	std::map<int, std::map<int, mu2e::CaloConst::detType>> channelType;
 	std::map<int, std::map<int, TH1D*>>                    h1_baseline_map;
@@ -135,9 +135,9 @@ mu2e::BaselineAnalyzer::BaselineAnalyzer(const art::EDAnalyzer::Table<Config>& c
     , writeTXT_(config().writeTXT())
     , TXTfoldername_(config().TXTfoldername())
     , writeCSV_(config().writeCSV())
-	, CSVfilename_(config().CSVfilename())
+    , CSVfilename_(config().CSVfilename())
     , writePDF_(config().writePDF())
-	, PDFfilename_(config().PDFfilename())
+    , PDFfilename_(config().PDFfilename())
     , thresholdOffset_(config().thresholdOffset())
     , thresholdOffsetPin_(config().thresholdOffsetPin())
     , hotStdDev_(config().hotStdDev())
@@ -175,46 +175,44 @@ mu2e::BaselineAnalyzer::BaselineAnalyzer(const art::EDAnalyzer::Table<Config>& c
 	h2_disk0->SetDrawOption("COLZL");
 	h2_disk1->SetDrawOption("COLZL");
 
-
 	auto baseBoardDir = tfs->mkdir("boards");
-	for (int boardID=0; boardID < CaloConst::_nDIRAC; boardID++){
-		TString dirname(Form("Board%03d",boardID));
-		auto boardDir = baseBoardDir.mkdir(dirname.Data());
-		for (int chanID=0; chanID < CaloConst::_nChPerDIRAC; chanID++){
+	for(int boardID = 0; boardID < CaloConst::_nDIRAC; boardID++) {
+		TString dirname(Form("Board%03d", boardID));
+		auto    boardDir = baseBoardDir.mkdir(dirname.Data());
+		for(int chanID = 0; chanID < CaloConst::_nChPerDIRAC; chanID++) {
 			TString hname                    = Form("h1_baseline_b%03d_c%02d", boardID, chanID);
 			TString htitle                   = Form("Baseline of Board %03d channel %02d", boardID, chanID);
 			h1_baseline_map[boardID][chanID] = boardDir.make<TH1D>(hname, htitle, xmax - xmin, xmin, xmax);
 		}
 	}
 	titlesSet = false;
-
-
 }
 
-void mu2e::BaselineAnalyzer::beginRun(art::Run const& run){
-	if (CSVfilename_ == ""){
+void mu2e::BaselineAnalyzer::beginRun(art::Run const& run) {
+	if(CSVfilename_ == "") {
 		CSVfilename_ = std::string("thresholds_run") + run.id().run() + ".csv";
 	}
-	if (PDFfilename_ == ""){
+	if(PDFfilename_ == "") {
 		PDFfilename_ = std::string("thresholds_run") + run.id().run() + ".pdf";
 	}
 }
 
 void mu2e::BaselineAnalyzer::analyze(art::Event const& event) {
-	const auto& caloDigis = *event.getValidHandle(consumes<mu2e::CaloDigiCollection>(caloDigiTag_));
+	const auto&                           caloDigis = *event.getValidHandle(consumes<mu2e::CaloDigiCollection>(caloDigiTag_));
 	art::ServiceHandle<art::TFileService> tfs;
 
 	mu2e::CaloDAQMap const& calodaqconds = _calodaqconds_h.get(event.id());
-	if (!titlesSet){ //Need to do this here in order to have calodaqconds
-		for (int sipmid=0; sipmid < CaloConst::_nChannel; sipmid++){
-			mu2e::CaloSiPMId        SiPMID_(sipmid);
-			if (!SiPMID_.isValid()) continue;
-			int BoardChan = calodaqconds.rawId(SiPMID_).id();
-			int boardID   = BoardChan / 20;
-			int chanID    = BoardChan % 20;
-			channelType[boardID][chanID]      = SiPMID_.detType();
-			TString typeName = mu2e::CaloConst::detTypeName(channelType[boardID][chanID]);
-			TString htitle                   = Form("Baseline of Board %03d channel %02d [%s]", boardID, chanID, typeName.Data());
+	if(!titlesSet) {  // Need to do this here in order to have calodaqconds
+		for(int sipmid = 0; sipmid < CaloConst::_nChannel; sipmid++) {
+			mu2e::CaloSiPMId SiPMID_(sipmid);
+			if(!SiPMID_.isValid())
+				continue;
+			int BoardChan                = calodaqconds.rawId(SiPMID_).id();
+			int boardID                  = BoardChan / 20;
+			int chanID                   = BoardChan % 20;
+			channelType[boardID][chanID] = SiPMID_.detType();
+			TString typeName             = mu2e::CaloConst::detTypeName(channelType[boardID][chanID]);
+			TString htitle               = Form("Baseline of Board %03d channel %02d [%s]", boardID, chanID, typeName.Data());
 			h1_baseline_map[boardID][chanID]->SetTitle(htitle);
 		}
 		titlesSet = true;
@@ -226,7 +224,8 @@ void mu2e::BaselineAnalyzer::analyze(art::Event const& event) {
 		std::vector<int> waveform = caloDigis[ihit].waveform();
 
 		mu2e::CaloSiPMId SiPMID_(SiPMID);
-		if (!SiPMID_.isValid()) continue;
+		if(!SiPMID_.isValid())
+			continue;
 		int BoardChan = calodaqconds.rawId(SiPMID_).id();
 		int boardID   = BoardChan / 20;
 		int chanID    = BoardChan % 20;
@@ -239,19 +238,17 @@ void mu2e::BaselineAnalyzer::analyze(art::Event const& event) {
 	}
 }
 
-void mu2e::BaselineAnalyzer::endJob() { 
-	
-	//Remove empty hists
-	for (int boardID=0; boardID < CaloConst::_nDIRAC; boardID++){
-		for (int chanID=0; chanID < CaloConst::_nChPerDIRAC; chanID++){
-			if (h1_baseline_map[boardID][chanID]->GetEntries() == 0){
+void mu2e::BaselineAnalyzer::endJob() {
+	// Remove empty hists
+	for(int boardID = 0; boardID < CaloConst::_nDIRAC; boardID++) {
+		for(int chanID = 0; chanID < CaloConst::_nChPerDIRAC; chanID++) {
+			if(h1_baseline_map[boardID][chanID]->GetEntries() == 0) {
 				delete h1_baseline_map[boardID][chanID];
 				h1_baseline_map[boardID].erase(chanID);
 			}
 		}
-		if (h1_baseline_map[boardID].empty()) {
+		if(h1_baseline_map[boardID].empty()) {
 			h1_baseline_map.erase(boardID);
-			
 		}
 	}
 
@@ -267,22 +264,22 @@ void mu2e::BaselineAnalyzer::FitHistograms() {
 	int                           unprecise_fits = 0;
 	std::set<std::pair<int, int>> failed_map;
 	std::set<std::pair<int, int>> unprecise_map;
-	std::ofstream outputCSV;
-	if (writeCSV_){
+	std::ofstream                 outputCSV;
+	if(writeCSV_) {
 		outputCSV.open(CSVfilename_);
 		if(!outputCSV.is_open()) {
 			std::cout << "Warning! Can't open file " << CSVfilename_ << "\n";
 			writeCSV_ = false;
 		}
 	}
-	std::set<int> all_boards;
-	std::map<int,std::map<int,float>> all_baselines;
-	std::map<int,std::map<int,int>> all_thresholds;
+	std::set<int>                       all_boards;
+	std::map<int, std::map<int, float>> all_baselines;
+	std::map<int, std::map<int, int>>   all_thresholds;
 	for(auto board_pair : h1_baseline_map) {
-		int           board = board_pair.first;
+		int board = board_pair.first;
 		all_boards.insert(board);
 		std::ofstream outputBaselineFile;
-		TString       fname         = Form("%s/dirac%03d.baseline", TXTfoldername_.c_str(), board);
+		TString       fname = Form("%s/dirac%03d.baseline", TXTfoldername_.c_str(), board);
 
 		if(writeTXT_) {
 			outputBaselineFile.open(fname);
@@ -300,7 +297,7 @@ void mu2e::BaselineAnalyzer::FitHistograms() {
 			h1_baseline_map[board][channel]->Scale(1. / h1_baseline_map[board][channel]->Integral());
 
 			double stddev = h1_baseline_map[board][channel]->GetRMS();
-			if (verbosity_ > 0){
+			if(verbosity_ > 0) {
 				if(stddev > hotStdDev_) {
 					std::cout << "Hot channel: Board " << board << " Channel " << channel << " (" << std::setprecision(4) << std::setw(5) << stddev << ") [" << channelType[board][channel] << "]\n";
 				}
@@ -323,10 +320,11 @@ void mu2e::BaselineAnalyzer::FitHistograms() {
 				g_stddev_empty->AddPoint(board * 100 + channel, stddev);
 				break;
 			default:
-				std::cout<<"Board "<<board<<" Channel "<<channel<<" : unknown type "<<channelType[board][channel]<<"\n";
+				std::cout << "Board " << board << " Channel " << channel << " : unknown type " << channelType[board][channel] << "\n";
 			}
 
-			if (verbosity_ > 1) std::cout << "Fitting board " << board << " channel " << channel << " ... ";
+			if(verbosity_ > 1)
+				std::cout << "Fitting board " << board << " channel " << channel << " ... ";
 			double guess_max   = h1_baseline_map[board][channel]->GetBinContent(h1_baseline_map[board][channel]->GetMaximumBin());
 			double guess_mean  = h1_baseline_map[board][channel]->GetMean();
 			double guess_sigma = h1_baseline_map[board][channel]->GetRMS();
@@ -335,7 +333,8 @@ void mu2e::BaselineAnalyzer::FitHistograms() {
 			TFitResultPtr fit_result = h1_baseline_map[board][channel]->Fit("gaus", "SQW", "", xmin, xmax);
 			h1_baseline_map[board][channel]->GetFunction("gaus")->SetNpx(1000);
 			if(fit_result < 0) {
-				if (verbosity_ > 1) std::cout << " <---- BAD FIT!!! Status " << fit_result << "\n";
+				if(verbosity_ > 1)
+					std::cout << " <---- BAD FIT!!! Status " << fit_result << "\n";
 				failed_fits++;
 				failed_map.insert(std::make_pair(board, channel));
 				continue;
@@ -351,13 +350,16 @@ void mu2e::BaselineAnalyzer::FitHistograms() {
 				threshold = int(round(fit_mean + thresholdOffsetPin_));
 			}
 
-			if (verbosity_ > 0) std::cout << fit_mean << " +- " << fit_sigma << " chi2/ndf=" << fit_chi2 << "/" << fit_ndf;
+			if(verbosity_ > 0)
+				std::cout << fit_mean << " +- " << fit_sigma << " chi2/ndf=" << fit_chi2 << "/" << fit_ndf;
 			if(fit_result > 0) {
-				if (verbosity_ > 0) std::cout << " <---- UNPRECISE! Status " << fit_result;
+				if(verbosity_ > 0)
+					std::cout << " <---- UNPRECISE! Status " << fit_result;
 				unprecise_fits++;
 				unprecise_map.insert(std::make_pair(board, channel));
 			}
-			if (verbosity_ > 0) std::cout << "\n";
+			if(verbosity_ > 0)
+				std::cout << "\n";
 
 			h1_means->Fill(fit_mean);
 			h1_sigmas->Fill(fit_sigma);
@@ -372,9 +374,9 @@ void mu2e::BaselineAnalyzer::FitHistograms() {
 				h2_disk1->FillRaw(board, channel, stddev);
 			}
 
-			all_baselines[board][channel] = fit_mean;
+			all_baselines[board][channel]  = fit_mean;
 			all_thresholds[board][channel] = threshold;
-			
+
 			TString lineout = Form("%d\t%.2f\t%.2f\t%d", channel, fit_mean, fit_sigma, threshold);
 			if(writeTXT_) {
 				outputBaselineFile << lineout << "\n";
@@ -384,29 +386,31 @@ void mu2e::BaselineAnalyzer::FitHistograms() {
 			outputBaselineFile.close();
 		}
 	}
-	
+
 	if(writeCSV_) {
-		for (auto b : all_boards){
+		for(auto b : all_boards) {
 			std::stringstream ss;
-	    	ss << b << ",[[";
-	    	for (int c=0; c<20; c++) {
-    		    if (c) ss << ",";
-        		ss << all_baselines[b][c];
-    		}
-	    	ss << "]],[[";
-	    	for (int c=0; c<20; c++) {
-    		    if (c) ss << ",";
-        		ss << all_thresholds[b][c];
-    		}
-	    	ss << "]],\"\",\"\",\"\"";
-    		std::string csv_line = ss.str();
+			ss << b << ",[[";
+			for(int c = 0; c < 20; c++) {
+				if(c)
+					ss << ",";
+				ss << all_baselines[b][c];
+			}
+			ss << "]],[[";
+			for(int c = 0; c < 20; c++) {
+				if(c)
+					ss << ",";
+				ss << all_thresholds[b][c];
+			}
+			ss << "]],\"\",\"\",\"\"";
+			std::string csv_line = ss.str();
 			outputCSV << csv_line << "\n";
 		}
 		outputCSV.close();
 		std::cout << "wrote file " << CSVfilename_ << "\n";
 	}
 
-	if (verbosity_ > 0){
+	if(verbosity_ > 0) {
 		std::cout << "Failed fits: " << failed_fits << "\n";
 		for(auto pair : failed_map) {
 			std::cout << "Board " << pair.first << " Channel " << pair.second << "\n";
@@ -419,9 +423,7 @@ void mu2e::BaselineAnalyzer::FitHistograms() {
 	}
 }
 
-
 void mu2e::BaselineAnalyzer::WriteReport() {
-
 	TCanvas* can = new TCanvas("pdf_canvas", "Baseline Report", 2000, 1400);
 	can->SetBatch(kTRUE);
 
@@ -430,7 +432,7 @@ void mu2e::BaselineAnalyzer::WriteReport() {
 
 	// Summary pages
 	can->Clear();
-	can->Divide(2,2);
+	can->Divide(2, 2);
 	can->cd(1);
 	h2_baselines->Draw("COLZ");
 	gPad->SetLogz();
@@ -442,21 +444,21 @@ void mu2e::BaselineAnalyzer::WriteReport() {
 	h1_threshold->Draw();
 	can->SaveAs(pdfname);
 
-	TText* text0 = new TText(0,50,"DISK 0");
-	TText* text1 = new TText(0,50,"DISK 1");
-	TText* textL = new TText(0,-50,"LEFT");
-	TText* textR = new TText(0,-50,"RIGHT");
+	TText* text0 = new TText(0, 50, "DISK 0");
+	TText* text1 = new TText(0, 50, "DISK 1");
+	TText* textL = new TText(0, -50, "LEFT");
+	TText* textR = new TText(0, -50, "RIGHT");
 	text0->SetTextAlign(22);
 	text1->SetTextAlign(22);
 	textL->SetTextAlign(22);
 	textR->SetTextAlign(22);
 
-	h2_disk0->GetZaxis()->SetRangeUser(coldStdDev_,hotStdDev_);
-	h2_disk1->GetZaxis()->SetRangeUser(coldStdDev_,hotStdDev_);
+	h2_disk0->GetZaxis()->SetRangeUser(coldStdDev_, hotStdDev_);
+	h2_disk1->GetZaxis()->SetRangeUser(coldStdDev_, hotStdDev_);
 
 	gStyle->SetPalette(kViridis);
 	can->Clear();
-	can->Divide(2,2);
+	can->Divide(2, 2);
 	can->cd(1);
 	h2_disk0->SetCombineMode(mu2e::ECombineMode::kLeft);
 	h2_disk0->Draw("colz l");
@@ -481,34 +483,37 @@ void mu2e::BaselineAnalyzer::WriteReport() {
 
 	// Stddev
 	can->Clear();
-	g_stddev->GetXaxis()->SetLimits(0,16100);
+	g_stddev->GetXaxis()->SetLimits(0, 16100);
 	double xmin = g_stddev->GetXaxis()->GetXmin();
 	double xmax = g_stddev->GetXaxis()->GetXmax();
 	double ymax = g_stddev->GetYaxis()->GetXmax();
 
-	if (g_stddev_pin->GetYaxis()->GetXmax() > ymax){
+	if(g_stddev_pin->GetYaxis()->GetXmax() > ymax) {
 		ymax = g_stddev_pin->GetYaxis()->GetXmax();
 	}
-	if (g_stddev_lyso->GetYaxis()->GetXmax() > ymax){
+	if(g_stddev_lyso->GetYaxis()->GetXmax() > ymax) {
 		ymax = g_stddev_lyso->GetYaxis()->GetXmax();
 	}
-	if (hotStdDev_ > ymax){
+	if(hotStdDev_ > ymax) {
 		ymax = hotStdDev_;
 	}
-	g_stddev->GetYaxis()->SetRangeUser(0,ymax+0.1);
+	g_stddev->GetYaxis()->SetRangeUser(0, ymax + 0.1);
 
 	g_stddev->Draw("AP");
-	if(g_stddev_pin->GetN() > 0) g_stddev_pin->Draw("P");
-	if(g_stddev_lyso->GetN() > 0) g_stddev_lyso->Draw("P");
-	if(g_stddev_empty->GetN() > 0) g_stddev_empty->Draw("P");
-	TLegend* leg = new TLegend(0.65,0.91,0.9,0.98);
-	leg->AddEntry(g_stddev_pin,g_stddev_pin->GetTitle(),"P");
-	leg->AddEntry(g_stddev_lyso,g_stddev_lyso->GetTitle(),"P");
-	leg->AddEntry(g_stddev_empty,g_stddev_empty->GetTitle(),"P");
+	if(g_stddev_pin->GetN() > 0)
+		g_stddev_pin->Draw("P");
+	if(g_stddev_lyso->GetN() > 0)
+		g_stddev_lyso->Draw("P");
+	if(g_stddev_empty->GetN() > 0)
+		g_stddev_empty->Draw("P");
+	TLegend* leg = new TLegend(0.65, 0.91, 0.9, 0.98);
+	leg->AddEntry(g_stddev_pin, g_stddev_pin->GetTitle(), "P");
+	leg->AddEntry(g_stddev_lyso, g_stddev_lyso->GetTitle(), "P");
+	leg->AddEntry(g_stddev_empty, g_stddev_empty->GetTitle(), "P");
 	leg->Draw();
 
-	TLine* l_cold = new TLine(xmin,coldStdDev_,xmax,coldStdDev_);
-	TLine* l_hot = new TLine(xmin,hotStdDev_,xmax,hotStdDev_);
+	TLine* l_cold = new TLine(xmin, coldStdDev_, xmax, coldStdDev_);
+	TLine* l_hot  = new TLine(xmin, hotStdDev_, xmax, hotStdDev_);
 	l_cold->SetLineColor(kBlue);
 	l_hot->SetLineColor(kRed);
 	l_cold->SetLineWidth(2);
@@ -517,8 +522,8 @@ void mu2e::BaselineAnalyzer::WriteReport() {
 	l_hot->SetLineStyle(kDashed);
 	l_cold->Draw("SAME");
 	l_hot->Draw("SAME");
-	TLatex* text_cold = new TLatex(xmax,coldStdDev_,"#downarrow COLD");
-	TLatex* text_hot = new TLatex(xmax,hotStdDev_,"#uparrow HOT");
+	TLatex* text_cold = new TLatex(xmax, coldStdDev_, "#downarrow COLD");
+	TLatex* text_hot  = new TLatex(xmax, hotStdDev_, "#uparrow HOT");
 	text_cold->SetTextSize(0.04);
 	text_hot->SetTextSize(0.04);
 	text_cold->SetTextAlign(12);
@@ -531,14 +536,14 @@ void mu2e::BaselineAnalyzer::WriteReport() {
 	delete leg;
 
 	// Per-board channel histograms, grouped into pages of 20 plots each
-	for (const auto& board_pair : h1_baseline_map) {
+	for(const auto& board_pair : h1_baseline_map) {
 		int board = board_pair.first;
 		can->Clear();
-		can->Divide(5,4);
-		for (int channel=0; channel<20; channel++){
-			can->cd(channel+1);
-			if (h1_baseline_map[board].find(channel) != h1_baseline_map[board].end()){
-				h1_baseline_map[board][channel]->GetXaxis()->SetRangeUser(1950,2150);
+		can->Divide(5, 4);
+		for(int channel = 0; channel < 20; channel++) {
+			can->cd(channel + 1);
+			if(h1_baseline_map[board].find(channel) != h1_baseline_map[board].end()) {
+				h1_baseline_map[board][channel]->GetXaxis()->SetRangeUser(1950, 2150);
 				h1_baseline_map[board][channel]->Draw("HIST");
 				gPad->SetLogy();
 			}
