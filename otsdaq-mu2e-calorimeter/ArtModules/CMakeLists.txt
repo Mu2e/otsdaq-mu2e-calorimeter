@@ -7,6 +7,19 @@ cet_build_plugin(testFragments art::module LIBRARIES REG
  artdaq-core-mu2e::Overlays art_root_io::TFileService_service ROOT::Hist
  )
 
+cet_build_plugin(BaselineAnalyzer art::module LIBRARIES REG
+  art_root_io::TFileService_service
+  Offline::CaloConditions
+  Offline::CaloVisualizer
+  Offline::CaloVisualizer_dict
+  Offline::DAQ
+  Offline::DataProducts
+  Offline::ProditionsService
+  Offline::RecoDataProducts
+  ROOT::Hist
+  ROOT::Tree
+)
+
 cet_build_plugin(CaloDataVerifier art::module LIBRARIES REG
  artdaq-core-mu2e::Data
  artdaq-core-mu2e::Data_dict
