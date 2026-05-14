@@ -1,0 +1,802 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+	<title>Calorimeter Configuration</title>
+
+	<link href='/WebPath/css/fonts.css?family=Inconsolata:400' rel='stylesheet' type='text/css'>
+
+	<link rel="stylesheet" type="text/css" href="/WebPath/css/ConfigurationGUI.css">
+	<link rel="stylesheet" type="text/css" href="/WebPath/UserWebPath/WebGUI_calo/css/CaloConfiguration.css">
+
+	<script type="text/JavaScript" src="/WebPath/js/Globals.js"></script>
+	<script type="text/JavaScript" src="/WebPath/js/Debug.js"></script>
+	<script type="text/JavaScript" src="/WebPath/js/DesktopContent.js"></script>
+	<script type="text/JavaScript" src="/WebPath/js/js_lib/SimpleContextMenu.js"></script>
+	<script type="text/JavaScript" src="/WebPath/js/js_lib/ConfigurationAPI.js"></script>
+
+	<script>
+
+		///////////////////////////////////////////////////////////////////////////////
+		// Calorimeter Configuration GUI
+		//
+		// Shifter-friendly interface to select configuration files and write
+		// them to the ots MongoDB configuration tables via ConfigurationAPI.
+		// No FE interface or configured State Machine required.
+		//
+		// FSM-scoped: a global FSM dropdown selects which FSM's set of
+		// configuration files is active. Each FSM keeps its own four file
+		// selections in localStorage, so switching FSMs swaps the displayed
+		// selections. The last-used FSM is restored on page load.
+		//
+		// File lists fetched via CodeEditor read-only API.
+		///////////////////////////////////////////////////////////////////////////////
+
+		// CodeEditorSupervisor application id (resolved at init() from the gateway)
+		var _codeEditorAppId = 0;
+
+		// localStorage layout:
+		//   CaloConfig_lastFsm                              -> name of last-active FSM
+		//   CaloConfig_fsm.<fsmName>.<sectionId>            -> selected fileName for that FSM+section
+		//   CaloConfig_dir.<sectionId>                      -> user-overridden directory (full path)
+		// Legacy keys "CaloConfig_<sectionId>" (pre-FSM) are migrated on first load.
+		var LOCALSTORAGE_PREFIX_     = "CaloConfig_";
+		var LOCALSTORAGE_LAST_FSM_   = LOCALSTORAGE_PREFIX_ + "lastFsm";
+		var LOCALSTORAGE_FSM_PREFIX_ = LOCALSTORAGE_PREFIX_ + "fsm.";
+		var LOCALSTORAGE_DIR_PREFIX_ = LOCALSTORAGE_PREFIX_ + "dir.";
+		var BOARD_CONFIG_BASE_PATH_  = "/otsdaq-mu2e-calorimeter/boardConfig/configurations";
+
+		// Populated at init() from getStateMachineNames. Always has at least one entry.
+		var _fsmNameArr   = [];
+		var _activeFsm    = "";
+		// Cached file lists per section: { sectionId: [fileName, ...] } so FSM
+		// switches don't re-fetch the CodeEditor directory listing.
+		var _fileListCache_ = {};
+
+		var CONFIG_SECTIONS_ = [
+			{
+				id:             "voltages",
+				title:          "SiPM Voltages",
+				description:    "Per-board SiPM bias voltage settings.",
+				boardConfigDir: "voltages",
+				mongoTable:     "/CaloVoltageConfigTable",
+				mongoField:     "ActiveConfigFile",
+			},
+			{
+				id:             "thresholds",
+				title:          "ADC Thresholds",
+				description:    "Per-channel ADC threshold values.",
+				boardConfigDir: "thresholds",
+				mongoTable:     "/CaloThresholdConfigTable",
+				mongoField:     "ActiveConfigFile",
+			},
+			{
+				id:             "mezzanine",
+				title:          "Mezzanine Config",
+				description:    "Mezzanine board configuration parameters.",
+				boardConfigDir: "mezzanine",
+				mongoTable:     "/CaloMezzanineConfigTable",
+				mongoField:     "ActiveConfigFile",
+			},
+			{
+				id:             "deadhot",
+				title:          "Dead-Hot Map",
+				description:    "Channel dead/hot quality map.",
+				boardConfigDir: "channelstatus",
+				mongoTable:     "/CaloDeadHotMapTable",
+				mongoField:     "ActiveConfigFile",
+			},
+		];
+
+		var modifiedTablesMap_ = {};
+
+
+		///////////////////////////////////////////////////////////////////////////
+		function init()
+		{
+			Debug.log("CaloConfiguration init");
+			DesktopContent.tooltip("Calo Configuration",
+				"Pick an FSM, then select config files and save them to the ots configuration tables. " +
+				"Each FSM remembers its own four file selections.");
+			DesktopContent.setWindowTooltip(
+				"FSM-scoped configuration: each FSM has its own four file selections.");
+
+			paintFsmBar();
+			paintSections();
+
+			//1) get FSM names, 2) resolve CodeEditor app id, 3) load file lists
+			DesktopContent.XMLHttpRequest(
+				"Request?RequestType=getStateMachineNames",
+				"",
+				function(fsmReq)
+				{
+					var nodes = (fsmReq && fsmReq.responseXML)
+						? fsmReq.responseXML.getElementsByTagName("stateMachineName")
+						: [];
+					_fsmNameArr = [];
+					for (var i = 0; i < nodes.length; ++i)
+					{
+						var v = nodes[i].getAttribute("value");
+						if (v && v !== "No FSM Records")
+							_fsmNameArr.push(v);
+					}
+					if (!_fsmNameArr.length)
+						_fsmNameArr = ["Default"]; //local fallback so the GUI still works
+
+					//pick active FSM: last-used if still present, else first
+					var savedFsm = localStorage.getItem(LOCALSTORAGE_LAST_FSM_);
+					_activeFsm = (savedFsm && _fsmNameArr.indexOf(savedFsm) >= 0)
+						? savedFsm : _fsmNameArr[0];
+					localStorage.setItem(LOCALSTORAGE_LAST_FSM_, _activeFsm);
+					migrateLegacyFsmKeysIfNeeded(_activeFsm);
+
+					populateFsmSelect();
+
+					//resolve CodeEditorSupervisor app id, then load file lists
+					DesktopContent.XMLHttpRequest(
+						"Request?RequestType=getAppId" +
+						"&classNeedle=ots::CodeEditorSupervisor",
+						"",
+						function(ceReq)
+						{
+							_codeEditorAppId = DesktopContent.getXMLValue(ceReq, "id") | 0;
+							Debug.log("_codeEditorAppId " + _codeEditorAppId);
+							if (!_codeEditorAppId)
+							{
+								Debug.log("No CodeEditorSupervisor found in the active context. " +
+									"File lists cannot be loaded.", Debug.HIGH_PRIORITY);
+								return;
+							}
+							loadAllFileLists();
+						},
+						0, 0, true, false, true //targetGatewaySupervisor
+					);
+				},
+				0, 0, true, true /*doNotShowLoadingOverlay*/, true /*targetGatewaySupervisor*/
+			);
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		// Per-FSM storage helpers
+		///////////////////////////////////////////////////////////////////////////
+		function fsmKey(fsmName, sectionId)
+		{
+			return LOCALSTORAGE_FSM_PREFIX_ + fsmName + "." + sectionId;
+		}
+		function getSavedSelection(fsmName, sectionId)
+		{
+			return localStorage.getItem(fsmKey(fsmName, sectionId));
+		}
+		function setSavedSelection(fsmName, sectionId, value)
+		{
+			if (value) localStorage.setItem(fsmKey(fsmName, sectionId), value);
+			else       localStorage.removeItem(fsmKey(fsmName, sectionId));
+		}
+
+		// One-time migration: if the user has legacy keys "CaloConfig_<sectionId>"
+		// (no FSM scope), copy them into the active FSM's slot the first time we
+		// encounter that FSM. The legacy keys are left in place for safety.
+		function migrateLegacyFsmKeysIfNeeded(fsmName)
+		{
+			for (var i = 0; i < CONFIG_SECTIONS_.length; ++i)
+			{
+				var sec = CONFIG_SECTIONS_[i];
+				var legacy = localStorage.getItem(LOCALSTORAGE_PREFIX_ + sec.id);
+				var current = getSavedSelection(fsmName, sec.id);
+				if (legacy && !current)
+					setSavedSelection(fsmName, sec.id, legacy);
+			}
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		// Per-section directory helpers (user-overridable)
+		///////////////////////////////////////////////////////////////////////////
+		function getDefaultSectionDir(sec)
+		{
+			return BOARD_CONFIG_BASE_PATH_ + "/" + sec.boardConfigDir;
+		}
+		function getSectionDir(sec)
+		{
+			var override = localStorage.getItem(LOCALSTORAGE_DIR_PREFIX_ + sec.id);
+			return (override && override.length) ? override : getDefaultSectionDir(sec);
+		}
+		function setSectionDirOverride(sectionId, value)
+		{
+			if (value && value.length)
+				localStorage.setItem(LOCALSTORAGE_DIR_PREFIX_ + sectionId, value);
+			else
+				localStorage.removeItem(LOCALSTORAGE_DIR_PREFIX_ + sectionId);
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		// FSM bar (top of page): dropdown + status indicator
+		///////////////////////////////////////////////////////////////////////////
+		function paintFsmBar()
+		{
+			var bar = document.getElementById("fsm-bar");
+			if (!bar) return;
+			bar.innerHTML =
+				'<label class="fsm-label" for="fsm-select">Configure FSM:</label>' +
+				'<select id="fsm-select" class="fsm-select" onchange="onFsmChange()">' +
+					'<option value="">-- loading... --</option>' +
+				'</select>';
+		}
+
+		function populateFsmSelect()
+		{
+			var sel = document.getElementById("fsm-select");
+			if (!sel) return;
+			var str = "";
+			for (var i = 0; i < _fsmNameArr.length; ++i)
+			{
+				var n = _fsmNameArr[i];
+				str += '<option value="' + escapeHtml(n) + '"' +
+					(n === _activeFsm ? ' selected' : '') + '>' +
+					escapeHtml(n) + '</option>';
+			}
+			sel.innerHTML = str;
+		}
+
+		function onFsmChange()
+		{
+			var sel = document.getElementById("fsm-select");
+			if (!sel) return;
+			var newFsm = sel.value;
+			if (!newFsm || newFsm === _activeFsm) return;
+
+			Debug.log("Switching active FSM to: " + newFsm);
+			_activeFsm = newFsm;
+			localStorage.setItem(LOCALSTORAGE_LAST_FSM_, _activeFsm);
+			migrateLegacyFsmKeysIfNeeded(_activeFsm); //in case this FSM was never seen before
+
+			//modified-tables map is per-session edits, not per-FSM; clear on switch
+			modifiedTablesMap_ = {};
+
+			//repaint and refresh selections for the new FSM using cached file lists if available
+			paintSections();
+			for (var i = 0; i < CONFIG_SECTIONS_.length; ++i)
+			{
+				var sec = CONFIG_SECTIONS_[i];
+				if (_fileListCache_[sec.id])
+					renderSectionFromCache(sec);
+				else
+					loadFileListForSection(sec);
+			}
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		function paintSections()
+		{
+			var el = document.getElementById("display");
+			var str = "";
+			for (var i = 0; i < CONFIG_SECTIONS_.length; ++i)
+			{
+				var sec = CONFIG_SECTIONS_[i];
+				var curDir = getSectionDir(sec);
+				var isOverridden = (curDir !== getDefaultSectionDir(sec));
+				str += '<div class="config-card" id="section-' + sec.id + '">';
+
+				// Title row: title (left) + (dir hint | dir input) + (pencil | save/reset/cancel)
+				// View and edit share the same row; clicking the pencil swaps the
+				// <span> for an <input> and the pencil for save/reset/cancel buttons.
+				str += '<div class="card-header">';
+				str +=   '<div class="card-title" title="' +
+					escapeHtml(sec.description) + '">' + sec.title + '</div>';
+				str +=   '<div class="card-header-right" id="dir-area-' + sec.id + '">';
+
+				// VIEW mode: static dir text + pencil
+				str +=     '<span class="dir-hint' +
+					(isOverridden ? ' is-overridden' : '') +
+					'" id="dir-hint-' + sec.id + '"' +
+					' title="' + escapeHtml(curDir) + '">' +
+					escapeHtml(curDir) +
+					'</span>';
+				str +=     '<button class="btn-edit-dir' +
+					(isOverridden ? ' is-overridden' : '') +
+					'" id="btn-edit-dir-' + sec.id +
+					'" onclick="onEditDir(\'' + sec.id + '\')"' +
+					' title="Edit directory for this section">&#9998;</button>';
+
+				// EDIT mode (hidden by default): input + inline action buttons
+				str +=     '<input type="text" class="dir-input" id="dir-input-' + sec.id +
+					'" value="' + escapeHtml(curDir) + '"' +
+					' onkeydown="onDirEditorKey(event, \'' + sec.id + '\')"' +
+					' spellcheck="false" autocomplete="off" style="display:none;">';
+				str +=     '<button class="btn-dir-save" id="btn-dir-save-' + sec.id +
+					'" onclick="onSaveDir(\'' + sec.id + '\')"' +
+					' title="Apply directory" style="display:none;">&#10003;</button>';
+				str +=     '<button class="btn-dir-reset" id="btn-dir-reset-' + sec.id +
+					'" onclick="onResetDir(\'' + sec.id + '\')"' +
+					' title="Reset to default directory" style="display:none;">&#8635;</button>';
+				str +=     '<button class="btn-dir-cancel" id="btn-dir-cancel-' + sec.id +
+					'" onclick="onCancelDir(\'' + sec.id + '\')"' +
+					' title="Cancel" style="display:none;">&#10005;</button>';
+
+				str +=   '</div>';
+				str += '</div>';
+
+				// Main controls: file select + Configure button
+				str += '<div class="card-controls">';
+				str +=   '<select id="select-' + sec.id + '"' +
+					' onchange="onSelectionChanged(\'' + sec.id + '\')">' +
+					'<option value="">-- loading... --</option></select>';
+				str +=   '<button class="btn-configure" id="btn-' + sec.id +
+					'" onclick="onConfigure(\'' + sec.id +
+					'\')" disabled>Configure</button>';
+				str += '</div>';
+
+				str += '<div class="status-msg" id="status-' + sec.id + '"></div>';
+				str += '</div>';
+			}
+			el.innerHTML = str;
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		// Per-section directory editor (pencil) handlers
+		///////////////////////////////////////////////////////////////////////////
+		// Toggle the header between "view" (dir text + pencil) and "edit"
+		// (text input + save/reset/cancel) modes. Both modes share the same
+		// row inside .card-header-right, so the layout never shifts.
+		function setDirEditMode(sectionId, editing)
+		{
+			var hint   = document.getElementById("dir-hint-"       + sectionId);
+			var pencil = document.getElementById("btn-edit-dir-"   + sectionId);
+			var input  = document.getElementById("dir-input-"      + sectionId);
+			var save   = document.getElementById("btn-dir-save-"   + sectionId);
+			var reset  = document.getElementById("btn-dir-reset-"  + sectionId);
+			var cancel = document.getElementById("btn-dir-cancel-" + sectionId);
+			var area   = document.getElementById("dir-area-"       + sectionId);
+			if (!input || !hint) return;
+
+			var viewDisp = editing ? "none" : "";
+			var editDisp = editing ? ""     : "none";
+
+			hint.style.display   = viewDisp;
+			pencil.style.display = viewDisp;
+			input.style.display  = editDisp;
+			save.style.display   = editDisp;
+			reset.style.display  = editDisp;
+			cancel.style.display = editDisp;
+
+			if (area) area.classList.toggle("is-editing", !!editing);
+		}
+
+		function onEditDir(sectionId)
+		{
+			var input = document.getElementById("dir-input-" + sectionId);
+			var sec   = getSectionById(sectionId);
+			if (!input || !sec) return;
+
+			//pre-fill with the current (possibly overridden) directory
+			input.value = getSectionDir(sec);
+			setDirEditMode(sectionId, true);
+			input.focus();
+			input.select();
+		}
+
+		function onCancelDir(sectionId)
+		{
+			setDirEditMode(sectionId, false);
+		}
+
+		function onSaveDir(sectionId)
+		{
+			var sec   = getSectionById(sectionId);  if (!sec) return;
+			var input = document.getElementById("dir-input-" + sectionId);
+			if (!input) return;
+			var newDir = (input.value || "").trim();
+			var defDir = getDefaultSectionDir(sec);
+
+			//empty input == reset to default
+			if (!newDir || newDir === defDir)
+				setSectionDirOverride(sectionId, "");
+			else
+				setSectionDirOverride(sectionId, newDir);
+
+			//invalidate cache + reload listing for this section under the new dir
+			_fileListCache_[sectionId] = undefined;
+			onCancelDir(sectionId);  //close editor
+			repaintSectionHeader(sec);
+			loadFileListForSection(sec);
+		}
+
+		function onResetDir(sectionId)
+		{
+			var sec = getSectionById(sectionId);  if (!sec) return;
+			setSectionDirOverride(sectionId, "");
+			_fileListCache_[sectionId] = undefined;
+			onCancelDir(sectionId);
+			repaintSectionHeader(sec);
+			loadFileListForSection(sec);
+		}
+
+		function onDirEditorKey(evt, sectionId)
+		{
+			if (evt.key === "Enter")  { evt.preventDefault(); onSaveDir(sectionId);   }
+			if (evt.key === "Escape") { evt.preventDefault(); onCancelDir(sectionId); }
+		}
+
+		// Update just the dir hint + pencil-button styling for one section
+		// (without re-rendering the whole card and losing the <select>).
+		function repaintSectionHeader(sec)
+		{
+			var curDir       = getSectionDir(sec);
+			var isOverridden = (curDir !== getDefaultSectionDir(sec));
+
+			var hint = document.getElementById("dir-hint-" + sec.id);
+			if (hint)
+			{
+				hint.className   = "dir-hint" + (isOverridden ? " is-overridden" : "");
+				hint.textContent = curDir;
+				hint.title       = curDir;
+			}
+			var btn = document.getElementById("btn-edit-dir-" + sec.id);
+			if (btn)
+				btn.className = "btn-edit-dir" + (isOverridden ? " is-overridden" : "");
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		function loadAllFileLists()
+		{
+			for (var i = 0; i < CONFIG_SECTIONS_.length; ++i)
+				loadFileListForSection(CONFIG_SECTIONS_[i]);
+		}
+
+		function loadFileListForSection(sec)
+		{
+			var dirPath = getSectionDir(sec);
+
+			//show a transient "loading" indicator for this section
+			var statusEl = document.getElementById("status-" + sec.id);
+			var selectEl = document.getElementById("select-" + sec.id);
+			if (selectEl) selectEl.innerHTML = '<option value="">-- loading... --</option>';
+			if (statusEl)
+			{
+				statusEl.className = "status-msg info";
+				statusEl.innerHTML = '<span class="dot dot-info"></span>Loading ' +
+					escapeHtml(dirPath) + ' ...';
+			}
+
+			if (!_codeEditorAppId)
+			{
+				Debug.log("CodeEditorSupervisor app id not resolved yet; cannot list " +
+					dirPath, Debug.WARN_PRIORITY);
+				return;
+			}
+
+			//DesktopContent.XMLHttpRequest builds the request URL from
+			//DesktopContent._localUrnLid, so route this call to the CodeEditorSupervisor
+			//by swapping _localUrnLid temporarily. The URL is built synchronously
+			//inside XMLHttpRequest (via req.open()), so we can restore immediately.
+			var savedUrn = DesktopContent._localUrnLid;
+			DesktopContent._localUrnLid = _codeEditorAppId;
+
+			DesktopContent.XMLHttpRequest(
+				"Request?RequestType=readOnlycodeEditor" +
+				"&option=getDirectoryContent" +
+				"&path=" + encodeURIComponent(dirPath),
+				"",
+				function(req, reqParam, errStr)
+				{
+					if (errStr || !req)
+					{
+						_fileListCache_[sec.id] = null;
+						var selectEl = document.getElementById("select-" + sec.id);
+						var statusEl = document.getElementById("status-" + sec.id);
+						selectEl.innerHTML = '<option value="">-- directory not found --</option>';
+						statusEl.className = "status-msg error";
+						statusEl.innerHTML = '<span class="dot dot-error"></span>Cannot read ' +
+							escapeHtml(dirPath);
+						return;
+					}
+
+					var files = req.responseXML.getElementsByTagName("file");
+					var dirs  = req.responseXML.getElementsByTagName("directory");
+					var items = [];
+					for (var j = 0; j < files.length; ++j)
+						items.push(files[j].getAttribute("value"));
+					for (var j = 0; j < dirs.length; ++j)
+						items.push(dirs[j].getAttribute("value") + "/");
+
+					_fileListCache_[sec.id] = items;
+					renderSectionFromCache(sec);
+				},
+				0, 0, true
+			);
+
+			//restore immediately; XHR is async, but the URL is built synchronously above
+			DesktopContent._localUrnLid = savedUrn;
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		// Render a section's <select> from the cached directory listing, picking
+		// the saved selection for the currently-active FSM and updating the
+		// validation indicator. Called both after the directory fetch completes
+		// and when the user switches between FSMs (no fetch needed).
+		///////////////////////////////////////////////////////////////////////////
+		function renderSectionFromCache(sec)
+		{
+			var selectEl = document.getElementById("select-" + sec.id);
+			var statusEl = document.getElementById("status-" + sec.id);
+			var btnEl    = document.getElementById("btn-" + sec.id);
+			var dirPath  = getSectionDir(sec);
+			var items    = _fileListCache_[sec.id];
+
+			if (!items)
+			{
+				selectEl.innerHTML = '<option value="">-- not loaded --</option>';
+				statusEl.className = "status-msg warn";
+				statusEl.innerHTML = '<span class="dot dot-warn"></span>Not loaded.';
+				btnEl.disabled = true;
+				return;
+			}
+			if (items.length === 0)
+			{
+				selectEl.innerHTML = '<option value="">-- empty --</option>';
+				statusEl.className = "status-msg warn";
+				statusEl.innerHTML = '<span class="dot dot-warn"></span>No files in ' +
+					escapeHtml(dirPath);
+				btnEl.disabled = true;
+				return;
+			}
+
+			var str = '<option value="">-- select --</option>';
+			for (var j = 0; j < items.length; ++j)
+				str += '<option value="' + escapeHtml(items[j]) +
+					'">' + escapeHtml(items[j]) + '</option>';
+			selectEl.innerHTML = str;
+
+			var saved = getSavedSelection(_activeFsm, sec.id);
+			if (saved)
+			{
+				selectEl.value = saved;
+				if (selectEl.value === saved)
+				{
+					statusEl.className = "status-msg success";
+					statusEl.innerHTML = '<span class="dot dot-ok"></span>Restored: <b>' +
+						escapeHtml(saved) + '</b>';
+				}
+				else
+				{
+					statusEl.className = "status-msg error";
+					statusEl.innerHTML = '<span class="dot dot-error"></span><b>' +
+						escapeHtml(saved) + '</b> no longer available.';
+				}
+			}
+			else
+			{
+				statusEl.className = "status-msg";
+				statusEl.innerHTML = '<span class="dot dot-idle"></span>' +
+					items.length + " file(s) available.";
+			}
+
+			btnEl.disabled = !selectEl.value;
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		function onSelectionChanged(sectionId)
+		{
+			var selectEl = document.getElementById("select-" + sectionId);
+			var statusEl = document.getElementById("status-" + sectionId);
+			var val = selectEl.value;
+
+			setSavedSelection(_activeFsm, sectionId, val);
+
+			if (val)
+			{
+				statusEl.className = "status-msg info";
+				statusEl.innerHTML = '<span class="dot dot-info"></span>Selected: <b>' +
+					escapeHtml(val) + '</b>';
+			}
+			else
+			{
+				statusEl.className = "status-msg";
+				statusEl.innerHTML = '<span class="dot dot-idle"></span>No file selected.';
+			}
+
+			document.getElementById("btn-" + sectionId).disabled = !val;
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		function onConfigure(sectionId)
+		{
+			var sec = getSectionById(sectionId);  if (!sec) return;
+			var fileName = document.getElementById("select-" + sec.id).value;
+			if (!fileName) return;
+
+			// Build the path stored in the Mongo field. Historically this is
+			// "<boardConfigDir>/<fileName>" (relative to BOARD_CONFIG_BASE_PATH_).
+			// When the user overrides the directory, we keep the same shape by
+			// stripping BOARD_CONFIG_BASE_PATH_ if present; otherwise we store
+			// the full directory + filename.
+			var curDir = getSectionDir(sec);
+			var relDir = curDir;
+			if (relDir.indexOf(BOARD_CONFIG_BASE_PATH_ + "/") === 0)
+				relDir = relDir.substring(BOARD_CONFIG_BASE_PATH_.length + 1);
+			else if (relDir === BOARD_CONFIG_BASE_PATH_)
+				relDir = "";
+			var filePath = relDir
+				? (relDir.replace(/\/+$/, "") + "/" + fileName)
+				: fileName;
+
+			var btnEl    = document.getElementById("btn-" + sec.id);
+			var statusEl = document.getElementById("status-" + sec.id);
+
+			btnEl.disabled = true;
+			statusEl.className = "status-msg info";
+			statusEl.innerHTML = '<span class="dot dot-info"></span>Saving to DB...';
+
+			doMongoDBUpdate(sec, filePath, function(ok, msg)
+			{
+				btnEl.disabled = false;
+				statusEl.className = "status-msg " + (ok ? "success" : "error");
+				statusEl.innerHTML = ok
+					? '<span class="dot dot-ok"></span>Saved. ' + getDateString(new Date())
+					: '<span class="dot dot-error"></span>Error: ' + escapeHtml(msg);
+			});
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		function doMongoDBUpdate(sec, filePath, callback)
+		{
+			ConfigurationAPI.getSubsetRecords(
+				sec.mongoTable, "",
+				function(records)
+				{
+					if (!records || records.length === 0)
+					{
+						ConfigurationAPI.addSubsetRecords(
+							sec.mongoTable, ["Default"],
+							function(mt)
+							{
+								if (!mt || !mt.length)
+								{ callback(false, "Table " + sec.mongoTable + " may not exist."); return; }
+								doSetAndSave(sec, filePath, ["Default"], mt, callback);
+							},
+							modifiedTablesMap_[sec.id], true
+						);
+						return;
+					}
+					doSetAndSave(sec, filePath, records, modifiedTablesMap_[sec.id], callback);
+				},
+				modifiedTablesMap_[sec.id]
+			);
+		}
+
+		function doSetAndSave(sec, filePath, recordArr, modIn, callback)
+		{
+			ConfigurationAPI.setFieldValuesForRecords(
+				sec.mongoTable, recordArr,
+				[sec.mongoField], [filePath],
+				function(mt, err)
+				{
+					if (err)                { callback(false, err);                   return; }
+					if (!mt || !mt.length)  { callback(false, "No modified tables."); return; }
+					modifiedTablesMap_[sec.id] = mt;
+
+					ConfigurationAPI.saveModifiedTables(mt,
+						function(saved)
+						{
+							if (!saved || !saved.length) { callback(false, "Save failed."); return; }
+							modifiedTablesMap_[sec.id] = undefined;
+							callback(true, "OK");
+						}
+					);
+				},
+				modIn
+			);
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		function configureAll()
+		{
+			var pending = [];
+			for (var i = 0; i < CONFIG_SECTIONS_.length; ++i)
+			{
+				var sec = CONFIG_SECTIONS_[i];
+				var val = document.getElementById("select-" + sec.id).value;
+				if (val) pending.push({sec: sec, fileName: val});
+			}
+			if (!pending.length)
+			{ Debug.log("Nothing selected.", Debug.WARN_PRIORITY); return; }
+
+			DesktopContent.popUpVerification(
+				"Save <b>" + pending.length + "</b> selection(s) to DB?<br><br>" +
+				pending.map(function(p) {
+					return "&nbsp;&nbsp;\u2022 " + p.sec.title + ": <i>" +
+						escapeHtml(p.fileName) + "</i>";
+				}).join("<br>"),
+				function()
+				{
+					var allBtn = document.getElementById("btn-configure-all");
+					if (allBtn) allBtn.disabled = true;
+					var idx = 0;
+					function next() {
+						if (idx >= pending.length)
+						{ if (allBtn) allBtn.disabled = false; return; }
+						var secId = pending[idx].sec.id;
+						var btnEl = document.getElementById("btn-" + secId);
+						onConfigure(secId);
+						var poll = setInterval(function() {
+							if (!btnEl.disabled)
+							{ clearInterval(poll); idx++; next(); }
+						}, 200);
+					}
+					next();
+				},
+				0,0,0,0,0,0, function(){}
+			);
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		function refreshAll()
+		{
+			modifiedTablesMap_ = {};
+			_fileListCache_   = {};
+			//re-run the full init flow so FSM list, CodeEditor id, and file lists
+			//are all re-resolved (handles context changes, new FSMs, etc.)
+			init();
+		}
+
+		function getSectionById(id)
+		{
+			for (var i = 0; i < CONFIG_SECTIONS_.length; ++i)
+				if (CONFIG_SECTIONS_[i].id === id) return CONFIG_SECTIONS_[i];
+			return null;
+		}
+
+		var _dayArr   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
+		var _monthArr = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+		function getDateString(d) {
+			return _dayArr[d.getDay()] + " " + _monthArr[d.getMonth()] + " " +
+				d.getDate() + " " + d.getHours() + ":" +
+				((d.getMinutes()<10)?"0":"") + d.getMinutes() + ":" +
+				((d.getSeconds()<10)?"0":"") + d.getSeconds();
+		}
+		function escapeHtml(s) {
+			if (!s) return "";
+			return s.replace(/&/g,"&amp;").replace(/</g,"&lt;")
+				.replace(/>/g,"&gt;").replace(/"/g,"&quot;");
+		}
+
+	</script>
+
+</head>
+
+<body onload='//init() called by DesktopContent.js'>
+
+	<div class="header-bar">
+		<h1>Calorimeter Configuration</h1>
+		<div class="header-actions">
+			<button class="btn-configure-all" id="btn-configure-all"
+				onclick="configureAll()" title="Save all selected files to the DB for the active FSM.">
+				Configure All</button>
+			<button class="btn-refresh" onclick="refreshAll()"
+				title="Re-fetch FSM list, CodeEditor info, and directory contents.">
+				Refresh</button>
+		</div>
+	</div>
+
+	<!-- FSM section: a single bordered container that groups the FSM selector
+	     with all the configuration sections it owns. -->
+	<div class="fsm-section">
+		<!-- Global FSM selector bar. Populated dynamically by paintFsmBar(). -->
+		<div id="fsm-bar" class="fsm-bar"></div>
+
+		<div id="display"></div>
+	</div>
+
+</body>
+
+</html>
