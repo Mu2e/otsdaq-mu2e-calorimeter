@@ -52,6 +52,12 @@
 		// switches don't re-fetch the CodeEditor directory listing.
 		var _fileListCache_ = {};
 
+		// CSV-to-table mapping is auto-discovered from the table schema at runtime:
+		//   * column 0 of each CSV row = the UID column value (BoardID)
+		//   * columns 1.. of the CSV row = the "data" columns of the table,
+		//     in schema order, skipping auto-managed columns
+		//     (UID, Comment, Author, Timestamp).
+		// So there is no per-section field list here; we just need the table path.
 		var CONFIG_SECTIONS_ = [
 			{
 				id:             "voltages",
@@ -59,7 +65,6 @@
 				description:    "Per-board SiPM bias voltage settings.",
 				boardConfigDir: "voltages",
 				mongoTable:     "/SubsystemCalorimeterVoltagesTable",
-				mongoField:     "ActiveConfigFile",
 			},
 			{
 				id:             "thresholds",
@@ -67,7 +72,6 @@
 				description:    "Per-channel ADC threshold values.",
 				boardConfigDir: "thresholds",
 				mongoTable:     "/SubsystemCalorimeterThresholdsTable",
-				mongoField:     "ActiveConfigFile",
 			},
 			{
 				id:             "mezzanine",
@@ -75,7 +79,6 @@
 				description:    "Mezzanine board configuration parameters.",
 				boardConfigDir: "mezzanine",
 				mongoTable:     "/SubsystemCalorimeterMZBCalibsTable",
-				mongoField:     "ActiveConfigFile",
 			},
 			{
 				id:             "deadhot",
@@ -83,7 +86,6 @@
 				description:    "Channel dead/hot quality map.",
 				boardConfigDir: "channelstatus",
 				mongoTable:     "/SubsystemCalorimeterStatusTable",
-				mongoField:     "ActiveConfigFile",
 			},
 		];
 
@@ -102,6 +104,11 @@
 
 			paintFsmBar();
 			paintSections();
+
+			//Kick off the "Active" line lookup for every section in parallel.
+			//It only needs the Configuration API (not the FSM list or
+			//CodeEditor), so we don't have to wait for those resolutions.
+			refreshAllActiveLines();
 
 			//1) get FSM names, 2) resolve CodeEditor app id, 3) load file lists
 			DesktopContent.XMLHttpRequest(
@@ -256,6 +263,7 @@
 
 			//repaint and refresh selections for the new FSM using cached file lists if available
 			paintSections();
+			refreshAllActiveLines(); //"Active" elements were re-created blank
 			for (var i = 0; i < CONFIG_SECTIONS_.length; ++i)
 			{
 				var sec = CONFIG_SECTIONS_[i];
@@ -317,6 +325,14 @@
 
 				str +=   '</div>';
 				str += '</div>';
+
+				// "Active" line: shows the table's current persistent version
+				// and -- if the last upload was done from this GUI -- the
+				// source CSV filename embedded in the tableComment.
+				str += '<div class="active-line" id="active-' + sec.id + '"' +
+					' title="Currently active table version (and file name if configured via this GUI)">' +
+					'Active: <span class="active-version">(loading)</span>' +
+					'</div>';
 
 				// Main controls: file select + Configure button
 				str += '<div class="card-controls">';
@@ -556,25 +572,26 @@
 			if (saved)
 			{
 				selectEl.value = saved;
-				if (selectEl.value === saved)
+				if (selectEl.value !== saved)
 				{
-					statusEl.className = "status-msg success";
-					statusEl.innerHTML = '<span class="dot dot-ok"></span>Restored: <b>' +
-						escapeHtml(saved) + '</b>';
-				}
-				else
-				{
+					//The previously-saved selection no longer exists in this
+					//directory; flag it so the shifter knows their saved
+					//choice is gone.
 					statusEl.className = "status-msg error";
 					statusEl.innerHTML = '<span class="dot dot-error"></span><b>' +
 						escapeHtml(saved) + '</b> no longer available.';
+					btnEl.disabled = !selectEl.value;
+					return;
 				}
+				//Saved selection is still valid: pre-select it in the dropdown
+				//but stay quiet in the status line. The "Active" pill at the
+				//top of the card already shows what is currently configured;
+				//repeating the file name here is just noise on page load.
 			}
-			else
-			{
-				statusEl.className = "status-msg";
-				statusEl.innerHTML = '<span class="dot dot-idle"></span>' +
-					items.length + " file(s) available.";
-			}
+
+			statusEl.className = "status-msg";
+			statusEl.innerHTML = '<span class="dot dot-idle"></span>' +
+				items.length + " file(s) available.";
 
 			btnEl.disabled = !selectEl.value;
 		}
@@ -606,36 +623,90 @@
 
 
 		///////////////////////////////////////////////////////////////////////////
+		// onConfigure orchestrates the full "push selected CSV file into the
+		// section's Mongo table" pipeline:
+		//   1. Read the CSV file via the CodeEditor read-only API
+		//   2. Parse rows (handles [[...]] nested arrays and quoted strings)
+		//   3. Look up the table schema (auto-discover writable column count)
+		//   4. Validate every row (column count, BoardID exists in table)
+		//   5. POST the entire table contents in one shot via the
+		//      saveSpecificTable RequestType (which delegates to
+		//      TableView::fillFromEncodedCSV server-side). Single round-trip.
+		// Any error (missing column, missing BoardID, row-width mismatch, server
+		// rejection) is reported in the section's status line; no partial writes.
+		///////////////////////////////////////////////////////////////////////////
 		function onConfigure(sectionId)
 		{
 			var sec = getSectionById(sectionId);  if (!sec) return;
 			var fileName = document.getElementById("select-" + sec.id).value;
 			if (!fileName) return;
-			
-			var curDir = getSectionDir(sec);
-			var relDir = curDir;
-			if (relDir.indexOf(BOARD_CONFIG_BASE_PATH_ + "/") === 0)
-				relDir = relDir.substring(BOARD_CONFIG_BASE_PATH_.length + 1);
-			else if (relDir === BOARD_CONFIG_BASE_PATH_)
-				relDir = "";
-			var filePath = relDir
-				? (relDir.replace(/\/+$/, "") + "/" + fileName)
-				: fileName;
+
+			var filePath = getSectionDir(sec).replace(/\/+$/, "") + "/" + fileName;
 
 			var btnEl    = document.getElementById("btn-" + sec.id);
 			var statusEl = document.getElementById("status-" + sec.id);
 
 			btnEl.disabled = true;
 			statusEl.className = "status-msg info";
-			statusEl.innerHTML = '<span class="dot dot-info"></span>Saving to DB...';
+			statusEl.innerHTML = '<span class="dot dot-info"></span>Reading ' +
+				escapeHtml(fileName) + ' ...';
 
-			doMongoDBUpdate(sec, filePath, function(ok, msg)
+			// done(ok, msgOrInfo)
+			//   on success: msgOrInfo is an object { savedVersion, foundEquivalent, rowCount, fileName }
+			//   on failure: msgOrInfo is an error string
+			function done(ok, msgOrInfo)
 			{
 				btnEl.disabled = false;
 				statusEl.className = "status-msg " + (ok ? "success" : "error");
-				statusEl.innerHTML = ok
-					? '<span class="dot dot-ok"></span>Saved. ' + getDateString(new Date())
-					: '<span class="dot dot-error"></span>Error: ' + escapeHtml(msg);
+				if (ok)
+				{
+					var info  = msgOrInfo || {};
+					var verStr = escapeHtml(String(info.savedVersion));
+					var label;
+					if (info.unchanged)
+						label = 'Already configured (table version ' + verStr +
+							' unchanged)';
+					else if (info.foundEquivalent)
+						label = 'Uploaded <b>' + escapeHtml(info.fileName || "?") +
+							'</b> as equivalent version ' + verStr + ' (reused)';
+					else
+						label = 'Uploaded <b>' + escapeHtml(info.fileName || "?") +
+							'</b> as table version ' + verStr;
+
+					statusEl.innerHTML = '<span class="dot dot-ok"></span>' + label +
+						' &middot; ' + getDateString(new Date());
+
+					//refresh the "Active" line in this section card so it
+					//immediately reflects the new version+file.
+					updateSectionActiveLine(sec, {
+						version:  info.savedVersion,
+						fileName: info.fileName
+					});
+				}
+				else
+				{
+					statusEl.innerHTML = '<span class="dot dot-error"></span>Error: ' +
+						escapeHtml(msgOrInfo);
+					Debug.log("onConfigure error: " + msgOrInfo, Debug.HIGH_PRIORITY);
+				}
+			}
+
+			readCodeEditorFile(filePath, function(text, errStr)
+			{
+				if (errStr || text == null)
+				{ done(false, "Cannot read CSV file: " + (errStr || "no data")); return; }
+
+				var rows;
+				try { rows = parseCaloCsv(text); }
+				catch (e) { done(false, "CSV parse error: " + e.message); return; }
+
+				if (!rows.length)
+				{ done(false, "CSV file has no usable data rows."); return; }
+
+				statusEl.innerHTML = '<span class="dot dot-info"></span>Uploading ' +
+					rows.length + ' row(s) to ' + escapeHtml(sec.mongoTable) + '...';
+
+				pushCsvToMongoTable(sec, rows, fileName, done);
 			});
 		}
 
@@ -705,54 +776,518 @@
 			);
 		}
 
-		function doMongoDBUpdate(sec, filePath, callback)
+		///////////////////////////////////////////////////////////////////////////
+		// Read a file via the CodeEditor read-only API.
+		//
+		// IMPORTANT: the CodeEditor RequestType "getFileContent" wants the path
+		// and the extension split into two separate parameters (path=..., ext=...).
+		// The server reconstructs <path>.<ext> internally and validates the
+		// extension against an allow-list (see CodeEditor.cc:173). Passing the
+		// full "foo/bar.csv" in path with ext="" yields:
+		//   "Invalid extension '' found!"
+		//
+		// So we split on the LAST dot here. Files without an extension cannot be
+		// read by this endpoint (and shouldn't be in our directories anyway).
+		//
+		// cb(text, errStr) -- text=null on error.
+		///////////////////////////////////////////////////////////////////////////
+		function readCodeEditorFile(filePath, cb)
+		{
+			if (!_codeEditorAppId)
+			{ cb(null, "CodeEditorSupervisor app id not resolved."); return; }
+
+			var dotIdx = filePath.lastIndexOf(".");
+			var slashIdx = filePath.lastIndexOf("/");
+			//ensure the dot is in the filename, not in a parent directory
+			if (dotIdx < 0 || dotIdx < slashIdx)
+			{ cb(null, "File '" + filePath + "' has no extension; CodeEditor cannot read it."); return; }
+
+			var pathNoExt = filePath.substring(0, dotIdx);
+			var ext       = filePath.substring(dotIdx + 1);
+			if (!ext)
+			{ cb(null, "File '" + filePath + "' has an empty extension."); return; }
+
+			//see loadFileListForSection() for why we swap _localUrnLid here
+			var savedUrn = DesktopContent._localUrnLid;
+			DesktopContent._localUrnLid = _codeEditorAppId;
+
+			DesktopContent.XMLHttpRequest(
+				"Request?RequestType=readOnlycodeEditor" +
+				"&option=getFileContent" +
+				"&path=" + encodeURIComponent(pathNoExt) +
+				"&ext="  + encodeURIComponent(ext),
+				"",
+				function(req, reqParam, errStr)
+				{
+					if (errStr || !req || !req.responseXML)
+					{ cb(null, errStr || "Empty response"); return; }
+					var err = DesktopContent.getXMLValue(req, "Error");
+					if (err) { cb(null, err); return; }
+
+					//CodeEditor returns the file body in the <text> XML element
+					//(see CodeEditor.editor.handleFileContent). Older endpoints
+					//may instead return <content> or fall back to responseText.
+					var content =
+						DesktopContent.getXMLValue(req, "text") ||
+						DesktopContent.getXMLValue(req, "content");
+					if (content == null) content = req.responseText || "";
+					cb(content, null);
+				},
+				0, 0, true
+			);
+
+			DesktopContent._localUrnLid = savedUrn;
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		// Parse a calorimeter-style CSV line into top-level cells, treating
+		// "[[...]]" nested arrays and "..." quoted strings as single cells
+		// (so commas inside them are NOT splitters). Returns an array of cells
+		// per line; each cell is the raw substring (with its surrounding
+		// brackets/quotes preserved -- ots stores BitMaps as the "[[v0,v1,...]]"
+		// string verbatim).
+		//
+		// Throws if a line has unbalanced quotes/brackets.
+		///////////////////////////////////////////////////////////////////////////
+		function splitCaloCsvLine(line)
+		{
+			var cells   = [];
+			var buf     = "";
+			var depth   = 0;     //nesting count for [ and (
+			var inQuote = false; //inside a "..." string
+			for (var i = 0; i < line.length; ++i)
+			{
+				var c = line.charAt(i);
+				if (inQuote)
+				{
+					buf += c;
+					if (c === '"') inQuote = false;
+					continue;
+				}
+				if (c === '"')      { inQuote = true;  buf += c; continue; }
+				if (c === '[' || c === '(') { depth++; buf += c; continue; }
+				if (c === ']' || c === ')')
+				{
+					if (depth === 0)
+						throw new Error("Unbalanced bracket at column " + (i + 1));
+					depth--;
+					buf += c;
+					continue;
+				}
+				if (c === ',' && depth === 0)
+				{
+					cells.push(buf.trim());
+					buf = "";
+					continue;
+				}
+				buf += c;
+			}
+			if (inQuote) throw new Error("Unterminated quoted string");
+			if (depth !== 0) throw new Error("Unbalanced brackets");
+			cells.push(buf.trim());
+			return cells;
+		}
+
+		// Returns array of { boardId: <string>, cells: [boardId, dataCells...] }
+		function parseCaloCsv(text)
+		{
+			var lines = text.split(/\r?\n/);
+			var out = [];
+			for (var i = 0; i < lines.length; ++i)
+			{
+				var raw = lines[i];
+				if (!raw || !raw.trim()) continue;       //skip blank lines
+				if (raw.trim().charAt(0) === '#') continue; //skip comment lines
+
+				var cells;
+				try { cells = splitCaloCsvLine(raw); }
+				catch (e) { throw new Error("Line " + (i + 1) + ": " + e.message); }
+
+				if (cells.length < 2)
+					throw new Error("Line " + (i + 1) + ": expected at least 2 cells, got " + cells.length);
+
+				out.push({ boardId: cells[0], cells: cells, lineNo: i + 1 });
+			}
+			return out;
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		// Discover the schema for a table -- which columns exist and what their
+		// types are -- via ConfigurationAPI.getFieldsOfRecords.
+		// cb(fields, errStr): fields = array of field objects from the API.
+		///////////////////////////////////////////////////////////////////////////
+		function getTableSchema(sec, anyRecordUID, cb)
+		{
+			//NOTE: depth must be >= 1; the server rejects depth=0 with
+			//"Depth of search must be greater than 0." (ConfigurationGUISupervisor.cc:3193).
+			//We only need the immediate child columns of the record, so depth=1.
+			ConfigurationAPI.getFieldsOfRecords(
+				sec.mongoTable, [anyRecordUID],
+				"" /*fieldList = all*/, 1 /*depth*/,
+				function(fields)
+				{
+					if (!fields || !fields.length)
+					{ cb(null, "Could not read schema (no fields returned)."); return; }
+					cb(fields, null);
+				},
+				modifiedTablesMap_[sec.id]
+			);
+		}
+
+		// Column types that the GUI never writes from the CSV (auto-managed by ots).
+		//
+		// NOTE about UID: in ots, the record's UID column is NOT returned by
+		// getFieldsOfRecords -- that endpoint returns the non-UID children of
+		// each record. The UID column's value IS the record key itself (i.e.
+		// what getSubsetRecords gives us). So we never need a "UID field"
+		// descriptor here. The CSV's first cell is matched directly against
+		// the record UID.
+		var AUTO_MANAGED_COLUMN_TYPES_ = {
+			"Comment": true, "Author": true, "Timestamp": true
+		};
+
+		// Pick the ordered "data" fields from a schema array (everything that
+		// is not auto-managed and not the UID column).
+		function classifyFields(fields)
+		{
+			var dataFields = [];
+			for (var i = 0; i < fields.length; ++i)
+			{
+				var f = fields[i];
+				var t = f.fieldColumnType;
+				//defensive: skip a UID field if for any reason the server did
+				//include one here.
+				if (t === "UID") continue;
+				if (AUTO_MANAGED_COLUMN_TYPES_[t]) continue;
+				dataFields.push(f);
+			}
+			return { dataFields: dataFields };
+		}
+
+		// Normalize a record-UID-like string (the CSV's BoardID cell, or a
+		// stored record key) to a canonical form so that "0" matches "0", and
+		// non-numeric strings (e.g. "Default") are compared trimmed.
+		function normalizeRecordKey(s)
+		{
+			if (s == null) return "";
+			var t = String(s).trim();
+			if (t === "") return "";
+			var n = Number(t);
+			if (!isNaN(n) && isFinite(n) && /^-?\d+(\.\d+)?$/.test(t))
+				return String(n | 0); //force integer interpretation
+			return t;
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		// Main writer. Builds an encoded-CSV "data=" string and POSTs it to the
+		// server's saveSpecificTable RequestType, which delegates to
+		// TableView::fillFromEncodedCSV() -- the same code path used by the
+		// Configure GUI's "Upload Data (CSV)" feature. This is a SINGLE
+		// round-trip that replaces the whole table contents and creates a new
+		// persistent version, far faster than per-cell edits.
+		//
+		// Wire format expected by the server (TableView.cc:3247-3248):
+		//   - ',' separates cells within a row (every cell including the last
+		//     is followed by a comma)
+		//   - ';' separates rows (so each row is "c0,c1,...,cN,;")
+		//   - all cells are URI-encoded (%##); the server decodes via
+		//     setURIEncodedValue
+		//   - the last 2 columns (Author + Timestamp) are auto-skipped server-
+		//     side, so the CSV need only carry data columns + UID
+		//
+		// We send rows in the same column order as the table's mockup:
+		//   <UID>, <dataField[0]>, <dataField[1]>, ..., <dataField[N-1]>, ;
+		// CommentDescription and other "user" columns we don't write will
+		// retain their pre-existing values from the source version we cloned.
+		///////////////////////////////////////////////////////////////////////////
+		// Marker we embed inside the table's tableComment so that we can later
+		// recover the source CSV filename for the "Active" display on startup.
+		// Format: "[CaloFile:<filename>]" appended at the end of the comment.
+		// Regex must match exactly that, with no nested ']' allowed in the file
+		// name (which is fine -- our filenames are plain).
+		var CALO_FILE_COMMENT_MARKER_RE_ = /\[CaloFile:([^\]]+)\]/;
+		function makeUploadComment(sec, fileName, rowCount)
+		{
+			return "CaloConfiguration upload: FSM=" + (_activeFsm || "?") +
+				", " + sec.title + ", " + rowCount + " row(s) " +
+				"[CaloFile:" + (fileName || "") + "]";
+		}
+		function extractFileNameFromComment(comment)
+		{
+			if (!comment) return null;
+			var m = CALO_FILE_COMMENT_MARKER_RE_.exec(comment);
+			return m ? m[1] : null;
+		}
+
+		function pushCsvToMongoTable(sec, csvRows, fileName, done)
 		{
 			checkTableExistsAndGetRecords(sec, function(res)
 			{
 				if (!res.exists)
 				{
-					//hard fail: table is missing or unreadable. Do NOT auto-create.
-					callback(false,
+					done(false,
 						"Table " + sec.mongoTable + " does not exist or cannot be read" +
 						(res.errorMsg ? (" (" + res.errorMsg + ")") : "") +
 						". Please create the table first.");
 					return;
 				}
-				if (!res.records || res.records.length === 0)
+				if (!res.records || !res.records.length)
 				{
-					//table exists but has no records to update.
-					callback(false,
+					done(false,
 						"Table " + sec.mongoTable + " exists but has no records " +
-						"to update. Please add a record (e.g. \"Default\") first.");
+						"to update. Please add a record per BoardID first.");
 					return;
 				}
-				doSetAndSave(sec, filePath, res.records,
-					modifiedTablesMap_[sec.id], callback);
-			});
+
+				var records = res.records;
+
+				//Build a set of existing UIDs so we can reject CSV rows that
+				//reference an unknown BoardID (no auto-add policy).
+				var existingUidSet = {};
+				for (var i = 0; i < records.length; ++i)
+					existingUidSet[normalizeRecordKey(records[i])] = true;
+
+				getTableSchema(sec, records[0], function(fields, schemaErr)
+				{
+					if (schemaErr) { done(false, schemaErr); return; }
+
+					var cls = classifyFields(fields);
+					if (!cls.dataFields.length)
+					{ done(false, "Table has no writable data columns in schema."); return; }
+
+					var expectedCells = 1 + cls.dataFields.length; //UID + data cols
+					var encodedDataParts = []; //pieces of the "data=" POST body
+
+					//validate + encode every row up-front so we don't send a
+					//half-built payload on error.
+					for (var i = 0; i < csvRows.length; ++i)
+					{
+						var row = csvRows[i];
+						if (row.cells.length < expectedCells)
+						{
+							done(false, "CSV line " + row.lineNo +
+								": expected " + expectedCells +
+								" cells (BoardID + " + cls.dataFields.length +
+								" data columns), got " + row.cells.length + ".");
+							return;
+						}
+						var key = normalizeRecordKey(row.boardId);
+						if (!(key in existingUidSet))
+						{
+							done(false, "CSV line " + row.lineNo +
+								": BoardID '" + row.boardId +
+								"' is not present in " + sec.mongoTable +
+								". Refusing to add new records.");
+							return;
+						}
+
+						//Build "<UID>,<data0>,<data1>,...,<dataN>,;"  (note the
+						//required trailing comma before the semicolon).
+						var rowParts = [];
+						for (var c = 0; c < expectedCells; ++c)
+							rowParts.push(encodeURIComponent(row.cells[c]));
+						encodedDataParts.push(rowParts.join(",") + ",;");
+					}
+
+					var dataStr = encodedDataParts.join("");
+
+					//Resolve the current persistent version of the table. The
+					//schema fetch we just did populates ConfigurationAPI._activeTables
+					//(see getFieldsOfRecords). The mongoTable path has a leading
+					//slash; the active-tables map is keyed by bare table name.
+					var bareTableName = sec.mongoTable.replace(/^\/+/, "");
+					var currentVersion =
+						(ConfigurationAPI._activeTables &&
+						 ConfigurationAPI._activeTables[bareTableName]) | 0;
+
+					var comment = makeUploadComment(sec, fileName, csvRows.length);
+
+					var reqStr =
+						"Request?RequestType=saveSpecificTable" +
+						"&dataOffset=0" +
+						"&chunkSize=" + csvRows.length +
+						"&tableName=" + encodeURIComponent(bareTableName) +
+						"&version=" + currentVersion +
+						"&lookForEquivalent=1" +
+						"&temporary=0" +
+						"&tableComment=" + encodeURIComponent(comment);
+
+					DesktopContent.XMLHttpRequest(reqStr, "data=" + dataStr,
+						function(req, reqParam, errStr)
+						{
+							if (errStr) { done(false, errStr); return; }
+							var err = DesktopContent.getXMLValue(req, "Error");
+							if (err)
+							{
+								//Special-case the server's "No rows were modified!"
+								//rejection (ConfigurationSupervisorBase.cc:198,
+								//re-thrown from TableView::fillFromEncodedCSV when
+								//every cell already matches the source version).
+								//
+								//That's not an error: the table is already
+								//configured with this exact content. Resolve it
+								//to a friendly success by re-reading the active
+								//table info (which carries both the unchanged
+								//version and the previously-recorded filename
+								//from the table comment).
+								if (/No rows were modified/i.test(err))
+								{
+									modifiedTablesMap_[sec.id] = undefined;
+									fetchActiveTableInfo(sec, function(info /*, infoErr*/)
+									{
+										done(true, {
+											savedVersion:    info ? info.version : "(unchanged)",
+											foundEquivalent: false,
+											unchanged:       true,
+											rowCount:        csvRows.length,
+											fileName:        fileName
+										});
+									});
+									return;
+								}
+								done(false, err);
+								return;
+							}
+
+							var savedVersion = DesktopContent.getXMLValue(req, "savedVersion");
+							var foundEquivalent =
+								DesktopContent.getXMLValue(req, "foundEquivalentVersion") | 0;
+
+							if (savedVersion == null || savedVersion === "")
+							{ done(false, "Server did not return a savedVersion."); return; }
+
+							//clear any in-flight modified tables for this section
+							modifiedTablesMap_[sec.id] = undefined;
+
+							done(true, {
+								savedVersion:    savedVersion,
+								foundEquivalent: !!foundEquivalent,
+								rowCount:        csvRows.length,
+								fileName:        fileName
+							});
+						},
+						0,    //reqParam
+						0,    //progressHandler
+						true  //callHandlerOnErr
+					);
+				}); //end getTableSchema
+			}); //end checkTableExistsAndGetRecords
+		} //end pushCsvToMongoTable
+
+
+		///////////////////////////////////////////////////////////////////////////
+		// "Active" line per section: fetch the currently-active version of the
+		// table and (if present) the source CSV filename from its tableComment.
+		//
+		// Implementation notes (verified against the server):
+		//   * descriptionOnly=1 returns ONLY <TableName> + <TableDescription>;
+		//     it omits <TableVersion> and <TableComment> (see
+		//     ConfigurationGUISupervisor.cc:6097). So we cannot use it here.
+		//   * With &version="", the server picks the latest persistent version
+		//     (see ConfigurationGUISupervisor.cc:665-672) -- which is exactly
+		//     the one created by saveSpecificTable on the most recent upload.
+		//   * The server emits the active version as <TableVersion> (not
+		//     "currentVersion" or "Version"), see line 6292. The comment is in
+		//     <TableComment>, see line 6370.
+		//
+		// We do request the row data here (no descriptionOnly) but only because
+		// the server gives us no lighter way to read the comment. For the four
+		// calo tables (a few hundred rows of ~80 chars each) this is still a
+		// single tens-of-KB response, much cheaper than the per-cell write loop
+		// we replaced.
+		///////////////////////////////////////////////////////////////////////////
+		function fetchActiveTableInfo(sec, cb)
+		{
+			var bareTableName = sec.mongoTable.replace(/^\/+/, "");
+			var reqStr =
+				"Request?RequestType=getSpecificTable" +
+				"&dataOffset=0" +
+				"&chunkSize=0" +
+				"&tableName=" + encodeURIComponent(bareTableName) +
+				"&version="; //empty -> server uses latest persistent version
+
+			DesktopContent.XMLHttpRequest(reqStr, "",
+				function(req, reqParam, errStr)
+				{
+					if (errStr) { cb(null, errStr); return; }
+					var err = DesktopContent.getXMLValue(req, "Error");
+					if (err)    { cb(null, err);    return; }
+
+					//Canonical element names emitted by handleGetTableXML.
+					var version  = DesktopContent.getXMLValue(req, "TableVersion") || "";
+					var comment  = DesktopContent.getXMLValue(req, "TableComment") || "";
+					var fileName = extractFileNameFromComment(comment);
+
+					if (!version)
+					{
+						cb(null, "No TableVersion in response.");
+						return;
+					}
+
+					cb({
+						version:  version,
+						fileName: fileName, //null if not configured via this GUI
+						comment:  comment   //full comment, for tooltip
+					}, null);
+				},
+				0, 0, true
+			);
 		}
 
-		function doSetAndSave(sec, filePath, recordArr, modIn, callback)
+		// Render the "Active: v9 · file foo.csv" line on a section card.
+		// info = { version, fileName, comment } | null (null clears to "(loading)")
+		// If errStr is set, render an error pill instead.
+		function updateSectionActiveLine(sec, info, errStr)
 		{
-			ConfigurationAPI.setFieldValuesForRecords(
-				sec.mongoTable, recordArr,
-				[sec.mongoField], [filePath],
-				function(mt, err)
-				{
-					if (err)                { callback(false, err);                   return; }
-					if (!mt || !mt.length)  { callback(false, "No modified tables."); return; }
-					modifiedTablesMap_[sec.id] = mt;
+			var el = document.getElementById("active-" + sec.id);
+			if (!el) return;
 
-					ConfigurationAPI.saveModifiedTables(mt,
-						function(saved)
-						{
-							if (!saved || !saved.length) { callback(false, "Save failed."); return; }
-							modifiedTablesMap_[sec.id] = undefined;
-							callback(true, "OK");
-						}
-					);
-				},
-				modIn
-			);
+			if (errStr)
+			{
+				el.className = "active-line is-error";
+				el.innerHTML = 'Active: <span class="active-version">unknown</span>' +
+					' <span class="active-detail">(' + escapeHtml(errStr) + ')</span>';
+				el.title = errStr;
+				return;
+			}
+			if (!info)
+			{
+				el.className = "active-line";
+				el.innerHTML = 'Active: <span class="active-version">(loading)</span>';
+				el.title = "Currently active table version (and file name if configured via this GUI)";
+				return;
+			}
+
+			var verStr  = info.version ? ("v" + escapeHtml(String(info.version))) : "(unknown)";
+			var fileStr = info.fileName
+				? ('<span class="active-detail">file <b>' + escapeHtml(info.fileName) + '</b></span>')
+				: ('<span class="active-detail is-unknown">file: not configured via this GUI</span>');
+
+			el.className = "active-line is-known";
+			el.innerHTML = 'Active: <span class="active-version">' + verStr + '</span>' +
+				' &middot; ' + fileStr;
+			el.title = info.comment || "";
+		}
+
+		// Refresh "Active" lines for all sections; called on init and on FSM
+		// change. Each section is fetched independently so they can render in
+		// parallel and one failure does not block the others.
+		function refreshAllActiveLines()
+		{
+			for (var i = 0; i < CONFIG_SECTIONS_.length; ++i)
+			{
+				(function(sec) {
+					updateSectionActiveLine(sec, null); //reset to "(loading)"
+					fetchActiveTableInfo(sec, function(info, err)
+					{
+						if (err) updateSectionActiveLine(sec, null, err);
+						else     updateSectionActiveLine(sec, info, null);
+					});
+				})(CONFIG_SECTIONS_[i]);
+			}
 		}
 
 

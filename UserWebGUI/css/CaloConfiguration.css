@@ -249,7 +249,7 @@ b, h3, h1 {
 
 /* ---- Status line ---- */
 .status-msg {
-	font-size:			11px;
+	font-size:			14px;
 	min-height:			14px;
 	color:				#666;
 	line-height:		1.4;
@@ -262,6 +262,55 @@ b, h3, h1 {
 .status-msg.error     { color: #c62828; font-weight: bold; }
 .status-msg.info      { color: #1565c0; }
 .status-msg.warn      { color: #e65100; }
+
+/* ---- "Active" line per section card ---- */
+.active-line {
+	font-size:			14px;
+	line-height:		1.4;
+	color:				#555;
+	padding:			2px 6px;
+	border-left:		3px solid #889;
+	background:			#f5f7fb;
+	border-radius:		3px;
+	cursor:				default;
+	min-height:			16px;
+	white-space:		nowrap;
+	overflow:			hidden;
+	text-overflow:		ellipsis;
+}
+.active-line.is-known {
+	border-left-color:	#2e7d32;
+	color:				#2c3e6b;
+	background:			#ecf7ed;
+}
+.active-line.is-error {
+	border-left-color:	#c62828;
+	color:				#c62828;
+	background:			#fdecea;
+}
+.active-line .active-version {
+	font-weight:		bold;
+	color:				rgb(12, 10, 113);
+}
+.active-line.is-known   .active-version { color: #2e7d32; }
+.active-line.is-error   .active-version { color: #c62828; }
+.active-line .active-detail {
+	color:				#555;
+}
+.active-line .active-detail.is-unknown {
+	color:				#888;
+	font-style:			italic;
+}
+
+/* File name highlight (used in .active-line, .status-msg, and configureAll
+ * pop-up): keep the navy bold accent but knock the size down a touch so it
+ * matches the surrounding 11px body text instead of looking chunky in the
+ * monospace face. */
+.active-line .active-detail b,
+.status-msg b {
+	font-size:			16px;
+	font-weight:		600;
+}
 
 /* ---- Validation dots ---- */
 .dot {
