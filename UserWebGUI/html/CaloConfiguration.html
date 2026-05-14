@@ -58,7 +58,7 @@
 				title:          "SiPM Voltages",
 				description:    "Per-board SiPM bias voltage settings.",
 				boardConfigDir: "voltages",
-				mongoTable:     "/CaloVoltageConfigTable",
+				mongoTable:     "/SubsystemCalorimeterVoltagesTable",
 				mongoField:     "ActiveConfigFile",
 			},
 			{
@@ -66,7 +66,7 @@
 				title:          "ADC Thresholds",
 				description:    "Per-channel ADC threshold values.",
 				boardConfigDir: "thresholds",
-				mongoTable:     "/CaloThresholdConfigTable",
+				mongoTable:     "/SubsystemCalorimeterThresholdsTable",
 				mongoField:     "ActiveConfigFile",
 			},
 			{
@@ -74,7 +74,7 @@
 				title:          "Mezzanine Config",
 				description:    "Mezzanine board configuration parameters.",
 				boardConfigDir: "mezzanine",
-				mongoTable:     "/CaloMezzanineConfigTable",
+				mongoTable:     "/SubsystemCalorimeterMZBCalibsTable",
 				mongoField:     "ActiveConfigFile",
 			},
 			{
@@ -82,7 +82,7 @@
 				title:          "Dead-Hot Map",
 				description:    "Channel dead/hot quality map.",
 				boardConfigDir: "channelstatus",
-				mongoTable:     "/CaloDeadHotMapTable",
+				mongoTable:     "/SubsystemCalorimeterStatusTable",
 				mongoField:     "ActiveConfigFile",
 			},
 		];
@@ -611,12 +611,7 @@
 			var sec = getSectionById(sectionId);  if (!sec) return;
 			var fileName = document.getElementById("select-" + sec.id).value;
 			if (!fileName) return;
-
-			// Build the path stored in the Mongo field. Historically this is
-			// "<boardConfigDir>/<fileName>" (relative to BOARD_CONFIG_BASE_PATH_).
-			// When the user overrides the directory, we keep the same shape by
-			// stripping BOARD_CONFIG_BASE_PATH_ if present; otherwise we store
-			// the full directory + filename.
+			
 			var curDir = getSectionDir(sec);
 			var relDir = curDir;
 			if (relDir.indexOf(BOARD_CONFIG_BASE_PATH_ + "/") === 0)
@@ -646,30 +641,94 @@
 
 
 		///////////////////////////////////////////////////////////////////////////
-		function doMongoDBUpdate(sec, filePath, callback)
+		// Verify a configuration table exists and return its records.
+		//
+		// We bypass ConfigurationAPI.getSubsetRecords because that helper
+		// swallows the server-side "Error" XML element and always calls back
+		// with an empty record array, which is indistinguishable from a real
+		// (but empty) table. We need to tell the two apart so that we can
+		// REFUSE to push to a non-existent table (no auto-create allowed).
+		//
+		// Calls cb({ exists, records, errorMsg }):
+		//   exists=true,  records=[...]            -> table exists; may be empty
+		//   exists=false, errorMsg="..."           -> table missing / unreachable
+		///////////////////////////////////////////////////////////////////////////
+		function checkTableExistsAndGetRecords(sec, cb)
 		{
-			ConfigurationAPI.getSubsetRecords(
-				sec.mongoTable, "",
-				function(records)
+			var modifiedTables = modifiedTablesMap_[sec.id];
+			var modifiedTablesListStr = "";
+			for (var i = 0; modifiedTables && i < modifiedTables.length; ++i)
+			{
+				if (i) modifiedTablesListStr += ",";
+				modifiedTablesListStr += modifiedTables[i].tableName + "," +
+					modifiedTables[i].tableVersion;
+			}
+
+			DesktopContent.XMLHttpRequest(
+				"Request?RequestType=getTreeView" +
+				"&tableGroup=" +
+				"&tableGroupKey=-1" +
+				"&hideStatusFalse=0" +
+				"&depth=1",
+				"startPath=/" + sec.mongoTable +
+				"&filterList=" +
+				"&modifiedTables=" + modifiedTablesListStr,
+				function(req, reqParam, errStr)
 				{
-					if (!records || records.length === 0)
+					if (errStr)
 					{
-						ConfigurationAPI.addSubsetRecords(
-							sec.mongoTable, ["Default"],
-							function(mt)
-							{
-								if (!mt || !mt.length)
-								{ callback(false, "Table " + sec.mongoTable + " may not exist."); return; }
-								doSetAndSave(sec, filePath, ["Default"], mt, callback);
-							},
-							modifiedTablesMap_[sec.id], true
-						);
+						cb({ exists: false, errorMsg: errStr });
 						return;
 					}
-					doSetAndSave(sec, filePath, records, modifiedTablesMap_[sec.id], callback);
+					var err = DesktopContent.getXMLValue(req, "Error");
+					if (err)
+					{
+						//classic "table does not exist" responses include
+						//"Invalid subset path" or "Failed to find table"; treat
+						//any Error from getTreeView as "table not available".
+						cb({ exists: false, errorMsg: err });
+						return;
+					}
+
+					var records = [];
+					var tree = DesktopContent.getXMLNode(req, "tree");
+					if (tree && tree.children)
+					{
+						for (var i = 0; i < tree.children.length; ++i)
+							records.push(tree.children[i].getAttribute("value"));
+					}
+					cb({ exists: true, records: records });
 				},
-				modifiedTablesMap_[sec.id]
+				0, //reqParam
+				0, //progressHandler
+				true //callHandlerOnErr
 			);
+		}
+
+		function doMongoDBUpdate(sec, filePath, callback)
+		{
+			checkTableExistsAndGetRecords(sec, function(res)
+			{
+				if (!res.exists)
+				{
+					//hard fail: table is missing or unreadable. Do NOT auto-create.
+					callback(false,
+						"Table " + sec.mongoTable + " does not exist or cannot be read" +
+						(res.errorMsg ? (" (" + res.errorMsg + ")") : "") +
+						". Please create the table first.");
+					return;
+				}
+				if (!res.records || res.records.length === 0)
+				{
+					//table exists but has no records to update.
+					callback(false,
+						"Table " + sec.mongoTable + " exists but has no records " +
+						"to update. Please add a record (e.g. \"Default\") first.");
+					return;
+				}
+				doSetAndSave(sec, filePath, res.records,
+					modifiedTablesMap_[sec.id], callback);
+			});
 		}
 
 		function doSetAndSave(sec, filePath, recordArr, modIn, callback)
