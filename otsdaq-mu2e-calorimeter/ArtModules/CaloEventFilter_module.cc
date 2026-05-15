@@ -62,15 +62,9 @@ mu2e::CaloEventFilter::CaloEventFilter(const art::EDFilter::Table<Config>& confi
 	}
 }
 
-void mu2e::CaloEventFilter::beginJob() {
-	TLOG(TLVL_DEBUG) << "CaloEventFilter beginJob: debugEvery=" << debugEvery_;
-}
+void mu2e::CaloEventFilter::beginJob() { TLOG(TLVL_INFO) << "CaloEventFilter beginJob: debugEvery=" << debugEvery_; }
 
-void mu2e::CaloEventFilter::endJob() {
-	TLOG(TLVL_DEBUG) << "CaloEventFilter summary: seen=" << eventsSeen_
-			  << ", withDTCEVT=" << eventsWithDtcevt_
-			  << ", passed=" << eventsPassed_;
-}
+void mu2e::CaloEventFilter::endJob() { TLOG(TLVL_INFO) << "CaloEventFilter summary: seen=" << eventsSeen_ << ", withDTCEVT=" << eventsWithDtcevt_ << ", passed=" << eventsPassed_; }
 
 bool mu2e::CaloEventFilter::filter(art::Event& event) {
 	++eventsSeen_;
@@ -106,10 +100,8 @@ bool mu2e::CaloEventFilter::filter(art::Event& event) {
 		++eventsPassed_;
 	}
 
-	       if(debugEvery_ != 0 && (eventsSeen_ % debugEvery_) == 0) {
-		       TLOG(TLVL_DEBUG) << "CaloEventFilter running stats: seen=" << eventsSeen_
-				       << ", withDTCEVT=" << eventsWithDtcevt_
-				       << ", passed=" << eventsPassed_;
+	if(debugEvery_ != 0 && (eventsSeen_ % debugEvery_) == 0) {
+		TLOG(TLVL_INFO) << "CaloEventFilter running stats: seen=" << eventsSeen_ << ", withDTCEVT=" << eventsWithDtcevt_ << ", passed=" << eventsPassed_;
 	}
 
 	return pass;
