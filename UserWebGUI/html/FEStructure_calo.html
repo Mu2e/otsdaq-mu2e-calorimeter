@@ -1,0 +1,918 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+	<title>MU2E FRONT END STRUCTURE</title>
+
+	<link href='/WebPath/css/fonts.css?family=Inconsolata:400' rel='stylesheet' type='text/css'>
+
+	<link rel="stylesheet" type="text/css" href="/WebPath/UserWebPath/WebGUI_calo/css/FEStructure_calo.css">
+
+	<script type="text/JavaScript" src="/WebPath/js/Globals.js"></script>
+	<script type="text/JavaScript" src="/WebPath/js/Debug.js"></script>
+	<script type="text/JavaScript" src="/WebPath/js/DesktopContent.js"></script>
+	<script type="text/JavaScript" src="/WebPath/js/js_lib/SimpleContextMenu.js"></script>
+	<script type="text/JavaScript" src="/WebPath/js/js_lib/ConfigurationAPI.js"></script>
+
+	<script>
+
+		//	Description of Configuration-Subset Functionality/Behavior:
+		//
+		//	GET parameters:
+		//		<subsetBasePath> = Records at this path are the target of this GUI, e.g. “FEInterfaceConfiguration”
+		//		<groupingFieldList> = CSV list of tree paths relative to <baseTable>, e.g. “LinkToFETypeConfiguration,FEInterfacePluginName”
+		//									- these are the fields that can be used to filter UID records by (and these will cause grouping in square-view)
+		//		<editableFieldList> = empty string or "DEFAULT" for all, or CSV list of fields to show for editing
+		//		<recordPreFilterList> = CSV list (of forced filter) of tree paths relative to <baseTable> and = value, e.g. "LinkToFETypeConfiguration=NIMPlus,FEInterfacePluginName=NIMPlusPlugin"
+		//									- this is like a pre-filter (filter on records UID that user can not control)
+		//		<recordsAlias> = Records display name, e.g. "Front-ends"
+
+
+		//global vars for GET params
+		var _subsetBasePath;
+		var _groupingFieldList;
+		var _editableFieldList;
+		var _recordPreFilterList;
+		var _recordsAlias;
+
+		var _selectedGroupFieldValues;
+		var _selectedGroupIDs;
+		var _selectedRecords;
+
+		//global vars for saving tables
+		var _modifiedTables;
+		var _rocModifiedTables;
+		var _dtcModifiedTables;
+		var _dtcRecordsAlias = "DTC";
+		var _rocRecordsAlias = "ROC";
+
+		//Board numbers for TRAD and laser
+		var TRADBoards = [31, 71, 111, 151];
+		var LaserBoard = 160;
+		var MinValidBoardId = 0;
+		var MaxValidBoardId = 160;
+
+		///////////////////////////////////////////////////////////////////////////////////////
+		///////////////////////////////////////////////////////////////////////////////////////
+
+		//functions:
+			//init()
+			//extractGETParameters()
+			//initSubsetGlobalData()
+			//checkForActiveGroupChange()
+			//saveAllStatusChanges()
+			//setDTCStatus()
+			//setROCStatus()
+			//paintApp()
+			//paintDtc()
+			//paintRoc()
+
+
+		///////////////////////////////////////////////////////////////////////////////////////
+		///////////////////////////////////////////////////////////////////////////////////////
+
+
+		//=====================================================================================
+		//init ~~
+		//	init called once body has loaded
+		function init()
+		{
+			Debug.log("FEStructure init ");
+
+			//extract get parameters
+			if(!extractGETParameters())
+			{
+				Debug.log("Illegal GET parameters. Aborting.",
+						Debug.HIGH_PRIORITY);
+				return;
+			}
+			var windowTooltip = "Welcome to the FE Structure viewer. " +
+				". Here you can view the FE objects and their status.";
+			DesktopContent.tooltip("FE Structure GUI Introduction",
+			windowTooltip);
+			DesktopContent.setWindowTooltip(windowTooltip);
+
+			//get subset record uids and
+			//	filter values for all possible grouping fields
+			initSubsetGlobalData();
+
+		} //end init()
+
+
+		//=====================================================================================
+		//extractGETParameters ~~
+		//	return false, if illegal params
+		function extractGETParameters()
+		{
+			//extract get parameters (most optional)
+			//		<subsetBasePath> 		= Records at this path are the target of this GUI, e.g. "FEInterfaceConfiguration"
+			//		<groupingFieldList> 	= CSV list of tree paths relative to <baseTable>, e.g. "LinkToFETypeConfiguration,FEInterfacePluginName"
+			//		<selectedGroupFieldValues>	= Pre-chosen selections for grouping field filters
+			//		<editableFieldList> 	= empty string or "DEFAULT" for all, or CSV list of fields to show for editing
+			//		<recordPreFilterList> 	= semicolon-separated list (of forced filter) of tree paths relative to <baseTable> and = value (CSV for multiple values), e.g. "LinkToFETypeConfiguration=NIMPlus;FEInterfacePluginName=NIMPlusPlugin,FEOtsUDPTemplateInterface"
+			//		<selectedRecords> 		= CSV list of pre-chosen record UID selections (this will override default behavior of selecting the first record,.. if only one record is chosen, that record will be loaded)
+			//		<recordsAlias> 			= PLURAL Records display name, e.g. "Front-ends"
+
+			_subsetBasePath		= DesktopContent.getParameter(0,"subsetBasePath");//"FEInterfaceConfiguration"; //DesktopContent.getParameter(0,"subsetBasePath");
+			_groupingFieldList 	= DesktopContent.getParameter(0,"groupingFieldList"); //"LinkToFETypeConfiguration,FEInterfacePluginName"; //DesktopContent.getParameter(0,"groupingFieldList");
+			_editableFieldList	= DesktopContent.getParameter(0,"editableFieldList");//"";//DesktopContent.getParameter(0,"editableFieldList");
+			_recordPreFilterList= DesktopContent.getParameter(0,"recordPreFilterList"); //"";//FEInterfacePluginName=myNewInterface";//DesktopContent.getParameter(0,"recordPreFilterList");
+			_recordsAlias		= DesktopContent.getParameter(0,"recordAlias"); //"Front-ends"; //default to records
+
+			_selectedGroupFieldValues = DesktopContent.getParameter(0,"selectedGroupFieldValues"); //"ParameterGroupID=myNewInterfaceParameters,myNewInterfaceParameters;FEInterfacePluginName=myNewInterface"";
+			_selectedGroupIDs 	= DesktopContent.getParameter(0,"selectedGroupIDs"); //"ParameterGroupID=myNewInterfaceParameters,myNewInterfaceParameters;FEInterfacePluginName=myNewInterface"";
+			_selectedRecords	= DesktopContent.getParameter(0,"selectedRecords"); //"myNewInterface,myNewInterface2";
+
+
+			if(!_subsetBasePath)
+			{
+				Debug.log("Missing required GET parameter 'subsetBasePath.'",
+						Debug.HIGH_PRIORITY);
+				return false;
+			}
+			if(!_groupingFieldList) _groupingFieldList = "";
+			if(!_editableFieldList) _editableFieldList = "";
+			if(!_recordPreFilterList) _recordPreFilterList = "";
+			if(!_recordsAlias) _recordsAlias = "Records";
+
+			if(!_selectedGroupFieldValues) _selectedGroupFieldValues = "";
+			if(!_selectedGroupIDs) _selectedGroupIDs = "";
+			if(!_selectedRecords) _selectedRecords = "";
+
+			Debug.logv({_subsetBasePath});
+			Debug.logv({_groupingFieldList});
+			Debug.logv({_editableFieldList});
+			Debug.logv({_recordPreFilterList});
+			Debug.logv({_recordsAlias});
+
+			Debug.logv({_selectedGroupFieldValues});
+			Debug.logv({_selectedGroupIDs});
+			Debug.logv({_selectedRecords});
+
+			return true;
+		}	//end extractGETParameters()
+
+
+		//=====================================================================================
+		//checkForActiveGroupChange ~~
+		function checkForActiveGroupChange(doInit)
+		{
+			//Debug.log("checkForActiveGroupChange() " + doInit);
+
+			if(_checkActiveGroupsTimer)
+			{
+				window.clearTimeout(_checkActiveGroupsTimer);
+				_checkActiveGroupsTimer = 0;
+			}
+
+			//get active table groups
+			DesktopContent.XMLHttpRequest(
+				"Request?RequestType=getActiveTableGroups",
+				"", function (req)
+				{
+
+					if(_checkActiveGroupsTimer)
+						window.clearTimeout(_checkActiveGroupsTimer);
+					_checkActiveGroupsTimer = window.setTimeout(checkForActiveGroupChange,_CHECK_ACTIVE_GROUPS_PERIOD);
+
+					if(!req) return; //ignore disconnected requests
+
+					var activeConfigGroups = [
+						DesktopContent.getXMLValue(req, "Context-ActiveGroupName"),
+						DesktopContent.getXMLValue(req, "Context-ActiveGroupKey"),
+						DesktopContent.getXMLValue(req, "Configuration-ActiveGroupName"),
+						DesktopContent.getXMLValue(req, "Configuration-ActiveGroupKey")];
+
+					//console.log("activeConfigGroups",activeConfigGroups);
+
+					//check for changes
+					if(doInit || _lastActiveGroups.length != activeConfigGroups.length)
+					{
+						if(!doInit && _lastActiveGroups.length) //treat as change
+						{
+							localHandleChange(activeConfigGroups);
+							return;
+						}
+						else //treat as initializing active groups
+							_lastActiveGroups = activeConfigGroups;
+					}
+
+					for(var i=0;i<_lastActiveGroups.length && activeConfigGroups.length;++i)
+					{
+						if(_lastActiveGroups[i] != activeConfigGroups[i])
+						{
+							localHandleChange(activeConfigGroups);
+							return;
+						}
+					}
+
+				},
+				0, 0, true,  //reqParam, progressHandler, callHandlerOnErr
+				true /*doNotShowLoadingOverlay*/
+			); //end of getActiveTableGroups handler
+
+			return;
+
+			//===========
+			function localHandleChange(activeConfigGroups)
+			{
+				if(_checkActiveGroupsTimer)
+				{
+					window.clearTimeout(_checkActiveGroupsTimer);
+					_checkActiveGroupsTimer = 0;
+				}
+
+				console.log("Change detected!... activeConfigGroups",activeConfigGroups,
+						"_lastActiveGroups",_lastActiveGroups);
+
+				DesktopContent.popUpVerification(
+						"A configuration change was detected! " +
+						"Do you want to <b>reload</b> the FE Structure Configuration GUI (any modifications in this window will be lost!)?",
+						initSubsetGlobalData /*yes-to-reload handler*/
+						,
+						0,0,// val [optional], bgColor [optional],
+						0,0,0, //			textColor [optional], borderColor [optional], getUserInput [optional],
+						0, //			dialogWidth [optional],
+						function() /*cancelFunc [optional]*/
+						{
+							Debug.log("Canceled...");
+
+							if(_checkActiveGroupsTimer)
+								window.clearTimeout(_checkActiveGroupsTimer);
+							_checkActiveGroupsTimer = window.setTimeout(checkForActiveGroupChange,_CHECK_ACTIVE_GROUPS_PERIOD);
+
+						} //end cancelFunc handler
+				);
+
+				//save for next time
+				_lastActiveGroups = activeConfigGroups;
+
+			} //end localHandleChange()
+
+		} //end checkForActiveGroupChange()
+
+
+		//=====================================================================================
+		//saveAllDtcsStatusChanges ~~
+		function saveAllDtcsStatusChanges()
+		{
+			DesktopContent.popUpVerification(
+			"Saving  DTCs configuration'. Are you sure?",
+			function () /*yes-to-save rocs tables*/
+			{
+				//proceed to save (quietly) tables, groups, aliases fot dtcs
+				if (_dtcModifiedTables != undefined)
+					ConfigurationAPI.saveModifiedTables(_dtcModifiedTables,
+					function(savedTables, savedGroups, savedAliases)
+					{
+						if(!savedTables.length)
+						{
+							Debug.log("There was an error while saving the values.",
+									Debug.HIGH_PRIORITY);
+							return;
+						}
+
+						Debug.log("The values for each field were successfully written to the targeted " +
+								_dtcRecordsAlias + " (target count = " + _dtcRecordsAlias.length + ")!",
+								Debug.INFO_PRIORITY);
+
+						_dtcModifiedTables = undefined; //clear after save
+
+					}); //end saveModifiedTables handler
+				}	,
+				0,0,// val [optional], bgColor [optional],
+				0,0,0, //			textColor [optional], borderColor [optional], getUserInput [optional],
+				0, //			dialogWidth [optional],
+				function (){}
+			);
+		} //end saveAllDtcsStatusChanges
+
+
+		//=====================================================================================
+		//saveAllRocsStatusChanges ~~
+		function saveAllRocsStatusChanges()
+		{
+			DesktopContent.popUpVerification(
+			"Saving  ROCs configuration'. Are you sure?",
+			function () /*yes-to-save rocs tables*/
+			{
+				//proceed to save (quietly) tables, groups, aliases for rocs
+				if (_rocModifiedTables != undefined)
+					ConfigurationAPI.saveModifiedTables(_rocModifiedTables,
+					function(savedTables, savedGroups, savedAliases)
+					{
+						if(!savedTables.length)
+						{
+							Debug.log("There was an error while saving the values.",
+									Debug.HIGH_PRIORITY);
+							return;
+						}
+
+						Debug.log("The values for each field were successfully written to the targeted " +
+								_rocRecordsAlias + " (target count = " + _rocRecordsAlias.length + ")!",
+								Debug.INFO_PRIORITY);
+
+						_rocModifiedTables = undefined; //clear after save
+
+					}); //end saveModifiedTables handler
+				}	,
+				0,0,// val [optional], bgColor [optional],
+				0,0,0, //			textColor [optional], borderColor [optional], getUserInput [optional],
+				0, //			dialogWidth [optional],
+				function (){}
+			);
+		} //end saveAllRocsStatusChanges
+
+
+		//=====================================================================================
+		//setDTCStatus ~~
+		function setDTCStatus(dtcid, dtcName, dtcStatus)
+		{
+			Debug.log("setDTCStatus()", dtcName, dtcStatus);
+
+			var status = dtcStatus;
+			var dtcBox = document.getElementById(dtcid);
+			if (dtcBox.style.border == "1px solid black" && dtcBox.style.opacity == 0.5)
+			{
+				dtcBox.style.border = "";
+				dtcBox.style.opacity = 1;
+				status = dtcStatus=="1"?"1":"0";
+			}
+			else
+			{
+				dtcBox.style.border = "1px solid black";
+				dtcBox.style.opacity = 0.5;
+				status = dtcStatus=="1"?"0":"1";
+			}
+
+			if (status == '1')
+				dtcBox.style.backgroundColor = 'green';
+			else
+				dtcBox.style.backgroundColor = 'red';
+
+			var fields = ["Status"];
+			var valueArr = [status];
+			var recordArr = [dtcName];
+
+			Debug.logv({recordArr});
+			Debug.logv({valueArr});
+			Debug.logv({fields});
+			Debug.logv({status});
+
+			var subsetBasePath = "/FEInterfaceTable";
+
+			ConfigurationAPI.setFieldValuesForRecords(
+					subsetBasePath,
+					recordArr, 	//recordArr
+					fields, 	//fieldArr
+					valueArr, 	//valueArr
+					function(modifiedTables)
+					{
+						Debug.log("modifiedTables length " + modifiedTables.length);
+
+						if(!modifiedTables.length)
+						{
+							Debug.log("There was an error while writing the values.",
+									Debug.HIGH_PRIORITY);
+							return;
+						}
+
+						_dtcModifiedTables = modifiedTables;
+
+						// //proceed to save (quietly) tables, groups, aliases
+						// ConfigurationAPI.saveModifiedTables(_modifiedTables,
+						// 		function(savedTables, savedGroups, savedAliases)
+						// 		{
+						// 	if(!savedTables.length)
+						// 	{
+						// 		Debug.log("There was an error while saving the values.",
+						// 				Debug.HIGH_PRIORITY);
+						// 		return;
+						// 	}
+
+						// 	Debug.log("The values for each field were successfully written to the targeted " +
+						// 			recordsAlias + " (target count = " + recordArr.length + ")!",
+						// 			Debug.INFO_PRIORITY);
+
+						// 	_modifiedTables = undefined; //clear after save
+
+						// 		}); //end saveModifiedTables handler
+
+					}, //end setFieldValuesForRecords handler
+					_dtcModifiedTables);
+
+		} //end setDTCStatus()
+
+
+		//=====================================================================================
+		//setROCStatus ~~
+		function setROCStatus(rocid, rocName, rocStatus)
+		{
+			Debug.log("setROCStatus()", rocName, rocStatus);
+			var status;
+
+			var rocBox = document.getElementById(rocid);
+			if (rocBox.style.border == "1px solid black" && rocBox.style.opacity == 0.5)
+			{
+				rocBox.style.border = "";
+				rocBox.style.opacity = 1;
+				status = rocStatus=="1"?"1":"0";
+			}
+			else
+			{
+				rocBox.style.border = "1px solid black";
+				rocBox.style.opacity = 0.5;
+				status = rocStatus=="1"?"0":"1";
+			}
+
+			if (status == '1')
+				rocBox.style.backgroundColor = 'green';
+			else
+				rocBox.style.backgroundColor = 'red';
+
+			var fields = ["Status"];
+			var valueArr = [status];
+			var recordArr = [rocName];
+
+			Debug.logv({recordArr});
+			Debug.logv({valueArr});
+			Debug.logv({fields});
+
+			var subsetBasePath = "/ROCInterfaceTable";
+
+			ConfigurationAPI.setFieldValuesForRecords(
+					subsetBasePath,
+					recordArr, 	//recordArr
+					fields, 	//fieldArr
+					valueArr, 	//valueArr
+					function(modifiedTables)
+					{
+						Debug.log("modifiedTables length " + modifiedTables.length);
+
+						if(!modifiedTables.length)
+						{
+							Debug.log("There was an error while writing the values.",
+									Debug.HIGH_PRIORITY);
+							return;
+						}
+
+						_rocModifiedTables = modifiedTables;
+
+						// //proceed to save (quietly) tables, groups, aliases
+						// ConfigurationAPI.saveModifiedTables(_modifiedTables,
+						// 		function(savedTables, savedGroups, savedAliases)
+						// 		{
+						// 	if(!savedTables.length)
+						// 	{
+						// 		Debug.log("There was an error while saving the values.",
+						// 				Debug.HIGH_PRIORITY);
+						// 		return;
+						// 	}
+
+						// 	Debug.log("The values for each field were successfully written to the targeted " +
+						// 			recordsAlias + " (target count = " + recordArr.length + ")!",
+						// 			Debug.INFO_PRIORITY);
+
+						// 	_modifiedTables = undefined; //clear after save
+
+						// 		}); //end saveModifiedTables handler
+
+					}, //end setFieldValuesForRecords handler
+					_rocModifiedTables);
+
+		} //end setROCStatus()
+
+
+		function toggleDiskPhi (disk, phi, targetStatus){
+			Debug.log("toggleDiskPhi()", disk, phi, targetStatus);
+
+			var excludeBoards = TRADBoards.concat(LaserBoard); //Make sure to exclude TRAD and laser boards
+
+			var allRocNames = [];
+			for(var i = 0; i < FEstructure_.apps.length; ++i)
+				for(var j = 0; j < FEstructure_.apps[i].dtcs.length; ++j)
+					for(var k = 0; k < FEstructure_.apps[i].dtcs[j].rocs.length; ++k)
+						allRocNames.push(FEstructure_.apps[i].dtcs[j].rocs[k].name);
+
+			ConfigurationAPI.getFieldValuesForRecords(
+				"/ROCInterfaceTable",
+				allRocNames,
+				["ROCTypeLinkUID"],
+				function(fieldValues)
+				{
+					if(!fieldValues.length)
+					{
+						Debug.log("No boardID values returned from ROCInterfaceTable.",
+								Debug.HIGH_PRIORITY);
+						return;
+					}
+
+					// Collect ROC names whose ROCTypeLinkUID falls in the disk's board ID range
+					var diskROCs = [];
+					for(var i = 0; i < fieldValues.length; ++i)
+					{
+						var boardId = parseInt(fieldValues[i].fieldValue);
+						if (boardId < MinValidBoardId || boardId > MaxValidBoardId) continue;
+
+						var thisDisk = Math.floor(boardId / 80);
+						var thisPhi = Math.floor((boardId % 80) / 40);
+
+						if (excludeBoards.indexOf(boardId) < 0 &&
+							(disk < 0 || thisDisk == disk) &&
+							(phi < 0 || thisPhi == phi)){
+							diskROCs.push(fieldValues[i].fieldUID);
+						}
+					}
+
+					if(!diskROCs.length)
+					{
+						Debug.log("No ROCs found for disk " + disk + ".",
+							Debug.HIGH_PRIORITY);
+						return;
+					}
+					Debug.log("Found " + diskROCs.length + " ROC(s) for disk " + disk);
+
+					var rocButtons = document.querySelectorAll('.rocBox');
+					for(var b = 0; b < rocButtons.length; ++b){
+						if(diskROCs.indexOf(rocButtons[b].innerText) >= 0)
+						{
+							rocButtons[b].style.backgroundColor = targetStatus == 1 ? 'green' : 'red';
+							rocButtons[b].style.border = "1px solid black";
+							rocButtons[b].style.opacity = 0.5;
+						}
+					}
+					var targetStatusStr = targetStatus == 1 ? "1" : "0";
+					ConfigurationAPI.setFieldValuesForRecords(
+						"/ROCInterfaceTable",
+						diskROCs,
+						["Status"],
+						[targetStatusStr],
+						function(modifiedTables)
+						{
+							if(!modifiedTables.length)
+							{
+								Debug.log("Error writing status for disk " + disk + " ROCs.",
+										Debug.HIGH_PRIORITY);
+								return;
+							}
+							_rocModifiedTables = modifiedTables;
+							Debug.log("Disk " + disk + " ROCs (" + diskROCs.length +
+									") set to " + (targetStatus == 1 ? "ON" : "OFF") + ".");
+						},
+						_rocModifiedTables
+					);
+				},
+				_rocModifiedTables
+			);
+
+		} //end toggleDiskPhi()
+
+		function toggleLaser (targetStatus){
+			Debug.log("toggleLaser()", targetStatus);
+
+			var allRocNames = [];
+			for(var i = 0; i < FEstructure_.apps.length; ++i)
+				for(var j = 0; j < FEstructure_.apps[i].dtcs.length; ++j)
+					for(var k = 0; k < FEstructure_.apps[i].dtcs[j].rocs.length; ++k)
+						allRocNames.push(FEstructure_.apps[i].dtcs[j].rocs[k].name);
+
+			ConfigurationAPI.getFieldValuesForRecords(
+				"/ROCInterfaceTable",
+				allRocNames,
+				["ROCTypeLinkUID"],
+				function(fieldValues)
+				{
+					if(!fieldValues.length)
+					{
+						Debug.log("No boardID values returned from ROCInterfaceTable.",
+								Debug.HIGH_PRIORITY);
+						return;
+					}
+
+					// Collect ROC names whose ROCTypeLinkUID falls in the disk's board ID range
+					var laserROCs = [];
+					for(var i = 0; i < fieldValues.length; ++i)
+					{
+						var boardId = parseInt(fieldValues[i].fieldValue);
+						if(boardId == LaserBoard){
+							laserROCs.push(fieldValues[i].fieldUID);
+							break;
+						}
+					}
+
+					if(!laserROCs.length)
+					{
+						Debug.log("No Laser ROCs found!",
+							Debug.HIGH_PRIORITY);
+						return;
+					}
+
+					var rocButtons = document.querySelectorAll('.rocBox');
+					for(var b = 0; b < rocButtons.length; ++b){
+						if(laserROCs.indexOf(rocButtons[b].innerText) >= 0)
+						{
+							rocButtons[b].style.backgroundColor = targetStatus == 1 ? 'green' : 'red';
+							rocButtons[b].style.border = "1px solid black";
+							rocButtons[b].style.opacity = 0.5;
+						}
+					}
+					var targetStatusStr = targetStatus == 1 ? "1" : "0";
+					ConfigurationAPI.setFieldValuesForRecords(
+						"/ROCInterfaceTable",
+						laserROCs,
+						["Status"],
+						[targetStatusStr],
+						function(modifiedTables)
+						{
+							if(!modifiedTables.length)
+							{
+								Debug.log("Error writing status for laser ROCs.",
+										Debug.HIGH_PRIORITY);
+								return;
+							}
+							_rocModifiedTables = modifiedTables;
+							Debug.log("Laser ROC set to " + (targetStatus == 1 ? "ON" : "OFF") + ".");
+						},
+						_rocModifiedTables
+					);
+				},
+				_rocModifiedTables
+			);
+
+		} //end toggleTRADs()
+
+		function toggleTRADs (targetStatus){
+			Debug.log("toggleTRADs()", targetStatus);
+
+			var allRocNames = [];
+			for(var i = 0; i < FEstructure_.apps.length; ++i)
+				for(var j = 0; j < FEstructure_.apps[i].dtcs.length; ++j)
+					for(var k = 0; k < FEstructure_.apps[i].dtcs[j].rocs.length; ++k)
+						allRocNames.push(FEstructure_.apps[i].dtcs[j].rocs[k].name);
+
+			ConfigurationAPI.getFieldValuesForRecords(
+				"/ROCInterfaceTable",
+				allRocNames,
+				["ROCTypeLinkUID"],
+				function(fieldValues)
+				{
+					if(!fieldValues.length)
+					{
+						Debug.log("No boardID values returned from ROCInterfaceTable.",
+								Debug.HIGH_PRIORITY);
+						return;
+					}
+
+					// Collect ROC names whose ROCTypeLinkUID falls in the disk's board ID range
+					var TRADROCs = [];
+					for(var i = 0; i < fieldValues.length; ++i)
+					{
+						var boardId = parseInt(fieldValues[i].fieldValue);
+
+						if(TRADBoards.indexOf(boardId) >= 0){
+							TRADROCs.push(fieldValues[i].fieldUID);
+						}
+					}
+
+					if(!TRADROCs.length)
+					{
+						Debug.log("No ROCs found for disk " + diskNumber + ".",
+							Debug.HIGH_PRIORITY);
+						return;
+					}
+					Debug.log("Found " + TRADROCs.length + " ROC(s)");
+
+					var rocButtons = document.querySelectorAll('.rocBox');
+					for(var b = 0; b < rocButtons.length; ++b){
+						if(TRADROCs.indexOf(rocButtons[b].innerText) >= 0)
+						{
+							rocButtons[b].style.backgroundColor = targetStatus == 1 ? 'green' : 'red';
+							rocButtons[b].style.border = "1px solid black";
+							rocButtons[b].style.opacity = 0.5;
+						}
+					}
+					var targetStatusStr = targetStatus == 1 ? "1" : "0";
+					ConfigurationAPI.setFieldValuesForRecords(
+						"/ROCInterfaceTable",
+						TRADROCs,
+						["Status"],
+						[targetStatusStr],
+						function(modifiedTables)
+						{
+							if(!modifiedTables.length)
+							{
+								Debug.log("Error writing status for TRAD ROCs.",
+										Debug.HIGH_PRIORITY);
+								return;
+							}
+							_rocModifiedTables = modifiedTables;
+							Debug.log("TRAD ROCs (" + TRADROCs.length +
+									") set to " + (targetStatus == 1 ? "ON" : "OFF") + ".");
+						},
+						_rocModifiedTables
+					);
+				},
+				_rocModifiedTables
+			);
+
+		} //end toggleTRADs()
+
+		//=====================================================================================
+		//paintApp ~~
+		function paintApp (appLength, appName, appStatus)
+		{
+			var el = document.getElementById("mainDiv");
+			if (el.childNodes.length == appLength) el.innerHTML = "";
+			var appDiv =  document.createElement('div');
+			appDiv.classList.add("appBlockContainer");
+			appDiv.id = appName;
+			appDiv.innerText = appName;
+
+			var appBox = document.createElement('button');
+			appBox.classList.add("appBox");
+			appBox.id = appName + '-box';
+			appBox.innerText = appName;
+
+			if (appStatus == '1')
+				appDiv.style.backgroundColor = 'white';
+			else
+				appDiv.style.backgroundColor = 'gray';
+
+			//appDiv.appendChild(appBox);
+			el.appendChild(appDiv);
+
+		}	//end paintApp()
+
+
+		//=====================================================================================
+		//paintDtc ~~ return dtc container id
+		function paintDtc (appid, dtcName, dtcStatus)
+		{
+			var app = document.getElementById(appid);
+			var dtcDiv = document.createElement('div');
+			dtcDiv.classList.add("dtcBlockContainer");
+			dtcDiv.id = appid + '-' + dtcName;
+
+			var dtcBox = document.createElement('button');
+			dtcBox.classList.add("dtcBox");
+			dtcBox.id = appid + '-' + dtcName + '-box';
+			dtcBox.innerText = dtcName;
+			dtcBox.onclick = function() { setDTCStatus(dtcBox.id, dtcName, dtcStatus); };
+
+			if (dtcStatus == '1')
+				dtcBox.style.backgroundColor = 'green';
+			else
+				dtcBox.style.backgroundColor = 'red';
+
+			dtcDiv.appendChild(dtcBox);
+
+			var fiber = document.createElement('img');
+			fiber.classList.add("fiber");
+			fiber.src = "/WebPath/images/fiber.png";
+			fiber.alt = "fibers";
+			fiber.title = "fibers";
+			dtcDiv.appendChild(fiber);
+
+			app.appendChild(dtcDiv);
+
+			return dtcDiv.id;
+		}	//end paintDtc()
+
+
+		//=====================================================================================
+		//paintRoc ~~
+		function paintRoc (dtcid, rocName, rocStatus)
+		{
+			var dtcDiv = document.getElementById(dtcid);
+			var rocBox = document.createElement('button');
+			rocBox.classList.add("rocBox");
+			rocBox.id = dtcid + '-' + rocName + '-box';
+			rocBox.innerText = rocName;
+			rocBox.onclick = function() {setROCStatus(rocBox.id, rocName, rocStatus); };
+
+			if (rocStatus == '1')
+				rocBox.style.backgroundColor = 'green';
+			else
+				rocBox.style.backgroundColor = 'red';
+
+			dtcDiv.appendChild(rocBox);
+		}	//end paintRoc()
+
+
+		var FEstructure_;
+		var _checkActiveGroupsTimer = 0;
+		var _CHECK_ACTIVE_GROUPS_PERIOD = 5000; //ms
+		var _lastActiveGroups = [];
+		//=====================================================================================
+		//initSubsetGlobalData ~~
+		function initSubsetGlobalData()
+		{
+			if(_checkActiveGroupsTimer)
+			{
+				window.clearTimeout(_checkActiveGroupsTimer);
+				_checkActiveGroupsTimer = 0;
+			}
+
+			ConfigurationAPI.getStructureStatus("DTCInterfaceTable",
+				function(json)
+				{
+					if(!json)
+					{
+						Debug.err("No hardware components found in request to server!");
+						return;
+					}
+					Debug.logv({json});
+					FEstructure_ = JSON.parse(json);
+					Debug.logv({FEstructure_});
+
+					for(var i=0; i<FEstructure_.apps.length; ++i)
+					{
+						var app = FEstructure_.apps[i];
+						var appName = app.name;
+						var appStatus = app.enabled;
+						paintApp(FEstructure_.apps.length, appName, appStatus);
+
+						for(var j=0; j<app.dtcs.length; ++j)
+						{
+							var dtc = app.dtcs[j];
+							var dtcName = dtc.name;
+							var dtcStatus = dtc.enabled;
+							var dtcid = paintDtc(appName, dtcName, dtcStatus);
+
+							for(var k=0; k<dtc.rocs.length; ++k)
+							{
+								var rocName = dtc.rocs[k].name;
+								var rocStatus = dtc.rocs[k].enabled;
+								paintRoc(dtcid, rocName, rocStatus);
+							}
+						}
+					}
+
+					checkForActiveGroupChange(true /*init*/); //force group update
+
+					//return configuration change check
+					if(_checkActiveGroupsTimer)
+						window.clearTimeout(_checkActiveGroupsTimer);
+					_checkActiveGroupsTimer = window.setTimeout(checkForActiveGroupChange,_CHECK_ACTIVE_GROUPS_PERIOD);
+
+				}, //end DTC getSubsetRecords() handler
+				_modifiedTables);
+		}
+
+		</script>
+</head>
+
+<body onload='//init() called by DesktopContent.js'>
+
+	<!-- body content populated by javascript paint(), etc. -->
+
+	<div class="legend">
+		<div style="color: black;">Status color legend:</div>
+		<div style="background-color: green">ON</div>
+		<div style="background-color: red">OFF</div>
+		<div style="background-color: gray">PARENT APP OFF</div>
+		<div style="background-color: darkslategray">NOT RECOGNIZED</div>
+	</div>
+	<button class='setStatus' onclick="saveAllDtcsStatusChanges()">Write Status For Selected DTCs</button>
+	<button class='setStatus' onclick="saveAllRocsStatusChanges()">Write Status For Selected ROCs</button>
+	<div style="display:flex; justify-content:flex-begin; gap:4px; padding:4px;">
+		<div class="toggleOn" onclick="toggleDiskPhi(0,-1,1)" style="display:flex; flex-direction:column; align-items:center; gap:4px; padding:8px; cursor:pointer;">
+			<span>Enable Disk 0</span>
+			<div style="display:flex; gap:4px;">
+				<button class='toggleOn' onclick="event.stopPropagation(); toggleDiskPhi(0,0,1)">Phi 0</button>
+				<button class='toggleOn' onclick="event.stopPropagation(); toggleDiskPhi(0,1,1)">Phi 1</button>
+			</div>
+		</div>
+		<div class="toggleOn" onclick="toggleDiskPhi(1,-1,1)" style="display:flex; flex-direction:column; align-items:center; gap:4px; padding:8px; cursor:pointer;">
+			<span>Enable Disk 1</span>
+			<div style="display:flex; gap:4px;">
+				<button class='toggleOn' onclick="event.stopPropagation(); toggleDiskPhi(1,0,1)">Phi 0</button>
+				<button class='toggleOn' onclick="event.stopPropagation(); toggleDiskPhi(1,1,1)">Phi 1</button>
+			</div>
+		</div>
+		<div class="toggleOff" onclick="toggleDiskPhi(0,-1,0)" style="display:flex; flex-direction:column; align-items:center; gap:4px; padding:8px; cursor:pointer;">
+			<span>Disable Disk 0</span>
+			<div style="display:flex; gap:4px;">
+				<button class='toggleOff' onclick="event.stopPropagation(); toggleDiskPhi(0,0,0)">Phi 0</button>
+				<button class='toggleOff' onclick="event.stopPropagation(); toggleDiskPhi(0,1,0)">Phi 1</button>
+			</div>
+		</div>
+		<div class="toggleOff" onclick="toggleDiskPhi(1,-1,0)" style="display:flex; flex-direction:column; align-items:center; gap:4px; padding:8px; cursor:pointer;">
+			<span>Disable Disk 1</span>
+			<div style="display:flex; gap:4px;">
+				<button class='toggleOff' onclick="event.stopPropagation(); toggleDiskPhi(1,0,0)">Phi 0</button>
+				<button class='toggleOff' onclick="event.stopPropagation(); toggleDiskPhi(1,1,0)">Phi 1</button>
+			</div>
+		</div>
+		<div style="display:flex; flex-direction:column; gap:4px;">
+			<button class='toggleOn' onclick="toggleLaser(1)">Enable Laser</button>
+			<button class='toggleOff' onclick="toggleLaser(0)">Disable Laser</button>
+		</div>
+		<div style="display:flex; flex-direction:column; gap:4px;">
+			<button class='toggleOn' onclick="toggleTRADs(1)">Enable TRADs</button>
+			<button class='toggleOff' onclick="toggleTRADs(0)">Disable TRADs</button>
+		</div>
+	</div>
+	<div class='mainBlockContainer' id='mainDiv'></div>
+</body>
+
+</html>
