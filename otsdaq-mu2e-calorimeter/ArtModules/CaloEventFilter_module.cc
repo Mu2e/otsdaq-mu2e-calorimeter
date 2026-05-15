@@ -33,7 +33,7 @@ class CaloEventFilter : public art::EDFilter {
 	// clang-format off
     struct Config {
        fhicl::Atom<std::string> subsystem_override {fhicl::Name("subsystemOverride" ) , fhicl::Comment("Override calo subsystem [\"calo\", \"tracker\"]"), "calo"};
-	   fhicl::Atom<unsigned>    debug_every       {fhicl::Name("debugEvery"), fhicl::Comment("Print running stats every N events (0 disables periodic prints)"), 1000};
+	   fhicl::Atom<unsigned>    debug_every       {fhicl::Name("debugEvery"), fhicl::Comment("Print running stats every N events (0 disables periodic prints)"), 1000000};
     };
 	// clang-format on
 
