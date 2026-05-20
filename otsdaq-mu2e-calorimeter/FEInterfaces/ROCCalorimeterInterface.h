@@ -3,6 +3,8 @@
 
 #include "otsdaq-mu2e/FEInterfaces/ROCPolarFireCoreInterface.h"
 
+#include <array>
+
 #define MZ_ADDRESS     262
 #define MZ_BUFFER_SIZE 46
 
@@ -80,9 +82,9 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 		// clang-format on
 	};
 
-	bool     hasBoardIdFromSerial() const { return haveBoardIdFromSerial_; }
-	uint16_t getCachedSerialReg147() const { return cachedSerialReg147_; }
-	uint16_t getCachedBoardIdFromDB() const { return cachedBoardIdFromDB_; }
+	bool     hasBoardIdFromSerial() const { return boardConfig_.identityValid; }
+	uint16_t getCachedSerialReg147() const { return boardConfig_.serial; }
+	uint16_t getCachedBoardIdFromDB() const { return boardConfig_.boardID; }
 
 	int GetTemperature(int idchannel);
 	//	temperature--
@@ -145,6 +147,12 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 	void SetADCsThresholds(__ARGS__);
 	void SetADCsThresholds(int offset);
 
+	void ReadVoltagesFromDB(__ARGS__);
+	void ReadChannelStatusFromDB(__ARGS__);
+	void PrintROCConfiguration(__ARGS__);
+	//void ReadVoltagesFromDB();
+
+
 	void ReadROCErrorCounter(__ARGS__);
 	void ReadMBRegisters(__ARGS__);
 	void GetMZBStatus(__ARGS__);
@@ -155,16 +163,46 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 	virtual void GetStatus(__ARGS__) override;
 
   private:
-	bool     haveBoardIdFromSerial_ = false;
-	uint16_t cachedSerialReg147_    = 0;
-	uint16_t cachedBoardIdFromDB_   = 9999;
+	static constexpr int MAX_BOARD_ID     = 160;   // Maximum valid board ID for calorimeter DIRACs, see also CaloConst::_nDIRAC from Offline/DataProducts/inc/CaloConst.hh
+	static constexpr int INVALID_BOARDID = 9999;
+
+	struct CaloChannelConfig
+	{
+		float       voltage       = 0.0f;
+		int         threshold     = 2300;
+		std::string sensorType    = "UNKNOWN";
+        std::string channelStatus = "undefined";
+
+		bool isPinDiode() const { return sensorType == "PIN-DIODE"; }
+	};
+
+	struct CaloBoardConfig
+	{
+		bool identityValid    = false;
+		bool voltagesLoaded   = false;
+		bool thresholdsLoaded = false;
+		bool statusLoaded     = false;
+
+		uint16_t serial  = 0;
+		uint16_t boardID = INVALID_BOARDID;
+
+		std::string voltageRecordUID;
+		std::string thresholdRecordUID;
+		std::string statusRecordUID;
+
+		std::array<CaloChannelConfig, 20> channels;
+	};
+
 	void     updateBoardIdFromSerial_();
 
-	static constexpr int                         MAX_BOARD_ID = 160;  // Maximum valid board ID for calorimeter DIRACs, see also CaloConst::_nDIRAC from Offline/DataProducts/inc/CaloConst.hh
-	static const std::set<DTCLib::roc_address_t> SPECIAL_BLOCK_READ_ADDRS_;
-	static constexpr int                         INVALID_BOARDID = 9999;
+	bool loadVoltagesFromDB_(std::ostream& os);
+	bool loadThresholdsFromDB_(std::ostream& os);
+	bool loadStatusFromDB_(std::ostream& os);
+	bool isPinDiodeChannel_(int ch) const;
 
-	std::set<int> _pin_diode_list;
+	CaloBoardConfig boardConfig_;
+
+	static const std::set<DTCLib::roc_address_t> SPECIAL_BLOCK_READ_ADDRS_;
 };
 
 }  // namespace ots
