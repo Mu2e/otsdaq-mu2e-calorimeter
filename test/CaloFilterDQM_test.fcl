@@ -1,0 +1,42 @@
+#include "Offline/fcl/minimalMessageService.fcl"
+#include "Offline/fcl/standardServices.fcl"
+
+daq.metrics : {
+  graphite: {
+    metricPluginType : graphite
+    level            : 2
+    host             : "mu2e-dcs-01.fnal.gov"
+    port             : 2003
+    namespace        : "test.pgirotti."
+  }
+}
+
+process_name: calofilter
+
+source : {
+  module_type : RootInput
+  fileNames   : @nil
+  maxEvents   : -1
+}
+
+services : {
+  TimeTracker: {}
+}
+
+physics: {
+
+  filters: {
+    caloFilterDQM : {
+      module_type         : CaloFilterDQM
+      verbosity           : 1
+      metricsLevel        : 3
+    }
+  }
+
+  t1 : [ caloFilterDQM ]
+
+  trigger_paths  : [t1]
+  end_paths      : []
+}
+
+services.scheduler.wantSummary: true
