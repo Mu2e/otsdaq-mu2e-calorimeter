@@ -130,6 +130,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 	void EnableAndPowerSiPMs(__ARGS__);
 	void EnableAndPowerSiPMs(bool hvonoff, float vbias);
 	void SetBoardVoltages(__ARGS__);
+	void SetBoardVoltages(bool hvonoff);
 	void SetBoardVoltages(bool hvonoff, int boardID, std::string conf);
 	void SetupForNoiseTaking(__ARGS__);
 	void SetupForNoiseTaking(unsigned int numberOfsamples);
@@ -171,7 +172,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 		float       voltage       = 0.0f;
 		int         threshold     = 2300;
 		std::string sensorType    = "UNKNOWN";
-        std::string channelStatus = "undefined";
+		std::string channelStatus = "undefined";
 
 		bool isPinDiode() const { return sensorType == "PIN-DIODE"; }
 	};
@@ -182,6 +183,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 		bool voltagesLoaded   = false;
 		bool thresholdsLoaded = false;
 		bool statusLoaded     = false;
+		bool mzbCalibrationLoaded = false;
 
 		uint16_t serial  = 0;
 		uint16_t boardID = INVALID_BOARDID;
@@ -189,6 +191,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 		std::string voltageRecordUID;
 		std::string thresholdRecordUID;
 		std::string statusRecordUID;
+		std::string mzbCalibrationRecordUID;
 
 		std::array<CaloChannelConfig, 20> channels;
 	};

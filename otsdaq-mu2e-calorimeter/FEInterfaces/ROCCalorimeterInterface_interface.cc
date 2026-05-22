@@ -921,9 +921,11 @@ void ROCCalorimeterInterface::updateBoardIdFromSerial_() {
 	boardConfig_.voltagesLoaded   = false;
 	boardConfig_.thresholdsLoaded = false;
 	boardConfig_.statusLoaded     = false;
+	boardConfig_.mzbCalibrationLoaded = false;
 	boardConfig_.voltageRecordUID.clear();
 	boardConfig_.thresholdRecordUID.clear();
 	boardConfig_.statusRecordUID.clear();
+	boardConfig_.mzbCalibrationRecordUID.clear();
 
 	if(boardConfig_.identityValid)
 		__FE_COUT__ << "Mapped serial 0x" << std::hex << boardConfig_.serial << std::dec << " -> BoardId=" << boardConfig_.boardID << __E__;
@@ -1015,8 +1017,25 @@ void ROCCalorimeterInterface::configure(void) try {
 		__COUT_INFO__ << "Configuration failed! :(" << __E__;
 
 	updateBoardIdFromSerial_();
+
+	std::stringstream dbLoadStatus;
+	if(!loadVoltagesFromDB_(dbLoadStatus)) {
+		__FE_SS__ << dbLoadStatus.str() << __E__;
+		__FE_SS_THROW__;
+	}
+	if(!loadThresholdsFromDB_(dbLoadStatus)) {
+		__FE_SS__ << dbLoadStatus.str() << __E__;
+		__FE_SS_THROW__;
+	}
+	if(!loadStatusFromDB_(dbLoadStatus)) {
+		__FE_SS__ << dbLoadStatus.str() << __E__;
+		__FE_SS_THROW__;
+	}
+	__COUT_INFO__ << dbLoadStatus.str() << __E__;
+
+	CalibrateMZB();
 	SetADCsThresholds(50);
-	// CalibrateMZB();
+	SetBoardVoltages(true);
 
 	writeRegister(ROC_ADDRESS_MASK_A, 1023);
 	writeRegister(ROC_ADDRESS_MASK_B, 1023);
@@ -1408,6 +1427,9 @@ void ROCCalorimeterInterface::CalibrateMZB() {
 		SendMzCommand(command, paramVect);
 	}
 
+	boardConfig_.mzbCalibrationLoaded = true;
+	boardConfig_.mzbCalibrationRecordUID = recUID;
+
 	__COUT_INFO__ << "MZB calibration done from SubsystemCalorimeterMZBCalibsTable (UID="
 	              << recUID << ") for boardID=" << boardID << __E__;
 
@@ -1437,21 +1459,14 @@ void ROCCalorimeterInterface::SetADCsThresholds(int offset) {
 		return;
 	}
 
-	std::stringstream os;
-	if(!loadThresholdsFromDB_(os)) {
-		__COUT_ERR__ << os.str() << __E__;
-		__COUT_ERR__ << "Setting default thresholds=2300 for 20 channels." << __E__;
-		for(int ichan = 0; ichan < 20; ++ichan)
-			writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ichan, 2300);
+	if(!boardConfig_.thresholdsLoaded) {
+		__COUT_ERR__ << "Threshold cache not loaded. Run configure first." << __E__;
 		return;
 	}
 
 	if(!boardConfig_.voltagesLoaded) {
-		std::stringstream voltageOs;
-		if(!loadVoltagesFromDB_(voltageOs))
-			__COUT_WARN__ << "Could not load voltage/sensor-type cache while setting thresholds. "
-			              << "Offset will be applied to all channels. Details:\n"
-			              << voltageOs.str() << __E__;
+		__COUT_ERR__ << "Voltage/sensor-type cache not loaded. Run configure first." << __E__;
+		return;
 	}
 
 	for(int ichan = 0; ichan < 20; ++ichan) {
@@ -1470,7 +1485,7 @@ void ROCCalorimeterInterface::SetADCsThresholds(int offset) {
 		writeRegister(ROC_ADDRESS_BASE_THRESHOLD + ichan, thr2set);
 	}
 
-	__COUT_INFO__ << "Thresholds set done from SubsystemCalorimeterThresholdsTable (UID="
+	__COUT_INFO__ << "Thresholds set done from cached SubsystemCalorimeterThresholdsTable (UID="
 	              << boardConfig_.thresholdRecordUID << ") for boardID=" << boardID << __E__;
 }
 
@@ -1747,14 +1762,11 @@ bool ROCCalorimeterInterface::loadStatusFromDB_(std::ostream& os) {
 	boardConfig_.statusRecordUID = recUID;
 
 	for(int ichan = 0; ichan < 20; ++ichan) {
-		
-		
 		std::string s = stsBmp.get(0, ichan);
-        if(s.empty())
-	        s = "undefined";
+		if(s.empty())
+			s = "undefined";
 
-        boardConfig_.channels[ichan].channelStatus = s;
-
+		boardConfig_.channels[ichan].channelStatus = s;
 	}
 
 	boardConfig_.statusLoaded = true;
@@ -1819,9 +1831,11 @@ void ROCCalorimeterInterface::PrintROCConfiguration(__ARGS__) {
 	os << "voltagesLoaded     = " << (boardConfig_.voltagesLoaded ? "true" : "false") << "\n";
 	os << "thresholdsLoaded   = " << (boardConfig_.thresholdsLoaded ? "true" : "false") << "\n";
 	os << "statusLoaded       = " << (boardConfig_.statusLoaded ? "true" : "false") << "\n";
+	os << "mzbCalibrationLoaded = " << (boardConfig_.mzbCalibrationLoaded ? "true" : "false") << "\n";
 	os << "voltageRecordUID   = " << boardConfig_.voltageRecordUID << "\n";
 	os << "thresholdRecordUID = " << boardConfig_.thresholdRecordUID << "\n";
 	os << "statusRecordUID    = " << boardConfig_.statusRecordUID << "\n";
+	os << "mzbCalibrationRecordUID = " << boardConfig_.mzbCalibrationRecordUID << "\n";
 
 	os << "\n";
 	os << "Ch  Voltage     Threshold   Status  SensorType\n";
@@ -1840,6 +1854,10 @@ void ROCCalorimeterInterface::PrintROCConfiguration(__ARGS__) {
 }
 
 //==================================================================================================
+
+void ROCCalorimeterInterface::SetBoardVoltages(bool hvonoff) {
+	SetBoardVoltages(hvonoff, static_cast<int>(boardConfig_.boardID), "DB");
+}
 
 void ROCCalorimeterInterface::SetBoardVoltages(bool hvonoff, int boardID, std::string conf) {
 	std::string command = "HVONOFF";
@@ -1895,26 +1913,32 @@ void ROCCalorimeterInterface::SetBoardVoltages(bool hvonoff, int boardID, std::s
 		}
 
 		if(!boardConfig_.voltagesLoaded) {
-			std::stringstream os;
-			if(!loadVoltagesFromDB_(os)) {
-				__FE_SS__ << "Could not load board voltages from DB:\n" << os.str() << __E__;
-				__FE_SS_THROW__;
-			}
+			__FE_SS__ << "Voltage cache not loaded. Run configure first." << __E__;
+			__FE_SS_THROW__;
+		}
+
+		if(!boardConfig_.statusLoaded) {
+			__FE_SS__ << "Channel status cache not loaded. Run configure first." << __E__;
+			__FE_SS_THROW__;
 		}
 
 		float vbias[20];
 
 		for(int ichan = 0; ichan < 20; ichan++) {
-			vbias[ichan] = boardConfig_.channels[ichan].voltage;
+			const bool channelIsGood = (boardConfig_.channels[ichan].channelStatus == "good");
+			vbias[ichan] = channelIsGood ? boardConfig_.channels[ichan].voltage : 0.0f;
+
 			__COUT_INFO__ << "Board " << boardID << " ch " << ichan
 			              << " voltage " << vbias[ichan]
+			              << " requested " << boardConfig_.channels[ichan].voltage
+			              << " status " << boardConfig_.channels[ichan].channelStatus
 			              << " type " << boardConfig_.channels[ichan].sensorType << __E__;
 		}
 
 		RMZB_writeAllSiPMbias(vbias);
 
-		__COUT_INFO__ << "Ramping up from DB voltages for BoardID=" << boardID << __E__;
-		__COUT_INFO__ << "Configuration done from DB for BoardID=" << boardID << __E__;
+		__COUT_INFO__ << "Ramping up good channels from cached DB voltages for BoardID=" << boardID << __E__;
+		__COUT_INFO__ << "Configuration done from DB cache for BoardID=" << boardID << __E__;
 	}
 
 }  // end SetBoardVoltages()
