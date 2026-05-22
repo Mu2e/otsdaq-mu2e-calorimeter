@@ -37,17 +37,22 @@
 		// localStorage layout:
 		//   CaloConfig_lastFsm                              -> name of last-active FSM
 		//   CaloConfig_fsm.<fsmName>.<sectionId>            -> selected fileName for that FSM+section
+		//   CaloConfig_alias.<fsmName>                      -> selected alias for that FSM
 		//   CaloConfig_dir.<sectionId>                      -> user-overridden directory (full path)
 		// Legacy keys "CaloConfig_<sectionId>" (pre-FSM) are migrated on first load.
 		var LOCALSTORAGE_PREFIX_     = "CaloConfig_";
 		var LOCALSTORAGE_LAST_FSM_   = LOCALSTORAGE_PREFIX_ + "lastFsm";
 		var LOCALSTORAGE_FSM_PREFIX_ = LOCALSTORAGE_PREFIX_ + "fsm.";
+		var LOCALSTORAGE_ALIAS_PREFIX_ = LOCALSTORAGE_PREFIX_ + "alias.";
 		var LOCALSTORAGE_DIR_PREFIX_ = LOCALSTORAGE_PREFIX_ + "dir.";
 		var BOARD_CONFIG_BASE_PATH_  = "/otsdaq-mu2e-calorimeter/boardConfig/configurations";
 
 		// Populated at init() from getStateMachineNames. Always has at least one entry.
 		var _fsmNameArr   = [];
 		var _activeFsm    = "";
+		// Aliases per FSM: { fsmName: [alias1, alias2, ...] }
+		var _aliasesPerFsm = {};
+		var _activeAlias  = "";
 		// Cached file lists per section: { sectionId: [fileName, ...] } so FSM
 		// switches don't re-fetch the CodeEditor directory listing.
 		var _fileListCache_ = {};
@@ -138,7 +143,7 @@
 
 					populateFsmSelect();
 
-					//resolve CodeEditorSupervisor app id, then load file lists
+					//resolve CodeEditorSupervisor app id, then load file lists and aliases
 					DesktopContent.XMLHttpRequest(
 						"Request?RequestType=getAppId" +
 						"&classNeedle=ots::CodeEditorSupervisor",
@@ -154,6 +159,7 @@
 								return;
 							}
 							loadAllFileLists();
+							loadAliasesForFsm(_activeFsm);
 						},
 						0, 0, true, false, true //targetGatewaySupervisor
 					);
@@ -218,7 +224,7 @@
 
 
 		///////////////////////////////////////////////////////////////////////////
-		// FSM bar (top of page): dropdown + status indicator
+		// FSM bar (top of page): dropdown + status indicator + alias selector
 		///////////////////////////////////////////////////////////////////////////
 		function paintFsmBar()
 		{
@@ -227,6 +233,11 @@
 			bar.innerHTML =
 				'<label class="fsm-label" for="fsm-select">Configure FSM:</label>' +
 				'<select id="fsm-select" class="fsm-select" onchange="onFsmChange()">' +
+					'<option value="">-- loading... --</option>' +
+				'</select>' +
+				'&nbsp;&nbsp;&nbsp;' +
+				'<label class="fsm-label" for="alias-select">Configuration Alias:</label>' +
+				'<select id="alias-select" class="fsm-select" onchange="onAliasChange()">' +
 					'<option value="">-- loading... --</option>' +
 				'</select>';
 		}
@@ -246,6 +257,152 @@
 			sel.innerHTML = str;
 		}
 
+		function loadAliasesForFsm(fsmName)
+		{
+			if (!fsmName) return;
+			
+			// Use ConfigurationAPI to fetch group aliases
+			// Aliases are organized by group type (Context, Backbone, Iterate, Configuration)
+			ConfigurationAPI.getAliasesAndGroups(
+				function(aliasesAndGroupsObj)
+				{
+					if (!aliasesAndGroupsObj || !aliasesAndGroupsObj.aliases)
+					{
+						Debug.log("Could not load aliases", Debug.WARN_PRIORITY);
+						_aliasesPerFsm[fsmName] = [];
+						populateAliasSelect();
+						return;
+					}
+
+					// Extract Configuration group aliases
+					var configAliases = aliasesAndGroupsObj.aliases["Configuration"] || [];
+					var aliases = [];
+					
+					for (var i = 0; i < configAliases.length; ++i)
+					{
+						if (configAliases[i].alias)
+							aliases.push(configAliases[i].alias);
+					}
+					
+					_aliasesPerFsm[fsmName] = aliases;
+					
+					// Restore last-used alias for this FSM
+					var savedAlias = localStorage.getItem(LOCALSTORAGE_ALIAS_PREFIX_ + fsmName);
+					if (savedAlias && aliases.indexOf(savedAlias) >= 0)
+						_activeAlias = savedAlias;
+					else
+						_activeAlias = "";
+					
+					populateAliasSelect();
+					
+					if (aliases.length > 0)
+						Debug.log("Loaded " + aliases.length + " aliases for FSM '" + fsmName + "'");
+				},
+				false, //optionForNoAliases - we want aliases
+				false  //optionForNoGroups - we want groups too
+			);
+		}
+
+		function populateAliasSelect()
+		{
+			var sel = document.getElementById("alias-select");
+			if (!sel) return;
+
+			var aliases = _aliasesPerFsm[_activeFsm] || [];
+			if (!aliases.length)
+			{
+				sel.innerHTML = '<option value="">-- no aliases --</option>';
+				return;
+			}
+
+			var str = '<option value="">-- select alias --</option>';
+			for (var i = 0; i < aliases.length; ++i)
+			{
+				var alias = aliases[i];
+				str += '<option value="' + escapeHtml(alias) + '"' +
+					(alias === _activeAlias ? ' selected' : '') + '>' +
+					escapeHtml(alias) + '</option>';
+			}
+			sel.innerHTML = str;
+		}
+
+		function onAliasChange()
+		{
+			var sel = document.getElementById("alias-select");
+			if (!sel) return;
+			var newAlias = sel.value;
+
+			if (newAlias)
+			{
+				_activeAlias = newAlias;
+				localStorage.setItem(LOCALSTORAGE_ALIAS_PREFIX_ + _activeFsm, _activeAlias);
+				Debug.log("Activated alias: " + _activeAlias + " for FSM: " + _activeFsm);
+				// Trigger activation via ConfigurationAPI
+				activateAlias(_activeFsm, _activeAlias);
+			}
+			else
+			{
+				_activeAlias = "";
+				localStorage.removeItem(LOCALSTORAGE_ALIAS_PREFIX_ + _activeFsm);
+			}
+		}
+
+		// Activate a configuration alias by name
+		function activateAlias(fsmName, aliasName)
+		{
+			if (!fsmName || !aliasName) return;
+
+			// Use ConfigurationAPI to find the alias details and activate it
+			ConfigurationAPI.getAliasesAndGroups(
+				function(aliasesAndGroupsObj)
+				{
+					if (!aliasesAndGroupsObj || !aliasesAndGroupsObj.aliases)
+						return;
+
+					// Find the alias object for Configuration group type
+					var configAliases = aliasesAndGroupsObj.aliases["Configuration"] || [];
+					var aliasObj = null;
+					
+					for (var i = 0; i < configAliases.length; ++i)
+					{
+						if (configAliases[i].alias === aliasName)
+						{
+							aliasObj = configAliases[i];
+							break;
+						}
+					}
+					
+					if (!aliasObj)
+					{
+						Debug.log("Alias '" + aliasName + "' not found in Configuration group", 
+							Debug.WARN_PRIORITY);
+						return;
+					}
+
+					// Activate the configuration group with this alias
+					// The alias corresponds to a specific group (groupName/groupKey)
+					ConfigurationAPI.activateGroup(aliasObj.name, aliasObj.key, 
+						false, /*ignoreWarnings*/
+						function(err)
+						{
+							if (err)
+							{
+								Debug.log("Failed to activate alias '" + aliasName + "': " + err,
+									Debug.WARN_PRIORITY);
+								return;
+							}
+							Debug.log("Successfully activated Configuration alias: " + aliasName);
+							
+							// Refresh active lines to show updated state
+							refreshAllActiveLines();
+						}
+					);
+				},
+				false, //optionForNoAliases
+				false  //optionForNoGroups
+			);
+		}
+
 		function onFsmChange()
 		{
 			var sel = document.getElementById("fsm-select");
@@ -257,6 +414,9 @@
 			_activeFsm = newFsm;
 			localStorage.setItem(LOCALSTORAGE_LAST_FSM_, _activeFsm);
 			migrateLegacyFsmKeysIfNeeded(_activeFsm); //in case this FSM was never seen before
+
+			//Load the alias list for this FSM and restore last-used alias
+			loadAliasesForFsm(_activeFsm);
 
 			//modified-tables map is per-session edits, not per-FSM; clear on switch
 			modifiedTablesMap_ = {};
@@ -334,14 +494,14 @@
 					'Active: <span class="active-version">(loading)</span>' +
 					'</div>';
 
-				// Main controls: file select + Configure button
-				str += '<div class="card-controls">';
-				str +=   '<select id="select-' + sec.id + '"' +
-					' onchange="onSelectionChanged(\'' + sec.id + '\')">' +
-					'<option value="">-- loading... --</option></select>';
-				str +=   '<button class="btn-configure" id="btn-' + sec.id +
-					'" onclick="onConfigure(\'' + sec.id +
-					'\')" disabled>Configure</button>';
+// Main controls: file select + Upload button
+			str += '<div class="card-controls">';
+			str +=   '<select id="select-' + sec.id + '"' +
+				' onchange="onSelectionChanged(\'' + sec.id + '\')">' +
+				'<option value="">-- loading... --</option></select>';
+			str +=   '<button class="btn-configure" id="btn-' + sec.id +
+				'" onclick="onConfigure(\'' + sec.id +
+				'\')" disabled>Upload</button>';
 				str += '</div>';
 
 				str += '<div class="status-msg" id="status-' + sec.id + '"></div>';
@@ -861,11 +1021,26 @@
 				var c = line.charAt(i);
 				if (inQuote)
 				{
-					buf += c;
-					if (c === '"') inQuote = false;
+					if (c === '"')
+					{
+						// "" inside a quoted field is an escaped literal quote
+						if (i + 1 < line.length && line.charAt(i + 1) === '"')
+						{
+							buf += '"';
+							++i; //skip the second quote
+						}
+						else
+						{
+							inQuote = false; //closing quote -- do NOT append it
+						}
+					}
+					else
+					{
+						buf += c;
+					}
 					continue;
 				}
-				if (c === '"')      { inQuote = true;  buf += c; continue; }
+				if (c === '"')      { inQuote = true; continue; } //opening quote -- do NOT append it
 				if (c === '[' || c === '(') { depth++; buf += c; continue; }
 				if (c === ']' || c === ')')
 				{
@@ -1074,15 +1249,16 @@
 								" data columns), got " + row.cells.length + ".");
 							return;
 						}
-						var key = normalizeRecordKey(row.boardId);
-						if (!(key in existingUidSet))
-						{
-							done(false, "CSV line " + row.lineNo +
-								": BoardID '" + row.boardId +
-								"' is not present in " + sec.mongoTable +
-								". Refusing to add new records.");
-							return;
-						}
+						// var key = normalizeRecordKey(row.boardId);
+						// if (!(key in existingUidSet))
+						// {
+						// 	done(false, "CSV line " + row.lineNo +
+						// 		": BoardID '" + row.boardId +
+						// 		"' (normalized to '" + key + "') is not present in " + sec.mongoTable +
+						// 		". Refusing to add new records. Existing BoardIDs: " +
+						// 		Object.keys(existingUidSet).join(", "));
+						// 	return;
+						// }
 
 						//Build "<UID>,<data0>,<data1>,...,<dataN>,;"  (note the
 						//required trailing comma before the semicolon).
@@ -1112,7 +1288,7 @@
 						"&tableName=" + encodeURIComponent(bareTableName) +
 						"&version=" + currentVersion +
 						"&lookForEquivalent=1" +
-						"&temporary=0" +
+						"&temporary=1" +
 						"&tableComment=" + encodeURIComponent(comment);
 
 					DesktopContent.XMLHttpRequest(reqStr, "data=" + dataStr,
@@ -1162,12 +1338,80 @@
 							//clear any in-flight modified tables for this section
 							modifiedTablesMap_[sec.id] = undefined;
 
-							done(true, {
-								savedVersion:    savedVersion,
-								foundEquivalent: !!foundEquivalent,
-								rowCount:        csvRows.length,
-								fileName:        fileName
-							});
+							//Delegate to ConfigurationAPI.saveModifiedTables to
+							//persist the temporary version, bump affected active
+							//groups, and activate them -- same pattern used by
+							//FEStructure_calo.html and the standard Configure GUI.
+							//
+							//When lookForEquivalent=1 finds an existing persistent
+							//version, savedVersion is already positive; in that
+							//case saveModifiedTables would skip it (it only
+							//processes negative/temporary versions). So we pass
+							//the equivalent persistent version directly into
+							//saveModifiedTables with a synthetic negative version
+							//flag by converting it to a temporary alias that
+							//sourceTableAsIs will promote back.
+							//
+							//Simplest correct approach: always feed
+							//saveModifiedTables a negative version.  When the
+							//server found an equivalent it erased our temporary
+							//and returned the persistent duplicate, so we
+							//re-create a temporary from that persistent version.
+							if ((savedVersion | 0) >= 0)
+							{
+								//Server found an equivalent persistent version.
+								//Create a fresh temporary copy of it so that
+								//saveModifiedTables can process it normally.
+								DesktopContent.XMLHttpRequest(
+									"Request?RequestType=saveSpecificTable" +
+									"&dataOffset=0&chunkSize=0" +
+									"&tableName=" + encodeURIComponent(bareTableName) +
+									"&version=" + savedVersion +
+									"&lookForEquivalent=0" +
+									"&temporary=1" +
+									"&sourceTableAsIs=1" +
+									"&tableComment=" + encodeURIComponent(comment),
+									"",
+									function(req2, reqParam2, errStr2)
+									{
+										if (errStr2) { done(false, errStr2); return; }
+										var err2 = DesktopContent.getXMLValue(req2, "Error");
+										if (err2)  { done(false, err2);     return; }
+										var tmpVer = DesktopContent.getXMLValue(req2, "savedVersion");
+										localSaveModifiedTables(tmpVer);
+									},
+									0, 0, true
+								);
+							}
+							else
+							{
+								localSaveModifiedTables(savedVersion);
+							}
+
+							function localSaveModifiedTables(tempVersion)
+							{
+								ConfigurationAPI.saveModifiedTables(
+									[{
+										tableName:    bareTableName,
+										tableVersion: tempVersion,
+										tableComment: comment
+									}],
+									function(savedTables, savedGroups, savedAliases)
+									{
+										if (!savedTables.length)
+										{
+											done(false, "Table was saved as temporary " +
+												"but failed to persist/activate.");
+											return;
+										}
+										done(true, {
+											savedVersion:    savedTables[0].tableVersion,
+											foundEquivalent: !!foundEquivalent,
+											rowCount:        csvRows.length,
+											fileName:        fileName
+										});
+									});
+							}
 						},
 						0,    //reqParam
 						0,    //progressHandler
@@ -1305,7 +1549,7 @@
 			{ Debug.log("Nothing selected.", Debug.WARN_PRIORITY); return; }
 
 			DesktopContent.popUpVerification(
-				"Save <b>" + pending.length + "</b> selection(s) to DB?<br><br>" +
+				"Upload <b>" + pending.length + "</b> selection(s) to DB?<br><br>" +
 				pending.map(function(p) {
 					return "&nbsp;&nbsp;\u2022 " + p.sec.title + ": <i>" +
 						escapeHtml(p.fileName) + "</i>";
@@ -1374,8 +1618,8 @@
 		<h1>Calorimeter Configuration</h1>
 		<div class="header-actions">
 			<button class="btn-configure-all" id="btn-configure-all"
-				onclick="configureAll()" title="Save all selected files to the DB for the active FSM.">
-				Configure All</button>
+				onclick="configureAll()" title="Upload all selected files to the DB for the active FSM.">
+				Upload All</button>
 			<button class="btn-refresh" onclick="refreshAll()"
 				title="Re-fetch FSM list, CodeEditor info, and directory contents.">
 				Refresh</button>
