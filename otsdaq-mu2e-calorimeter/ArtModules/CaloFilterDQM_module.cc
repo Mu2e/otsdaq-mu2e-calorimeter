@@ -250,6 +250,22 @@ void mu2e::CaloFilterDQM::printRunSummary() {
 			std::cout << "\tDTC " << dtcID << ", Link " << rocID << ": " << nFails << " failed hits\n";
 		}
 	}
+
+	std::cout << "Good hits per DTC link:" << std::endl;
+	std::cout << std::setw(12) << "DTC ID" << std::setw(12) << "Link 0" << std::setw(12) << "Link 1" << std::setw(12) << "Link 2" << std::setw(12) << "Link 3" << std::setw(12) << "Link 4"
+	          << std::setw(12) << "Link 5" << std::endl;
+	for(const auto& dtcLinkGood : goodHits_per_dtc_link) {
+		int dtcID = dtcLinkGood.first;
+		std::cout << std::setw(12) << dtcID;
+		for(int rocID = 0; rocID < 6; rocID++) {
+			if(dtcLinkGood.second.count(rocID)) {
+				std::cout << std::setw(12) << dtcLinkGood.second.at(rocID);
+			} else {
+				std::cout << std::setw(12) << "-";
+			}
+		}
+		std::cout << std::endl;
+	}
 }
 
 DEFINE_ART_MODULE(mu2e::CaloFilterDQM)
