@@ -260,7 +260,7 @@
 		function loadAliasesForFsm(fsmName)
 		{
 			if (!fsmName) return;
-			
+
 			// Use ConfigurationAPI to fetch group aliases
 			// Aliases are organized by group type (Context, Backbone, Iterate, Configuration)
 			ConfigurationAPI.getAliasesAndGroups(
@@ -277,24 +277,24 @@
 					// Extract Configuration group aliases
 					var configAliases = aliasesAndGroupsObj.aliases["Configuration"] || [];
 					var aliases = [];
-					
+
 					for (var i = 0; i < configAliases.length; ++i)
 					{
 						if (configAliases[i].alias)
 							aliases.push(configAliases[i].alias);
 					}
-					
+
 					_aliasesPerFsm[fsmName] = aliases;
-					
+
 					// Restore last-used alias for this FSM
 					var savedAlias = localStorage.getItem(LOCALSTORAGE_ALIAS_PREFIX_ + fsmName);
 					if (savedAlias && aliases.indexOf(savedAlias) >= 0)
 						_activeAlias = savedAlias;
 					else
 						_activeAlias = "";
-					
+
 					populateAliasSelect();
-					
+
 					if (aliases.length > 0)
 						Debug.log("Loaded " + aliases.length + " aliases for FSM '" + fsmName + "'");
 				},
@@ -362,7 +362,7 @@
 					// Find the alias object for Configuration group type
 					var configAliases = aliasesAndGroupsObj.aliases["Configuration"] || [];
 					var aliasObj = null;
-					
+
 					for (var i = 0; i < configAliases.length; ++i)
 					{
 						if (configAliases[i].alias === aliasName)
@@ -371,17 +371,17 @@
 							break;
 						}
 					}
-					
+
 					if (!aliasObj)
 					{
-						Debug.log("Alias '" + aliasName + "' not found in Configuration group", 
+						Debug.log("Alias '" + aliasName + "' not found in Configuration group",
 							Debug.WARN_PRIORITY);
 						return;
 					}
 
 					// Activate the configuration group with this alias
 					// The alias corresponds to a specific group (groupName/groupKey)
-					ConfigurationAPI.activateGroup(aliasObj.name, aliasObj.key, 
+					ConfigurationAPI.activateGroup(aliasObj.name, aliasObj.key,
 						false, /*ignoreWarnings*/
 						function(err)
 						{
@@ -392,7 +392,7 @@
 								return;
 							}
 							Debug.log("Successfully activated Configuration alias: " + aliasName);
-							
+
 							// Refresh active lines to show updated state
 							refreshAllActiveLines();
 						}
@@ -1446,7 +1446,7 @@
 		function fetchActiveTableInfo(sec, cb)
 		{
 			var bareTableName = sec.mongoTable.replace(/^\/+/, "");
-			
+
 			// First, get the active Configuration group to find the actual active version
 			ConfigurationAPI.getActiveGroups(
 				function(activeGroups)
@@ -1485,7 +1485,7 @@
 
 							// Parse the response to find this table's version
 							var version = DesktopContent.getXMLValue(req, "Version") || "";
-							
+
 							if (!version)
 							{
 								// Fallback: try latest version
@@ -1709,7 +1709,7 @@
 	</div>
 
 	<!-- FSM section: a single bordered container that groups the FSM selector
-	     with all the configuration sections it owns. -->
+		 with all the configuration sections it owns. -->
 	<div class="fsm-section">
 		<!-- Global FSM selector bar. Populated dynamically by paintFsmBar(). -->
 		<div id="fsm-bar" class="fsm-bar"></div>
