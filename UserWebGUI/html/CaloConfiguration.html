@@ -1446,6 +1446,89 @@
 		function fetchActiveTableInfo(sec, cb)
 		{
 			var bareTableName = sec.mongoTable.replace(/^\/+/, "");
+			
+			// First, get the active Configuration group to find the actual active version
+			ConfigurationAPI.getActiveGroups(
+				function(activeGroups)
+				{
+					if (!activeGroups || !activeGroups.Configuration)
+					{
+						cb(null, "Could not determine active Configuration group");
+						return;
+					}
+
+					var configGroupName = activeGroups.Configuration.groupName;
+					var configGroupKey = activeGroups.Configuration.groupKey;
+
+					if (!configGroupName || configGroupName === "")
+					{
+						cb(null, "No active Configuration group");
+						return;
+					}
+
+					// Now fetch the metadata for this group to get the active versions
+					var reqStr =
+						"Request?RequestType=getTableGroupMembers" +
+						"&GroupName=" + encodeURIComponent(configGroupName) +
+						"&GroupKey=" + encodeURIComponent(configGroupKey) +
+						"&TableName=" + encodeURIComponent(bareTableName);
+
+					DesktopContent.XMLHttpRequest(reqStr, "",
+						function(req, reqParam, errStr)
+						{
+							if (errStr)
+							{
+								// Fallback: try latest version
+								fetchLatestTableInfo(bareTableName, cb);
+								return;
+							}
+
+							// Parse the response to find this table's version
+							var version = DesktopContent.getXMLValue(req, "Version") || "";
+							
+							if (!version)
+							{
+								// Fallback: try latest version
+								fetchLatestTableInfo(bareTableName, cb);
+								return;
+							}
+
+							// Got active version, now fetch the table metadata with this version
+							var reqStr2 =
+								"Request?RequestType=getSpecificTable" +
+								"&dataOffset=0" +
+								"&chunkSize=0" +
+								"&tableName=" + encodeURIComponent(bareTableName) +
+								"&version=" + encodeURIComponent(version);
+
+							DesktopContent.XMLHttpRequest(reqStr2, "",
+								function(req2, reqParam2, errStr2)
+								{
+									if (errStr2) { cb(null, errStr2); return; }
+									var err = DesktopContent.getXMLValue(req2, "Error");
+									if (err)    { cb(null, err);    return; }
+
+									var comment  = DesktopContent.getXMLValue(req2, "TableComment") || "";
+									var fileName = extractFileNameFromComment(comment);
+
+									cb({
+										version:  version,
+										fileName: fileName, //null if not configured via this GUI
+										comment:  comment   //full comment, for tooltip
+									}, null);
+								},
+								0, 0, true
+							);
+						},
+						0, 0, true
+					);
+				}
+			);
+		}
+
+		function fetchLatestTableInfo(bareTableName, cb)
+		{
+			// Fallback: fetch the latest persistent version
 			var reqStr =
 				"Request?RequestType=getSpecificTable" +
 				"&dataOffset=0" +
@@ -1460,7 +1543,6 @@
 					var err = DesktopContent.getXMLValue(req, "Error");
 					if (err)    { cb(null, err);    return; }
 
-					//Canonical element names emitted by handleGetTableXML.
 					var version  = DesktopContent.getXMLValue(req, "TableVersion") || "";
 					var comment  = DesktopContent.getXMLValue(req, "TableComment") || "";
 					var fileName = extractFileNameFromComment(comment);
@@ -1473,8 +1555,8 @@
 
 					cb({
 						version:  version,
-						fileName: fileName, //null if not configured via this GUI
-						comment:  comment   //full comment, for tooltip
+						fileName: fileName,
+						comment:  comment
 					}, null);
 				},
 				0, 0, true
