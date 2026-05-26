@@ -40,7 +40,7 @@ class CaloFilterDQM : public art::EDFilter {
 	explicit CaloFilterDQM(const art::EDFilter::Table<Config>& config);
 
 	bool         filter(art::Event& e) override;
-	virtual bool endRun(art::Run& run) override;
+	virtual void endJob() override;
 
 	void processCFOData(mu2e::DTCEventFragment& eventFragment);
 	void processCaloData(mu2e::DTCEventFragment& eventFragment);
@@ -219,12 +219,10 @@ bool mu2e::CaloFilterDQM::filter(art::Event& event) {
 	return failedEvent;
 }
 
-bool mu2e::CaloFilterDQM::endRun(art::Run&) {
+void mu2e::CaloFilterDQM::endJob() {
 	if(verbosity_ > 0) {
 		printRunSummary();
 	}
-
-	return true;
 }
 
 void mu2e::CaloFilterDQM::processCFOData(mu2e::DTCEventFragment& eventFragment) {
@@ -364,9 +362,9 @@ void mu2e::CaloFilterDQM::printRunSummary() {
 	}
 
 	std::cout << "Bad hit EwT failures per board/channel:" << std::endl;
-	std::cout << std::setw(8) << "Board ID";
+	std::cout << std::setw(8) << "Board";
 	for(int i = 0; i < 20; i++)
-		std::cout << std::setw(8) << "Chan " << i;
+		std::cout << std::setw(8) << ("Ch " + std::to_string(i));
 	std::cout << std::endl;
 	for(const auto& boardChannelBadHitEWT : badHitEWT_per_board_channel) {
 		int boardID = boardChannelBadHitEWT.first;
