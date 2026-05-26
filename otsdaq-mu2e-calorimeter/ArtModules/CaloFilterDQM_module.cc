@@ -20,6 +20,7 @@
 #include "artdaq-core-mu2e/Data/EventHeader.hh"
 #include "artdaq-core-mu2e/Overlays/DTCEventFragment.hh"
 #include "artdaq-core-mu2e/Overlays/Decoders/CalorimeterDataDecoder.hh"
+#include "artdaq-core-mu2e/Overlays/Decoders/MobileSyncDataDecoder.hh"
 #include "artdaq-core-mu2e/Overlays/FragmentType.hh"
 
 #include "cetlib_except/exception.h"
@@ -39,8 +40,9 @@ class CaloFilterDQM : public art::EDFilter {
 	explicit CaloFilterDQM(const art::EDFilter::Table<Config>& config);
 
 	bool         filter(art::Event& e) override;
-	virtual bool endRun(art::Run& run) override;
+	virtual void endJob() override;
 
+	void processCFOData(mu2e::DTCEventFragment& eventFragment);
 	void processCaloData(mu2e::DTCEventFragment& eventFragment);
 
 	void printRunSummary();
@@ -56,16 +58,28 @@ class CaloFilterDQM : public art::EDFilter {
 	size_t nEventGoodHits;
 	size_t nEventBadHits;
 
+	long int cfoEWT = -1;
+	size_t   nEventBadDTCEWTs;
+	size_t   nEventBadROCEWTs;
+	size_t   nEventBadHitEWTs;
+
 	// Totals
 	size_t nEvents;
 	size_t nTotalCaloHits;
 	size_t nTotalGoodHits;
 	size_t nTotalBadHits;
 
+	size_t nTotalBadDTCEWTs;
+	size_t nTotalBadROCEWTs;
+	size_t nTotalBadHitEWTs;
+
 	std::map<int, int> failMap_DTCEWTs;
 
 	std::map<int, std::map<int, int>>                    goodHits_per_dtc_link;
 	std::map<int, std::map<int, int>>                    failures_per_dtc_link;
+	std::map<int, std::map<int, int>>                    badHitEWT_per_dtc_link;
+	std::map<int, std::map<int, int>>                    badHitEWT_per_board_channel;
+	std::map<int, std::map<int, int>>                    goodHitEWT_per_dtc_link;
 	std::map<mu2e::CaloDAQUtilities::CaloHitError, uint> failure_type_counter;
 
 	bool failedEvent;
@@ -74,11 +88,14 @@ class CaloFilterDQM : public art::EDFilter {
 
 mu2e::CaloFilterDQM::CaloFilterDQM(const art::EDFilter::Table<Config>& config)
     : art::EDFilter{config}, verbosity_(config().verbosity()), metrics_reporting_level_(config().metrics_level()), caloDAQUtil_("CaloDigiFromFragments") {
-	nEvents        = 0;
-	nTotalCaloHits = 0;
-	nTotalGoodHits = 0;
-	nTotalBadHits  = 0;
-	failedEvent    = false;
+	nEvents          = 0;
+	nTotalCaloHits   = 0;
+	nTotalGoodHits   = 0;
+	nTotalBadHits    = 0;
+	nTotalBadDTCEWTs = 0;
+	nTotalBadROCEWTs = 0;
+	nTotalBadHitEWTs = 0;
+	failedEvent      = false;
 }
 
 bool mu2e::CaloFilterDQM::filter(art::Event& event) {
@@ -91,10 +108,15 @@ bool mu2e::CaloFilterDQM::filter(art::Event& event) {
 	nEventGoodHits = 0;
 	nEventBadHits  = 0;
 
+	nEventBadDTCEWTs = 0;
+	nEventBadROCEWTs = 0;
+	nEventBadHitEWTs = 0;
+
 	artdaq::Fragments fragments = caloDAQUtil_.getFragments(event);
 	TLOG(TLVL_DEBUG + 6) << "Iterating through " << fragments.size() << " fragments\n";
 	for(const auto& frag : fragments) {
 		mu2e::DTCEventFragment eventFragment(frag);
+		processCFOData(eventFragment);
 		processCaloData(eventFragment);
 	}
 
@@ -102,10 +124,28 @@ bool mu2e::CaloFilterDQM::filter(art::Event& event) {
 	nTotalGoodHits += nEventGoodHits;
 	nTotalBadHits += nEventBadHits;
 
+	nTotalBadDTCEWTs += nEventBadDTCEWTs;
+	nTotalBadROCEWTs += nEventBadROCEWTs;
+	nTotalBadHitEWTs += nEventBadHitEWTs;
+
+	int nBadHitEWTChannels = 0;
+	for(const auto& boardChannelBadHitEWT : badHitEWT_per_board_channel) {
+		for(int channelID = 0; channelID < 20; channelID++) {
+			if(boardChannelBadHitEWT.second.count(channelID)) {
+				nBadHitEWTChannels++;
+			}
+		}
+	}
+
 	// Send metrics
 	if(metricMan != nullptr) {
-		// Failures
+		// EwT
+		metricMan->sendMetric("CaloFilterDQM.nEventBadDTCEWTs", int(nEventBadDTCEWTs), "Number of bad DTC EwTs", metrics_reporting_level_, artdaq::MetricMode::Maximum);
+		metricMan->sendMetric("CaloFilterDQM.nEventBadROCEWTs", int(nEventBadROCEWTs), "Number of bad ROC EwTs", metrics_reporting_level_, artdaq::MetricMode::Maximum);
+		metricMan->sendMetric("CaloFilterDQM.nEventBadHitEWTs", int(nEventBadHitEWTs), "Number of bad hit EwTs", metrics_reporting_level_, artdaq::MetricMode::Maximum);
+		metricMan->sendMetric("CaloFilterDQM.nBadHitEWTChannels", int(nBadHitEWTChannels), "Number of channels with bad hit EwTs", metrics_reporting_level_, artdaq::MetricMode::LastPoint);
 
+		// Failures
 		metricMan->sendMetric("CaloFilterDQM.nTotalHits", int(nTotalCaloHits), "Total hits", metrics_reporting_level_, artdaq::MetricMode::LastPoint);
 		metricMan->sendMetric("CaloFilterDQM.nTotalBadHits", int(nTotalBadHits), "Total failed hits", metrics_reporting_level_, artdaq::MetricMode::LastPoint);
 		metricMan->sendMetric("CaloFilterDQM.nTotalGoodHits", int(nTotalGoodHits), "Total good hits", metrics_reporting_level_, artdaq::MetricMode::LastPoint);
@@ -138,11 +178,12 @@ bool mu2e::CaloFilterDQM::filter(art::Event& event) {
 				                      artdaq::MetricMode::LastPoint);
 			}
 		}
+
 		// Per-event
 		metricMan->sendMetric("CaloFilterDQM.nCaloDTCs", int(nCaloDTCs), "Calo DTCs", metrics_reporting_level_, artdaq::MetricMode::LastPoint);
-		metricMan->sendMetric("CaloFilterDQM.nHits", int(nEventCaloHits), "Hits per event", metrics_reporting_level_, artdaq::MetricMode::LastPoint);
-		metricMan->sendMetric("CaloFilterDQM.nGoodHits", int(nEventGoodHits), "Good hits per event", metrics_reporting_level_, artdaq::MetricMode::LastPoint);
-		metricMan->sendMetric("CaloFilterDQM.nBadHits", int(nEventBadHits), "Bad hits per event", metrics_reporting_level_, artdaq::MetricMode::LastPoint);
+		metricMan->sendMetric("CaloFilterDQM.nHits", int(nEventCaloHits), "Hits per event", metrics_reporting_level_, artdaq::MetricMode::Average);
+		metricMan->sendMetric("CaloFilterDQM.nGoodHits", int(nEventGoodHits), "Good hits per event", metrics_reporting_level_, artdaq::MetricMode::Average);
+		metricMan->sendMetric("CaloFilterDQM.nBadHits", int(nEventBadHits), "Bad hits per event", metrics_reporting_level_, artdaq::MetricMode::Average);
 
 		if(verbosity_ > 1) {
 			std::cout << "Metrics for event " << eventNumber << ":"
@@ -178,12 +219,22 @@ bool mu2e::CaloFilterDQM::filter(art::Event& event) {
 	return failedEvent;
 }
 
-bool mu2e::CaloFilterDQM::endRun(art::Run&) {
+void mu2e::CaloFilterDQM::endJob() {
 	if(verbosity_ > 0) {
 		printRunSummary();
 	}
+}
 
-	return true;
+void mu2e::CaloFilterDQM::processCFOData(mu2e::DTCEventFragment& eventFragment) {
+	// CFO data is needed to get the "correct" EwT for the event, to compare against the EwTs in the calo data
+	// Default to -1 if no CFO found
+	cfoEWT            = -1;
+	auto cfoSubEvents = eventFragment.getSubsystemData(DTCLib::DTC_Subsystem::DTC_Subsystem_MobileSync);
+	for(const auto& subevent : cfoSubEvents) {
+		mu2e::MobileSyncDataDecoder cfoDecoder(subevent);
+		auto&                       this_subevent = cfoDecoder.event_;
+		cfoEWT                                    = this_subevent.GetEventWindowTag().GetEventWindowTag(true);
+	}
 }
 
 void mu2e::CaloFilterDQM::processCaloData(mu2e::DTCEventFragment& eventFragment) {
@@ -196,7 +247,10 @@ void mu2e::CaloFilterDQM::processCaloData(mu2e::DTCEventFragment& eventFragment)
 		mu2e::CalorimeterDataDecoder caloDecoder(subevent);
 		auto&                        this_subevent = caloDecoder.event_;
 
-		uint64_t dtcID = this_subevent.GetDTCID();
+		uint64_t dtcID  = this_subevent.GetDTCID();
+		long int dtcEWT = this_subevent.GetEventWindowTag().GetEventWindowTag(true);
+		if(cfoEWT >= 0 && dtcEWT != cfoEWT)
+			nEventBadDTCEWTs++;
 
 		nCaloDTCs++;
 		// Iterate over the data blocks (ROCs)
@@ -205,11 +259,17 @@ void mu2e::CaloFilterDQM::processCaloData(mu2e::DTCEventFragment& eventFragment)
 		TLOG(TLVL_DEBUG + 6) << "Iterating through " << nROCs << " data blocks (ROCs)\n";
 		std::vector<int> roc_hits;
 		for(uint iroc = 0; iroc < nROCs; iroc++) {
+			// DTCLib::DTC_DataHeaderPacket* rocHeader = dataBlocks[iroc].GetHeader().get();
+			// long int rocEWT = rocHeader->GetEventWindowTag().GetEventWindowTag(true);
+			long int rocEWT = dataBlocks[iroc].GetHeader()->GetEventWindowTag().GetEventWindowTag(true);
+			if(rocEWT != dtcEWT)
+				nEventBadROCEWTs++;
+
 			auto caloHits = caloDecoder.GetCalorimeterHitData(iroc);
 			uint nHits    = caloHits->size();
 			roc_hits.push_back(nHits);
 			for(uint ihit = 0; ihit < nHits; ihit++) {
-				// mu2e::CalorimeterDataDecoder::CalorimeterHitDataPacket hit          = caloHits->at(ihit).first;
+				mu2e::CalorimeterDataDecoder::CalorimeterHitDataPacket hit = caloHits->at(ihit).first;
 				// std::vector<uint16_t>                                  hit_waveform = caloHits->at(ihit).second;
 
 				// Check that the hit is good
@@ -221,6 +281,19 @@ void mu2e::CaloFilterDQM::processCaloData(mu2e::DTCEventFragment& eventFragment)
 				} else {
 					goodHits_per_dtc_link[dtcID][iroc]++;
 					nEventGoodHits++;
+
+					long int hitEWT = hit.InPayloadEventWindowTag - 1;
+					if(hitEWT != dtcEWT % 65536) {
+						if(verbosity_ > 2) {
+							std::cout << "WARNING! DTC " << dtcID << " Link " << iroc << " Board " << hit.BoardID << " Channel " << hit.ChannelID << ": Hit EwT " << hitEWT << " != DTC EwT "
+							          << dtcEWT % 65536 << " (ROC EWT: " << rocEWT << ", DTC EWT: " << dtcEWT << ", CFO EwT: " << cfoEWT << ")\n";
+						}
+						nEventBadHitEWTs++;
+						badHitEWT_per_dtc_link[dtcID][iroc]++;
+						badHitEWT_per_board_channel[hit.BoardID][hit.ChannelID]++;
+					} else {
+						goodHitEWT_per_dtc_link[dtcID][iroc]++;
+					}
 				}
 				nEventCaloHits++;
 			}
@@ -234,6 +307,11 @@ void mu2e::CaloFilterDQM::printRunSummary() {
 	          << "\t total calo hits: " << nTotalCaloHits << std::endl
 	          << "\t total good hits: " << nTotalGoodHits << " (" << int(100. * nTotalGoodHits / nTotalCaloHits) << "%)" << std::endl
 	          << "\t total bad hits: " << nTotalBadHits << " (" << int(100. * nTotalBadHits / nTotalCaloHits) << "%)" << std::endl;
+
+	std::cout << "EwT failures:" << std::endl
+	          << "\t bad DTC EwTs: " << nTotalBadDTCEWTs << std::endl
+	          << "\t bad ROC EwTs: " << nTotalBadROCEWTs << std::endl
+	          << "\t bad hit EwTs: " << nTotalBadHitEWTs << std::endl;
 
 	std::cout << "Failures:" << std::endl;
 	for(auto fail : failure_type_counter) {
@@ -262,6 +340,40 @@ void mu2e::CaloFilterDQM::printRunSummary() {
 				std::cout << std::setw(12) << dtcLinkGood.second.at(rocID);
 			} else {
 				std::cout << std::setw(12) << "-";
+			}
+		}
+		std::cout << std::endl;
+	}
+
+	std::cout << "Bad hit EwT failures per DTC link:" << std::endl;
+	std::cout << std::setw(12) << "DTC ID" << std::setw(12) << "Link 0" << std::setw(12) << "Link 1" << std::setw(12) << "Link 2" << std::setw(12) << "Link 3" << std::setw(12) << "Link 4"
+	          << std::setw(12) << "Link 5" << std::endl;
+	for(const auto& dtcLinkBadHitEWT : badHitEWT_per_dtc_link) {
+		int dtcID = dtcLinkBadHitEWT.first;
+		std::cout << std::setw(12) << dtcID;
+		for(int rocID = 0; rocID < 6; rocID++) {
+			if(dtcLinkBadHitEWT.second.count(rocID)) {
+				std::cout << std::setw(12) << dtcLinkBadHitEWT.second.at(rocID);
+			} else {
+				std::cout << std::setw(12) << "-";
+			}
+		}
+		std::cout << std::endl;
+	}
+
+	std::cout << "Bad hit EwT failures per board/channel:" << std::endl;
+	std::cout << std::setw(8) << "Board";
+	for(int i = 0; i < 20; i++)
+		std::cout << std::setw(8) << ("Ch " + std::to_string(i));
+	std::cout << std::endl;
+	for(const auto& boardChannelBadHitEWT : badHitEWT_per_board_channel) {
+		int boardID = boardChannelBadHitEWT.first;
+		std::cout << std::setw(8) << boardID;
+		for(int channelID = 0; channelID < 20; channelID++) {
+			if(boardChannelBadHitEWT.second.count(channelID)) {
+				std::cout << std::setw(8) << boardChannelBadHitEWT.second.at(channelID);
+			} else {
+				std::cout << std::setw(8) << "-";
 			}
 		}
 		std::cout << std::endl;
