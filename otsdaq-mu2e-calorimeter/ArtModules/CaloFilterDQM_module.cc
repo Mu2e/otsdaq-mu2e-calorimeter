@@ -364,18 +364,18 @@ void mu2e::CaloFilterDQM::printRunSummary() {
 	}
 
 	std::cout << "Bad hit EwT failures per board/channel:" << std::endl;
-	std::cout << std::setw(12) << "Board ID";
+	std::cout << std::setw(8) << "Board ID";
 	for(int i = 0; i < 20; i++)
-		std::cout << std::setw(12) << "Chan " << i;
+		std::cout << std::setw(8) << "Chan " << i;
 	std::cout << std::endl;
 	for(const auto& boardChannelBadHitEWT : badHitEWT_per_board_channel) {
 		int boardID = boardChannelBadHitEWT.first;
-		std::cout << std::setw(12) << boardID;
+		std::cout << std::setw(8) << boardID;
 		for(int channelID = 0; channelID < 20; channelID++) {
 			if(boardChannelBadHitEWT.second.count(channelID)) {
-				std::cout << std::setw(12) << boardChannelBadHitEWT.second.at(channelID);
+				std::cout << std::setw(8) << boardChannelBadHitEWT.second.at(channelID);
 			} else {
-				std::cout << std::setw(12) << "-";
+				std::cout << std::setw(8) << "-";
 			}
 		}
 		std::cout << std::endl;
