@@ -5,13 +5,11 @@
 
 #include <array>
 
-#define MZ_ADDRESS     262
+#define MZ_ADDRESS 262
 #define MZ_BUFFER_SIZE 46
 
-namespace ots
-{
-class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
-{
+namespace ots {
+class ROCCalorimeterInterface : public ROCPolarFireCoreInterface {
   public:
 	ROCCalorimeterInterface(const std::string& rocUID, const ConfigurationTree& theXDAQContextConfigTree, const std::string& interfaceConfigurationPath);
 
@@ -23,7 +21,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 	// void halt	(void) override;
 	// void pause	(void) override;
 	// void resume	(void) override;
-	void start	(std::string runNumber) override;
+	void start(std::string runNumber) override;
 	// void stop	(void) override;
 	bool running(void) override;
 
@@ -36,8 +34,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 
 	bool emulatorWorkLoop(void) override;
 
-	enum CaloRegisters
-	{
+	enum CaloRegisters {
 		// clang-format off
         ROC_ADDRESS_DDRRESET                 = 14,
         ROC_ADDRESS_ANALOGRESET              = 13,
@@ -88,14 +85,12 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 
 	int GetTemperature(int idchannel);
 	//	temperature--
-	class Thermometer
-	{
+	class Thermometer {
 	  private:
 		double mnoiseTemp;
 
 	  public:
-		void noiseTemp(double intemp)
-		{
+		void noiseTemp(double intemp) {
 			mnoiseTemp = (double)intemp + 0.05 * (intemp * ((double)rand() / (RAND_MAX)) - 0.5);
 			return;
 		}
@@ -166,8 +161,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 	static constexpr int MAX_BOARD_ID    = 160;  // Maximum valid board ID for calorimeter DIRACs, see also CaloConst::_nDIRAC from Offline/DataProducts/inc/CaloConst.hh
 	static constexpr int INVALID_BOARDID = 9999;
 
-	struct CaloChannelConfig
-	{
+	struct CaloChannelConfig {
 		float       voltage       = 0.0f;
 		int         threshold     = 2300;
 		std::string sensorType    = "UNKNOWN";
@@ -176,8 +170,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 		bool isPinDiode() const { return sensorType == "PIN-DIODE"; }
 	};
 
-	struct CaloBoardConfig
-	{
+	struct CaloBoardConfig {
 		bool identityValid        = false;
 		bool voltagesLoaded       = false;
 		bool thresholdsLoaded     = false;
