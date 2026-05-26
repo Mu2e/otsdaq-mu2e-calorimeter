@@ -1036,9 +1036,17 @@ void ROCCalorimeterInterface::configure(void) try {
 	CalibrateMZB();
 	SetADCsThresholds(50);
 	SetBoardVoltages(true);
+	SetBoardVoltages(true);
+	SetBoardVoltages(true);
+	SetBoardVoltages(true);
+
 
 	writeRegister(ROC_ADDRESS_MASK_A, 1023);
 	writeRegister(ROC_ADDRESS_MASK_B, 1023);
+
+	writeRegister(ROC_ADDRESS_MZB_BUSY, 1);
+
+
 
 } catch(const std::runtime_error& e) {
 	__FE_COUT__ << "Error caught: " << e.what() << __E__;
@@ -1054,10 +1062,23 @@ void ROCCalorimeterInterface::configure(void) try {
 	__FE_SS_THROW__;
 }
 
+
+//==============================================================================
+void ROCCalorimeterInterface::start(std::string runNumber)
+{
+
+	SetupForADCsDataTaking(0, 1, 2300);
+
+	return;
+
+}
+
 //==================================================================================================
 bool ROCCalorimeterInterface::running(void) {
 	// SetupForPatternFixedLengthDataTaking(40);
+
 	// SetupForADCsDataTaking(0, 0, 2300);
+
 
 	return false;
 }

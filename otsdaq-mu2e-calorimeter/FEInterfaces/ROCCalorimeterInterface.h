@@ -23,7 +23,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 	// void halt	(void) override;
 	// void pause	(void) override;
 	// void resume	(void) override;
-	// void start	(std::string runNumber) override;
+	void start	(std::string runNumber) override;
 	// void stop	(void) override;
 	bool running(void) override;
 
