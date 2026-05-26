@@ -108,6 +108,7 @@ std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(const
 		for(uint32_t j = 0; j < bitmap.numberOfColumns(0); j++) {
 			const uint32_t onlineID = boardID * mu2e::CaloConst::_nChPerDIRAC + j;
 			auto           it       = mapChannels_.find(onlineID);
+
 			if(it == mapChannels_.end()) {
 				__SS__ << "No channel map entry found for online ID " << onlineID << " (boardID=" << boardID << ", channel=" << j << "). Tables may be inconsistent - check "
 				       << SubsystemCalorimeterParametersTable::CHANNEL_STATUS_TABLE << " vs " << SubsystemCalorimeterParametersTable::CHANNEL_MAP_TABLE << "." << __E__;
