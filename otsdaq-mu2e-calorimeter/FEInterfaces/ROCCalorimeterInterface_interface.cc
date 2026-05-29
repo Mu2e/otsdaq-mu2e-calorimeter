@@ -719,6 +719,7 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 		return ROCCoreVInterface::readROCBlock(data, address, wordCount, incrementAddress);
 
 	uint16_t u;
+	uint16_t readCount = 0;
 
 	// check if special Block Write required
 	if(ROCCalorimeterInterface::SPECIAL_BLOCK_READ_ADDRS_.find(address) != ROCCalorimeterInterface::SPECIAL_BLOCK_READ_ADDRS_.end()) {
@@ -780,7 +781,7 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 		}
 
 		uint16_t j = 0;
-		while((u = thisDTC_->ReadROCRegister(linkID_, 128, 100)) == 0) {
+		while(((u = thisDTC_->ReadROCRegister(linkID_, 128, 100)) & 0x8000) == 0) {
 			usleep(100);
 			j++;
 			if(j == 100) {
@@ -793,7 +794,7 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 		usleep(1000);
 
 		j = 0;
-		while((u = thisDTC_->ReadROCRegister(linkID_, 129, 100)) == 0) {
+		while(((u = thisDTC_->ReadROCRegister(linkID_, 129, 100)) & 0x07ff) == 0) {
 			usleep(100);
 			j++;
 			if(j == 100) {
@@ -802,23 +803,32 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 			}
 		}
 
+		readCount = u & 0x07ff;
+
 		__COUT__ << "r_129: 0x" << std::hex << u << __E__;
+
+		if(readCount < 4) {
+			__FE_SS__ << "ROC block read of address " << address << "(0x" << std::hex << address << std::dec
+			          << ") returned invalid TX word count " << readCount << " from register 129 value 0x"
+			          << std::hex << u << std::dec << __E__;
+			__FE_SS_THROW__;
+		}
 
 		// wordCount = u - 4;  // number of words to read back
 	}
 	__FE_COUTV__(data.size());
 	__FE_COUTV__(wordCount);
-	__FE_COUTV__(u - 4);
-	thisDTC_->ReadROCBlock(data, linkID_, address, u - 4, incrementAddress, 0);
+	__FE_COUTV__(readCount - 4);
+	thisDTC_->ReadROCBlock(data, linkID_, address, readCount - 4, incrementAddress, 0);
 	__FE_COUTV__(data.size());
 	// only fix data if received more than needed - TODO fix in ROC firmware
 	while(data.size() > wordCount)
 		data.pop_back();
 
 	if(emulatedInDTC_)  // fix count for emulated ROC to survive
-		u = wordCount + 4;
-	if(data.size() != (long unsigned int)u - 4) {
-		__FE_SS__ << "ROC block read of address " << address << "(0x" << std::hex << address << std::dec << ") failed, expecting " << u - 4 << " words, and read " << data.size() << " words." << __E__;
+		readCount = wordCount + 4;
+	if(data.size() != (long unsigned int)readCount - 4) {
+		__FE_SS__ << "ROC block read of address " << address << "(0x" << std::hex << address << std::dec << ") failed, expecting " << readCount - 4 << " words, and read " << data.size() << " words." << __E__;
 		{
 			__FE_COUT_ERR__ << ss.str();  // demoted to error rather than exception on 19-Feb-2026 during Calo MC2 commissioning
 			// just pad with zeros for now if wrong
