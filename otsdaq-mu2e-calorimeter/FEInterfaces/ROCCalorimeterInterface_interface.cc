@@ -780,6 +780,10 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 			break;
 		}
 
+		// Give the ROC microprocessor time to consume the new command and clear
+		// the previous DONE state in register 128 before polling for completion.
+		usleep(1000);
+
 		uint16_t j = 0;
 		while(((u = thisDTC_->ReadROCRegister(linkID_, 128, 100)) & 0x8000) == 0) {
 			usleep(100);
