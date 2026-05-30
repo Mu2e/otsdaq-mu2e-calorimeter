@@ -780,20 +780,28 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 			break;
 		}
 
-		// Give the ROC microprocessor time to consume the new command and clear
-		// the previous DONE state in register 128 before polling for completion.
-		usleep(1000);
-
+		// Phase 1: wait for DONE to clear (command accepted by processor)
 		uint16_t j = 0;
+		while(((u = thisDTC_->ReadROCRegister(linkID_, 128, 100)) & 0x8000) != 0) {
+			usleep(100);
+			j++;
+			if(j == 100) {
+				__FE_SS__ << "ROC block read: DONE stuck high (reg128=0x" << std::hex << u 
+				          << "), command not accepted" << __E__;
+				__FE_SS_THROW__;
+			}
+		}
+
+		// Phase 2: wait for DONE to set (command completed)
+		j = 0;
 		while(((u = thisDTC_->ReadROCRegister(linkID_, 128, 100)) & 0x8000) == 0) {
 			usleep(100);
 			j++;
 			if(j == 100) {
-				__FE_SS__ << "ROC block failed at 128" << __E__;
+				__FE_SS__ << "ROC block read: timeout waiting for DONE (reg128=0x" << std::hex << u << ")" << __E__;
 				__FE_SS_THROW__;
 			}
-		}  // when the write operation ends the micropro
-		// cessor writes 0x8000 to register 0x128
+		}
 		__COUT__ << "r_128: 0x" << std::hex << u << __E__;
 		usleep(1000);
 
