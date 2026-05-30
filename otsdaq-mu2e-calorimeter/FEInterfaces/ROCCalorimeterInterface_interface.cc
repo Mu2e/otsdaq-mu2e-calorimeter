@@ -469,6 +469,26 @@ void ROCCalorimeterInterface::ROCSlowControl(__ARGS__) {
 		fileVI << ((float)data5[i]) / 100. << " ";
 	}
 
+	os << __E__;
+	os << "Reading SiPMs requested voltages:" << __E__;
+	os << __E__;
+
+	std::vector<DTCLib::roc_data_t> data6;
+	readROCBlock(data6, 267, FEE_NUM, false);
+
+	os << "vector size:" << data6.size() << __E__;
+
+	os << __E__;
+
+	for(size_t i = 0; i < data6.size(); i++) {
+		const auto raw     = data6[i];
+		const bool enabled = (raw & 0x8000) != 0;
+		const auto value   = raw & 0x7fff;
+		os << "Word " << i << ": raw=0x" << std::hex << raw << std::dec
+		   << " enabled=" << enabled << " request=" << ((float)value) / 10. << " V"
+		   << __E__;
+	}
+
 	file << std::endl;
 	fileVI << std::endl;
 
@@ -756,8 +776,9 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 			break;
 
 		case 267:
-			address   = offsetof(EE_DATABUF_t, biasVreq_tag);
-			wordCount = 2;
+			address   = offsetof(EE_DATABUF_t, biasVreq_tag) + 4;
+			wordCount = offsetof(EE_DATABUF_t, functionReq_tag) -
+			            offsetof(EE_DATABUF_t, biasVreq_tag) - 8;
 			writeROCBlock({wordCount, address}, 261, false /* incrementAddress*/);
 			wordCount = wordCount / 2;
 			address   = 261;
