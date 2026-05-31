@@ -738,7 +738,6 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 	if(ROCCalorimeterInterface::SPECIAL_BLOCK_READ_ADDRS_.find(address) == ROCCalorimeterInterface::SPECIAL_BLOCK_READ_ADDRS_.end())
 		return ROCCoreVInterface::readROCBlock(data, address, wordCount, incrementAddress);
 
-	uint16_t u;
 	uint16_t readCount = 0;
 
 	// check if special Block Write required
@@ -801,58 +800,44 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 			break;
 		}
 
-		// Phase 1: wait for DONE to clear (command accepted by processor)
-		uint16_t j = 0;
-		while(((u = thisDTC_->ReadROCRegister(linkID_, 128, 100)) & 0x8000) != 0) {
-			usleep(100);
-			j++;
-			if(j == 100) {
-				__FE_SS__ << "ROC block read: DONE stuck high (reg128=0x" << std::hex << u 
-				          << "), command not accepted" << __E__;
+		const uint16_t expectedReadCount = wordCount + 4;
+		uint16_t       doneReg           = 0;
+		uint16_t       countReg          = 0;
+		uint16_t       j                 = 0;
+
+		while(true) {
+			doneReg  = thisDTC_->ReadROCRegister(linkID_, 128, 100);
+			countReg = thisDTC_->ReadROCRegister(linkID_, 129, 100);
+
+			const bool done = (doneReg & 0x8000) != 0;
+			readCount       = countReg & 0x07ff;
+
+			if(done && readCount == expectedReadCount)
+				break;
+
+			usleep(1000);
+			if(++j == 5000) {
+				__FE_SS__ << "ROC block read timeout: address=" << address << "(0x"
+				          << std::hex << address << ") expectedReadCount=0x"
+				          << expectedReadCount << " reg128=0x" << doneReg
+				          << " reg129=0x" << countReg << std::dec
+				          << " readCount=" << readCount << " wordCount=" << wordCount
+				          << __E__;
 				__FE_SS_THROW__;
 			}
 		}
 
-		// Phase 2: wait for DONE to set (command completed)
-		j = 0;
-		while(((u = thisDTC_->ReadROCRegister(linkID_, 128, 100)) & 0x8000) == 0) {
-			usleep(100);
-			j++;
-			if(j == 100) {
-				__FE_SS__ << "ROC block read: timeout waiting for DONE (reg128=0x" << std::hex << u << ")" << __E__;
-				__FE_SS_THROW__;
-			}
-		}
-		__COUT__ << "r_128: 0x" << std::hex << u << __E__;
-		usleep(1000);
-
-		j = 0;
-		while(((u = thisDTC_->ReadROCRegister(linkID_, 129, 100)) & 0x07ff) == 0) {
-			usleep(100);
-			j++;
-			if(j == 100) {
-				__FE_SS__ << "ROC block failed at 129" << __E__;
-				__FE_SS_THROW__;
-			}
-		}
-
-		readCount = u & 0x07ff;
-
-		__COUT__ << "r_129: 0x" << std::hex << u << __E__;
-
-		if(readCount < 4) {
-			__FE_SS__ << "ROC block read of address " << address << "(0x" << std::hex << address << std::dec
-			          << ") returned invalid TX word count " << readCount << " from register 129 value 0x"
-			          << std::hex << u << std::dec << __E__;
-			__FE_SS_THROW__;
-		}
+		__FE_COUTT__ << "ROC block read ready: reg128=0x" << std::hex << doneReg
+		             << " reg129=0x" << countReg << std::dec
+		             << " readCount=" << readCount
+		             << " expectedReadCount=" << expectedReadCount << __E__;
 
 		// wordCount = u - 4;  // number of words to read back
 	}
 	__FE_COUTV__(data.size());
 	__FE_COUTV__(wordCount);
 	__FE_COUTV__(readCount - 4);
-	thisDTC_->ReadROCBlock(data, linkID_, address, readCount - 4, incrementAddress, 0);
+	thisDTC_->ReadROCBlock(data, linkID_, address, wordCount, incrementAddress, 0);
 	__FE_COUTV__(data.size());
 	// only fix data if received more than needed - TODO fix in ROC firmware
 	while(data.size() > wordCount)
