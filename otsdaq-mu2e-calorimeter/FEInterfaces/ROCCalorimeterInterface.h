@@ -78,7 +78,15 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
         ROC_ADDRESS_SIMWF_ENABLE_A           = 150,
         ROC_ADDRESS_SIMWF_ENABLE_B           = 151,
         ROC_ADDRESS_SIMWF_MULTI_A            = 152,
-        ROC_ADDRESS_SIMWF_MULTI_B            = 153
+        ROC_ADDRESS_SIMWF_MULTI_B            = 153,
+
+        ROC_ADDRESS_FW_PROJECT_ID            = 240,
+        ROC_ADDRESS_FW_GIT_SHA               = 241,
+        ROC_ADDRESS_FW_BUILD_DATE_LO         = 242,
+        ROC_ADDRESS_FW_BUILD_DATE_HI         = 243,
+        ROC_ADDRESS_FW_BUILD_TIME_LO         = 244,
+        ROC_ADDRESS_FW_BUILD_TIME_HI         = 245,
+        ROC_ADDRESS_FW_VERSION               = 246
 		// clang-format on
 	};
 
@@ -151,6 +159,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 	void ReadVoltagesFromDB(__ARGS__);
 	void ReadChannelStatusFromDB(__ARGS__);
 	void PrintROCConfiguration(__ARGS__);
+	void PrintROCFirmwareVersion(__ARGS__);
 	// void ReadVoltagesFromDB();
 
 	void ReadROCErrorCounter(__ARGS__);

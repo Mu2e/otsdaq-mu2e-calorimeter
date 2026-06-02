@@ -151,6 +151,12 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(const std::string& rocUID, cons
 	                        std::vector<std::string>{"Status"},
 	                        1);
 
+	registerFEMacroFunction("Print ROC Firmware Version",
+	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::PrintROCFirmwareVersion),
+	                        std::vector<std::string>{},
+	                        std::vector<std::string>{"Status"},
+	                        1);
+
 	registerFEMacroFunction("SetupForNoiseTaking",
 	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::SetupForNoiseTaking),
 	                        std::vector<std::string>{"Number of noise samples per evt [Default := 20]"},  // inputs parameters
@@ -1872,6 +1878,52 @@ void ROCCalorimeterInterface::PrintROCConfiguration(__ARGS__) {
 		os << std::setw(3) << ichan << " " << std::setw(11) << boardConfig_.channels[ichan].voltage << " " << std::setw(11) << boardConfig_.channels[ichan].threshold << " " << std::setw(7)
 		   << boardConfig_.channels[ichan].channelStatus << " " << boardConfig_.channels[ichan].sensorType << "\n";
 	}
+
+	__COUT_INFO__ << os.str() << __E__;
+	__SET_ARG_OUT__("Status", os.str());
+}
+
+//==================================================================================================
+void ROCCalorimeterInterface::PrintROCFirmwareVersion(__ARGS__) {
+	const uint16_t proj_id = readRegister(ROC_ADDRESS_FW_PROJECT_ID);
+	const uint16_t git_sha = readRegister(ROC_ADDRESS_FW_GIT_SHA);
+	const uint16_t date_lo = readRegister(ROC_ADDRESS_FW_BUILD_DATE_LO);
+	const uint16_t date_hi = readRegister(ROC_ADDRESS_FW_BUILD_DATE_HI);
+	const uint16_t time_lo = readRegister(ROC_ADDRESS_FW_BUILD_TIME_LO);
+	const uint16_t time_hi = readRegister(ROC_ADDRESS_FW_BUILD_TIME_HI);
+	const uint16_t version = readRegister(ROC_ADDRESS_FW_VERSION);
+
+	auto bcd16 = [](uint16_t v) {
+		return ((v >> 12) & 0xF) * 1000 + ((v >> 8) & 0xF) * 100 + ((v >> 4) & 0xF) * 10 + (v & 0xF);
+	};
+	auto bcd8 = [](uint8_t v) { return ((v >> 4) & 0xF) * 10 + (v & 0xF); };
+
+	const char project_str[3] = {
+	    static_cast<char>((proj_id >> 8) & 0xFF),
+	    static_cast<char>(proj_id & 0xFF),
+	    '\0',
+	};
+	const unsigned year   = bcd16(date_hi);
+	const unsigned month  = bcd8((date_lo >> 8) & 0xFF);
+	const unsigned day    = bcd8(date_lo & 0xFF);
+	const unsigned hour   = bcd8(time_hi & 0xFF);
+	const unsigned minute = bcd8((time_lo >> 8) & 0xFF);
+	const unsigned second = bcd8(time_lo & 0xFF);
+	const unsigned major  = (version >> 8) & 0xFF;
+	const unsigned minor  = version & 0xFF;
+
+	std::stringstream os;
+	os << "ROC Firmware Version\n";
+	os << "====================\n";
+	os << "Project ID    : \"" << project_str << "\"  (raw 0x" << std::hex << std::setw(4) << std::setfill('0') << proj_id << std::dec << ")\n";
+	os << "Git SHA (low) : 0x" << std::hex << std::setw(4) << std::setfill('0') << git_sha << std::dec << "\n";
+	os << "Build date    : " << std::setw(4) << std::setfill('0') << year << "-"
+	                          << std::setw(2) << month << "-"
+	                          << std::setw(2) << day << "\n";
+	os << "Build time    : " << std::setw(2) << std::setfill('0') << hour << ":"
+	                          << std::setw(2) << minute << ":"
+	                          << std::setw(2) << second << "\n";
+	os << "FW version    : " << major << "." << minor << "\n";
 
 	__COUT_INFO__ << os.str() << __E__;
 	__SET_ARG_OUT__("Status", os.str());
