@@ -1885,13 +1885,17 @@ void ROCCalorimeterInterface::PrintROCConfiguration(__ARGS__) {
 
 //==================================================================================================
 void ROCCalorimeterInterface::PrintROCFirmwareVersion(__ARGS__) {
-	const uint16_t proj_id = readRegister(ROC_ADDRESS_FW_PROJECT_ID);
-	const uint16_t git_sha = readRegister(ROC_ADDRESS_FW_GIT_SHA);
-	const uint16_t date_lo = readRegister(ROC_ADDRESS_FW_BUILD_DATE_LO);
-	const uint16_t date_hi = readRegister(ROC_ADDRESS_FW_BUILD_DATE_HI);
-	const uint16_t time_lo = readRegister(ROC_ADDRESS_FW_BUILD_TIME_LO);
-	const uint16_t time_hi = readRegister(ROC_ADDRESS_FW_BUILD_TIME_HI);
-	const uint16_t version = readRegister(ROC_ADDRESS_FW_VERSION);
+	const uint16_t proj_id    = readRegister(ROC_ADDRESS_FW_PROJECT_ID);
+	const uint16_t git_sha    = readRegister(ROC_ADDRESS_FW_GIT_SHA);
+	const uint16_t date_lo    = readRegister(ROC_ADDRESS_FW_BUILD_DATE_LO);
+	const uint16_t date_hi    = readRegister(ROC_ADDRESS_FW_BUILD_DATE_HI);
+	const uint16_t time_lo    = readRegister(ROC_ADDRESS_FW_BUILD_TIME_LO);
+	const uint16_t time_hi    = readRegister(ROC_ADDRESS_FW_BUILD_TIME_HI);
+	const uint16_t version    = readRegister(ROC_ADDRESS_FW_VERSION);
+	const uint16_t sw_git     = readRegister(ROC_ADDRESS_SW_GIT_SHA);
+	const uint16_t sw_hash    = readRegister(ROC_ADDRESS_SW_HEX_HASH);
+	const uint16_t sw_date_lo = readRegister(ROC_ADDRESS_SW_BUILD_DATE_LO);
+	const uint16_t sw_date_hi = readRegister(ROC_ADDRESS_SW_BUILD_DATE_HI);
 
 	auto bcd16 = [](uint16_t v) {
 		return ((v >> 12) & 0xF) * 1000 + ((v >> 8) & 0xF) * 100 + ((v >> 4) & 0xF) * 10 + (v & 0xF);
@@ -1912,18 +1916,35 @@ void ROCCalorimeterInterface::PrintROCFirmwareVersion(__ARGS__) {
 	const unsigned major  = (version >> 8) & 0xFF;
 	const unsigned minor  = version & 0xFF;
 
+	const unsigned sw_year  = bcd16(sw_date_hi);
+	const unsigned sw_month = bcd8((sw_date_lo >> 8) & 0xFF);
+	const unsigned sw_day   = bcd8(sw_date_lo & 0xFF);
+
 	std::stringstream os;
 	os << "ROC Firmware Version\n";
 	os << "====================\n";
-	os << "Project ID    : \"" << project_str << "\"  (raw 0x" << std::hex << std::setw(4) << std::setfill('0') << proj_id << std::dec << ")\n";
-	os << "Git SHA (low) : 0x" << std::hex << std::setw(4) << std::setfill('0') << git_sha << std::dec << "\n";
-	os << "Build date    : " << std::setw(4) << std::setfill('0') << year << "-"
+	os << "Project ID     : \"" << project_str << "\"  (raw 0x" << std::hex << std::setw(4) << std::setfill('0') << proj_id << std::dec << ")\n";
+	os << "FW Git SHA     : 0x" << std::hex << std::setw(4) << std::setfill('0') << git_sha << std::dec << "\n";
+	os << "FW Build date  : " << std::setw(4) << std::setfill('0') << year << "-"
 	                          << std::setw(2) << month << "-"
 	                          << std::setw(2) << day << "\n";
-	os << "Build time    : " << std::setw(2) << std::setfill('0') << hour << ":"
+	os << "FW Build time  : " << std::setw(2) << std::setfill('0') << hour << ":"
 	                          << std::setw(2) << minute << ":"
 	                          << std::setw(2) << second << "\n";
-	os << "FW version    : " << major << "." << minor << "\n";
+	os << "FW Version     : " << major << "." << minor << "\n";
+	os << "--- MIV soft-core ---\n";
+	os << "SW Git SHA     : 0x" << std::hex << std::setw(4) << std::setfill('0') << sw_git << std::dec;
+	if (sw_git == 0) os << "  (manifest not present at FPGA build)";
+	os << "\n";
+	os << "SW Hex hash    : 0x" << std::hex << std::setw(4) << std::setfill('0') << sw_hash << std::dec << "\n";
+	os << "SW Build date  : ";
+	if (sw_date_hi == 0 && sw_date_lo == 0) {
+		os << "(none)\n";
+	} else {
+		os << std::setw(4) << std::setfill('0') << sw_year << "-"
+		   << std::setw(2) << sw_month << "-"
+		   << std::setw(2) << sw_day << "\n";
+	}
 
 	__COUT_INFO__ << os.str() << __E__;
 	__SET_ARG_OUT__("Status", os.str());

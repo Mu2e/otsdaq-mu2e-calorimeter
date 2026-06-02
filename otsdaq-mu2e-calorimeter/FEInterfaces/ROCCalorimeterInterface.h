@@ -86,7 +86,12 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
         ROC_ADDRESS_FW_BUILD_DATE_HI         = 243,
         ROC_ADDRESS_FW_BUILD_TIME_LO         = 244,
         ROC_ADDRESS_FW_BUILD_TIME_HI         = 245,
-        ROC_ADDRESS_FW_VERSION               = 246
+        ROC_ADDRESS_FW_VERSION               = 246,
+
+        ROC_ADDRESS_SW_GIT_SHA               = 247,
+        ROC_ADDRESS_SW_HEX_HASH              = 248,
+        ROC_ADDRESS_SW_BUILD_DATE_LO         = 249,
+        ROC_ADDRESS_SW_BUILD_DATE_HI         = 250
 		// clang-format on
 	};
 
