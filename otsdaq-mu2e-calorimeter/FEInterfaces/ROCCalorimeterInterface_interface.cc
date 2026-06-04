@@ -14,6 +14,8 @@
 #include <filesystem>
 #include <fstream>
 #include <iomanip>
+#include <initializer_list>
+#include <vector>
 
 using namespace ots;
 
@@ -2158,6 +2160,135 @@ void ROCCalorimeterInterface::PrintROCFirmwareVersion(__ARGS__) {
 	const std::string status = getFirmwareVersion();
 	__COUT_INFO__ << status << __E__;
 	__SET_ARG_OUT__("Status", status);
+}
+
+//==================================================================================================
+std::string ROCCalorimeterInterface::getFirmwareInventoryHeader(void) {
+	std::stringstream os;
+	os << std::left
+	   << std::setw(14) << "Status"
+	   << std::setw(10) << "BoardID"
+	   << std::setw(10) << "UID_MSB"
+	   << std::setw(10) << "UID_CSB"
+	   << std::setw(10) << "UID_LSB"
+	   << std::setw(9) << "Project"
+	   << std::setw(10) << "FW_Git"
+	   << std::setw(13) << "FW_Date"
+	   << std::setw(10) << "FW_Time"
+	   << std::setw(8) << "FW_Ver"
+	   << std::setw(10) << "SW_Git"
+	   << std::setw(10) << "SW_Hash"
+	   << std::setw(13) << "SW_Date";
+	return os.str();
+}
+
+//==================================================================================================
+std::string ROCCalorimeterInterface::getFirmwareInventoryRow(void) {
+	const uint16_t timeoutWord = 0xEFFE;
+
+	const uint16_t board_id   = readRegister(ROC_ADDRESS_BOARD_ID);
+	const uint16_t uid_lsb    = readRegister(ROC_ADDRESS_BOARD_U_ID_LSB);
+	const uint16_t uid_csb    = readRegister(ROC_ADDRESS_BOARD_U_ID_CSB);
+	const uint16_t uid_msb    = readRegister(ROC_ADDRESS_BOARD_U_ID_MSB);
+	const uint16_t proj_id    = readRegister(ROC_ADDRESS_FW_PROJECT_ID);
+	const uint16_t git_sha    = readRegister(ROC_ADDRESS_FW_GIT_SHA);
+	const uint16_t date_lo    = readRegister(ROC_ADDRESS_FW_BUILD_DATE_LO);
+	const uint16_t date_hi    = readRegister(ROC_ADDRESS_FW_BUILD_DATE_HI);
+	const uint16_t time_lo    = readRegister(ROC_ADDRESS_FW_BUILD_TIME_LO);
+	const uint16_t time_hi    = readRegister(ROC_ADDRESS_FW_BUILD_TIME_HI);
+	const uint16_t version    = readRegister(ROC_ADDRESS_FW_VERSION);
+	const uint16_t sw_git     = readRegister(ROC_ADDRESS_SW_GIT_SHA);
+	const uint16_t sw_hash    = readRegister(ROC_ADDRESS_SW_HEX_HASH);
+	const uint16_t sw_date_lo = readRegister(ROC_ADDRESS_SW_BUILD_DATE_LO);
+	const uint16_t sw_date_hi = readRegister(ROC_ADDRESS_SW_BUILD_DATE_HI);
+
+	auto isTimeout = [timeoutWord](uint16_t v) { return v == timeoutWord; };
+	auto isAnyTimeout = [&](std::initializer_list<uint16_t> values) {
+		for(const auto v : values)
+			if(isTimeout(v))
+				return true;
+		return false;
+	};
+	auto bcd16 = [](uint16_t v) {
+		return ((v >> 12) & 0xF) * 1000 + ((v >> 8) & 0xF) * 100 + ((v >> 4) & 0xF) * 10 + (v & 0xF);
+	};
+	auto bcd8 = [](uint8_t v) { return ((v >> 4) & 0xF) * 10 + (v & 0xF); };
+	auto hex4 = [](uint16_t v) {
+		std::stringstream s;
+		s << "0x" << std::hex << std::setw(4) << std::setfill('0') << v << std::dec;
+		return s.str();
+	};
+	auto dateString = [&](uint16_t hi, uint16_t lo) {
+		if(isAnyTimeout({hi, lo}))
+			return std::string("[TIMEOUT]");
+		std::stringstream s;
+		s << std::setw(4) << std::setfill('0') << bcd16(hi) << "-"
+		  << std::setw(2) << bcd8((lo >> 8) & 0xFF) << "-"
+		  << std::setw(2) << bcd8(lo & 0xFF);
+		return s.str();
+	};
+	auto timeString = [&](uint16_t hi, uint16_t lo) {
+		if(isAnyTimeout({hi, lo}))
+			return std::string("[TIMEOUT]");
+		std::stringstream s;
+		s << std::setw(2) << std::setfill('0') << bcd8(hi & 0xFF) << ":"
+		  << std::setw(2) << bcd8((lo >> 8) & 0xFF) << ":"
+		  << std::setw(2) << bcd8(lo & 0xFF);
+		return s.str();
+	};
+
+	std::vector<std::string> problems;
+	if(isAnyTimeout({board_id, uid_lsb, uid_csb, uid_msb, proj_id, git_sha, date_lo, date_hi, time_lo, time_hi, version, sw_git, sw_hash, sw_date_lo, sw_date_hi}))
+		problems.push_back("TIMEOUT");
+	if(!isTimeout(board_id) && (board_id == 0 || board_id == 0xFFFF))
+		problems.push_back("BAD_BOARD_ID");
+	if(!isAnyTimeout({uid_lsb, uid_csb, uid_msb}) && uid_lsb == 0 && uid_csb == 0 && uid_msb == 0)
+		problems.push_back("BAD_UID");
+	if(!isTimeout(proj_id) && proj_id == 0)
+		problems.push_back("BAD_PROJECT");
+	if(!isTimeout(git_sha) && git_sha == 0)
+		problems.push_back("BAD_FW_GIT");
+
+	std::string status = "OK";
+	if(!problems.empty()) {
+		status.clear();
+		for(size_t i = 0; i < problems.size(); ++i) {
+			if(i)
+				status += ",";
+			status += problems[i];
+		}
+	}
+
+	const char project_str[3] = {
+	    static_cast<char>((proj_id >> 8) & 0xFF),
+	    static_cast<char>(proj_id & 0xFF),
+	    '\0',
+	};
+
+	const unsigned major = (version >> 8) & 0xFF;
+	const unsigned minor = version & 0xFF;
+	std::stringstream fwVersion;
+	if(isTimeout(version))
+		fwVersion << "[TIMEOUT]";
+	else
+		fwVersion << major << "." << minor;
+
+	std::stringstream os;
+	os << std::left
+	   << std::setw(14) << status
+	   << std::setw(10) << (isTimeout(board_id) ? std::string("[TIMEOUT]") : std::to_string(board_id))
+	   << std::setw(10) << (isTimeout(uid_msb) ? std::string("[TIMEOUT]") : hex4(uid_msb))
+	   << std::setw(10) << (isTimeout(uid_csb) ? std::string("[TIMEOUT]") : hex4(uid_csb))
+	   << std::setw(10) << (isTimeout(uid_lsb) ? std::string("[TIMEOUT]") : hex4(uid_lsb))
+	   << std::setw(9) << (isTimeout(proj_id) ? std::string("[TIMEOUT]") : std::string(project_str))
+	   << std::setw(10) << (isTimeout(git_sha) ? std::string("[TIMEOUT]") : hex4(git_sha))
+	   << std::setw(13) << dateString(date_hi, date_lo)
+	   << std::setw(10) << timeString(time_hi, time_lo)
+	   << std::setw(8) << fwVersion.str()
+	   << std::setw(10) << (isTimeout(sw_git) ? std::string("[TIMEOUT]") : hex4(sw_git))
+	   << std::setw(10) << (isTimeout(sw_hash) ? std::string("[TIMEOUT]") : hex4(sw_hash))
+	   << std::setw(13) << dateString(sw_date_hi, sw_date_lo);
+	return os.str();
 }
 
 //==================================================================================================
