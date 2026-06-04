@@ -2186,7 +2186,6 @@ std::string ROCCalorimeterInterface::getFirmwareInventoryHeader(void) {
 std::string ROCCalorimeterInterface::getFirmwareInventoryRow(void) {
 	const uint16_t timeoutWord = 0xEFFE;
 
-	const uint16_t board_id   = readRegister(ROC_ADDRESS_BOARD_ID);
 	const uint16_t uid_lsb    = readRegister(ROC_ADDRESS_BOARD_U_ID_LSB);
 	const uint16_t uid_csb    = readRegister(ROC_ADDRESS_BOARD_U_ID_CSB);
 	const uint16_t uid_msb    = readRegister(ROC_ADDRESS_BOARD_U_ID_MSB);
@@ -2237,10 +2236,14 @@ std::string ROCCalorimeterInterface::getFirmwareInventoryRow(void) {
 		return s.str();
 	};
 
+	std::string boardIdString = "[CACHE_EMPTY]";
+	if(boardConfig_.identityValid && boardConfig_.boardID != INVALID_BOARDID)
+		boardIdString = std::to_string(boardConfig_.boardID);
+
 	std::vector<std::string> problems;
-	if(isAnyTimeout({board_id, uid_lsb, uid_csb, uid_msb, proj_id, git_sha, date_lo, date_hi, time_lo, time_hi, version, sw_git, sw_hash, sw_date_lo, sw_date_hi}))
+	if(isAnyTimeout({uid_lsb, uid_csb, uid_msb, proj_id, git_sha, date_lo, date_hi, time_lo, time_hi, version, sw_git, sw_hash, sw_date_lo, sw_date_hi}))
 		problems.push_back("TIMEOUT");
-	if(!isTimeout(board_id) && (board_id == 0 || board_id == 0xFFFF))
+	if(boardIdString == "[CACHE_EMPTY]")
 		problems.push_back("BAD_BOARD_ID");
 	if(!isAnyTimeout({uid_lsb, uid_csb, uid_msb}) && uid_lsb == 0 && uid_csb == 0 && uid_msb == 0)
 		problems.push_back("BAD_UID");
@@ -2276,7 +2279,7 @@ std::string ROCCalorimeterInterface::getFirmwareInventoryRow(void) {
 	std::stringstream os;
 	os << std::left
 	   << std::setw(14) << status
-	   << std::setw(10) << (isTimeout(board_id) ? std::string("[TIMEOUT]") : std::to_string(board_id))
+	   << std::setw(10) << boardIdString
 	   << std::setw(10) << (isTimeout(uid_msb) ? std::string("[TIMEOUT]") : hex4(uid_msb))
 	   << std::setw(10) << (isTimeout(uid_csb) ? std::string("[TIMEOUT]") : hex4(uid_csb))
 	   << std::setw(10) << (isTimeout(uid_lsb) ? std::string("[TIMEOUT]") : hex4(uid_lsb))
