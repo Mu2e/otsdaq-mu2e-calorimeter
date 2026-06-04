@@ -27,6 +27,11 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 	// void stop	(void) override;
 	bool running(void) override;
 
+	virtual void writeDelay(uint16_t delay) override;  // 5ns steps
+	virtual int  readDelay(void) override;             // 5ns steps
+	virtual int  readDTCLinkLossCounter(void) override;
+	virtual void resetDTCLinkLossCounter(void) override;
+
 	// write and read to registers
 	virtual void     writeEmulatorRegister(uint16_t address, uint16_t data_to_write) override;
 	virtual uint16_t readEmulatorRegister(uint16_t address) override;
@@ -150,6 +155,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 	void RMZB_writeAllSiPMbias(float* hv);
 	void EnableDisableLEDs(__ARGS__);
 	void FindBoardIDFromSerial(__ARGS__);
+	void DebugDatabaseLookup(__ARGS__);
 
 	void ConfigureLink(__ARGS__);
 	void ConfigureLink(std::string conf, std::string confFile, bool hvonoff, bool doCalibration, bool setThresholds, int offset);

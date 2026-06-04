@@ -97,6 +97,12 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(const std::string& rocUID, cons
 	                        std::vector<std::string>{"Status"},  // output
 	                        1);
 
+	registerFEMacroFunction("Debug Database Lookup",
+	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::DebugDatabaseLookup),
+	                        std::vector<std::string>{},          // input
+	                        std::vector<std::string>{"Status"},  // output
+	                        1);
+
 	registerFEMacroFunction("Set Board Voltages",
 	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::SetBoardVoltages),
 	                        std::vector<std::string>{"configuration folder, Default:= nominal",
@@ -276,6 +282,30 @@ void ROCCalorimeterInterface::writeEmulatorRegister(uint16_t address, uint16_t d
 	return;
 
 }  // end writeRegister()
+
+//==================================================================================================
+/// FIXME -- get the Calo correct delay register
+void ROCCalorimeterInterface::writeDelay(uint16_t delay)
+{
+	// this->writeRegister(24, delay);
+	return;
+}
+
+//==================================================================================================
+/// FIXME -- get the Calo correct delay register
+int ROCCalorimeterInterface::readDelay() { return 0; }  // this->readRegister(7); }
+
+//==================================================================================================
+/// FIXME -- get the Calo correct link loss reset "soft reset" register
+int ROCCalorimeterInterface::readDTCLinkLossCounter() { return 0; }  // this->readRegister(8); }
+
+//==================================================================================================
+/// FIXME -- get the Calo correct link loss reset "soft reset" register
+void ROCCalorimeterInterface::resetDTCLinkLossCounter()
+{
+	// this->writeRegister(24, 0x1);
+	return;
+}
 
 //==================================================================================================
 uint16_t ROCCalorimeterInterface::readEmulatorRegister(uint16_t address)  // not useful, broken by Luca
@@ -869,7 +899,7 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 void ots::ROCCalorimeterInterface::FindBoardIDFromSerial(__ARGS__) {
 	std::stringstream os;
 
-	//   updateBoardIdFromSerial_();
+	updateBoardIdFromSerial_();
 
 	os << "identityValid          = " << (boardConfig_.identityValid ? "true" : "false") << "\n";
 	os << "serial (reg 147)       = 0x" << std::hex << boardConfig_.serial << std::dec << "\n";
@@ -924,6 +954,180 @@ void ots::ROCCalorimeterInterface::FindBoardIDFromSerial(__ARGS__) {
 		os << "Thr[" << ch << "]=" << v << "\n";
 	}
 
+	__SET_ARG_OUT__("Status", os.str());
+}
+
+///////////////////////
+// Debug macro: tests each step of DB lookup independently and reports results to GUI
+void ots::ROCCalorimeterInterface::DebugDatabaseLookup(__ARGS__) {
+	std::stringstream os;
+	__FE_COUT__ << "===== DEBUG DATABASE LOOKUP =====" << __E__;
+	os << "===== DEBUG DATABASE LOOKUP =====\n\n";
+
+	// --- Step 1: read serial from register 147 ---
+	__FE_COUT__ << "STEP 1: Reading serial from register 147..." << __E__;
+	os << "--- STEP 1: Read serial from register 147 ---\n";
+	uint16_t serial = 0;
+	try {
+		serial = readRegister(147);
+		__FE_COUT__ << "STEP 1 OK: serial = 0x" << std::hex << serial << std::dec << __E__;
+		os << "OK: serial = 0x" << std::hex << serial << std::dec << " (" << serial << ")\n";
+	}
+	catch(const std::exception& e) {
+		__FE_COUT__ << "STEP 1 FAIL: readRegister(147) threw: " << e.what() << __E__;
+		os << "FAIL: readRegister(147) threw exception: " << e.what() << "\n";
+		os << ">> Cannot continue without serial. Aborting.\n";
+		__SET_ARG_OUT__("Status", os.str());
+		return;
+	}
+
+	if(serial == 0 || serial == 0xFFFF) {
+		__FE_COUT__ << "STEP 1 WARNING: serial 0x" << std::hex << serial << std::dec << " looks invalid" << __E__;
+		os << "WARNING: serial value 0x" << std::hex << serial << std::dec << " looks invalid (0 or 0xFFFF)\n";
+	}
+
+	// --- Step 2: get ConfigurationManager ---
+	__FE_COUT__ << "STEP 2: Getting ConfigurationManager..." << __E__;
+	os << "\n--- STEP 2: Get ConfigurationManager ---\n";
+	const ots::ConfigurationManager* cfgMgr = nullptr;
+	try {
+		cfgMgr = getConfigurationManager();
+		if(cfgMgr) {
+			__FE_COUT__ << "STEP 2 OK: ConfigurationManager pointer is valid" << __E__;
+			os << "OK: ConfigurationManager pointer is valid\n";
+		} else {
+			__FE_COUT__ << "STEP 2 FAIL: getConfigurationManager() returned nullptr" << __E__;
+			os << "FAIL: getConfigurationManager() returned nullptr\n";
+			__SET_ARG_OUT__("Status", os.str());
+			return;
+		}
+	}
+	catch(const std::exception& e) {
+		__FE_COUT__ << "STEP 2 FAIL: getConfigurationManager() threw: " << e.what() << __E__;
+		os << "FAIL: getConfigurationManager() threw: " << e.what() << "\n";
+		__SET_ARG_OUT__("Status", os.str());
+		return;
+	}
+
+	// --- Step 3: lookup serial in SubsystemCalorimeterParametersTable ---
+	__FE_COUT__ << "STEP 3: Looking up serial 0x" << std::hex << serial << std::dec << " in SubsystemCalorimeterParametersTable..." << __E__;
+	os << "\n--- STEP 3: Lookup serial in SubsystemCalorimeterParametersTable ---\n";
+	int boardID = -1;
+	try {
+		auto rows = cfgMgr->getNode("SubsystemCalorimeterParametersTable").getChildren();
+		__FE_COUT__ << "STEP 3: SubsystemCalorimeterParametersTable has " << rows.size() << " rows" << __E__;
+		os << "OK: SubsystemCalorimeterParametersTable has " << rows.size() << " rows\n";
+
+		bool found = false;
+		for(const auto& row : rows) {
+			const auto& rec = row.second;
+			uint64_t    tableSerial = 0;
+			try {
+				tableSerial = rec.getNode("SerialNumber").getValue<uint64_t>();
+			}
+			catch(const std::exception& e) {
+				os << "  row '" << row.first << "': FAIL reading SerialNumber: " << e.what() << "\n";
+				continue;
+			}
+
+			os << "  row '" << row.first << "': SerialNumber=0x" << std::hex << tableSerial << std::dec;
+
+			if(static_cast<uint16_t>(tableSerial) == serial) {
+				try {
+					boardID = static_cast<int>(rec.getNode("BoardId").getValue<uint64_t>());
+					__FE_COUT__ << "STEP 3 MATCH: row '" << row.first << "' serial 0x" << std::hex << tableSerial << std::dec << " -> BoardId=" << boardID << __E__;
+					os << " -> MATCH! BoardId=" << boardID << "\n";
+					found = true;
+					break;
+				}
+				catch(const std::exception& e) {
+					__FE_COUT__ << "STEP 3 FAIL: matched serial but cannot read BoardId: " << e.what() << __E__;
+					os << " -> MATCH on serial but FAIL reading BoardId: " << e.what() << "\n";
+				}
+			} else {
+				os << " (no match)\n";
+			}
+		}
+
+		if(!found) {
+			__FE_COUT__ << "STEP 3 NOT FOUND: no row matches serial 0x" << std::hex << serial << std::dec << __E__;
+			os << "NOT FOUND: no row in ParametersTable matches serial 0x" << std::hex << serial << std::dec << "\n";
+			os << ">> Cannot continue without boardID. Aborting.\n";
+			__SET_ARG_OUT__("Status", os.str());
+			return;
+		}
+	}
+	catch(const std::exception& e) {
+		__FE_COUT__ << "STEP 3 FAIL: exception accessing SubsystemCalorimeterParametersTable: " << e.what() << __E__;
+		os << "FAIL: exception accessing SubsystemCalorimeterParametersTable: " << e.what() << "\n";
+		__SET_ARG_OUT__("Status", os.str());
+		return;
+	}
+
+	// --- Step 4: lookup boardID in SubsystemCalorimeterThresholdsTable ---
+	__FE_COUT__ << "STEP 4: Looking up BoardID=" << boardID << " in SubsystemCalorimeterThresholdsTable..." << __E__;
+	os << "\n--- STEP 4: Lookup BoardID=" << boardID << " in SubsystemCalorimeterThresholdsTable ---\n";
+	try {
+		auto rows = cfgMgr->getNode("SubsystemCalorimeterThresholdsTable").getChildren();
+		__FE_COUT__ << "STEP 4: SubsystemCalorimeterThresholdsTable has " << rows.size() << " rows" << __E__;
+		os << "OK: SubsystemCalorimeterThresholdsTable has " << rows.size() << " rows\n";
+
+		bool found = false;
+		for(const auto& row : rows) {
+			const auto& r = row.second;
+			int         tableBoardId = -1;
+			try {
+				tableBoardId = static_cast<int>(r.getNode("BoardID").getValue<uint64_t>());
+			}
+			catch(const std::exception& e) {
+				os << "  row '" << row.first << "': FAIL reading BoardID: " << e.what() << "\n";
+				continue;
+			}
+
+			if(tableBoardId == boardID) {
+				__FE_COUT__ << "STEP 4 MATCH: row '" << row.first << "' BoardID=" << tableBoardId << __E__;
+				os << "  row '" << row.first << "': BoardID=" << tableBoardId << " -> MATCH!\n";
+
+				try {
+					auto thrBmp = r.getNode("Thresholds").getValueAsBitMap();
+					__FE_COUT__ << "STEP 4 OK: Thresholds bitmap rows=" << thrBmp.numberOfRows() << " cols(0)=" << thrBmp.numberOfColumns(0) << __E__;
+					os << "  Thresholds bitmap: rows=" << thrBmp.numberOfRows()
+					   << " cols(0)=" << thrBmp.numberOfColumns(0) << "\n";
+				}
+				catch(const std::exception& e) {
+					__FE_COUT__ << "STEP 4 FAIL: reading Thresholds bitmap: " << e.what() << __E__;
+					os << "  FAIL reading Thresholds bitmap: " << e.what() << "\n";
+				}
+
+				found = true;
+				break;
+			}
+		}
+
+		if(!found) {
+			__FE_COUT__ << "STEP 4 NOT FOUND: no row matches BoardID=" << boardID << __E__;
+			os << "NOT FOUND: no row in ThresholdsTable matches BoardID=" << boardID << "\n";
+		}
+	}
+	catch(const std::exception& e) {
+		__FE_COUT__ << "STEP 4 FAIL: exception accessing SubsystemCalorimeterThresholdsTable: " << e.what() << __E__;
+		os << "FAIL: exception accessing SubsystemCalorimeterThresholdsTable: " << e.what() << "\n";
+	}
+
+	// --- Step 5: compare with cached boardConfig_ ---
+	__FE_COUT__ << "STEP 5: Comparing with cached boardConfig_..." << __E__;
+	os << "\n--- STEP 5: Current boardConfig_ state ---\n";
+	os << "boardConfig_.identityValid = " << (boardConfig_.identityValid ? "true" : "false") << "\n";
+	os << "boardConfig_.serial        = 0x" << std::hex << boardConfig_.serial << std::dec << "\n";
+	os << "boardConfig_.boardID       = " << boardConfig_.boardID << "\n";
+	if(boardConfig_.serial != serial) {
+		__FE_COUT__ << "STEP 5 WARNING: cached serial (0x" << std::hex << boardConfig_.serial << ") != hw serial (0x" << serial << std::dec << ")" << __E__;
+		os << "WARNING: cached serial (0x" << std::hex << boardConfig_.serial
+		   << ") != hw serial (0x" << serial << std::dec << ")\n";
+	}
+
+	__FE_COUT__ << "===== DEBUG COMPLETE =====" << __E__;
+	os << "\n===== DEBUG COMPLETE =====\n";
 	__SET_ARG_OUT__("Status", os.str());
 }
 
