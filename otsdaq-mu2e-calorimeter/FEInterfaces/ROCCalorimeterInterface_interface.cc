@@ -2236,6 +2236,9 @@ std::string ROCCalorimeterInterface::getFirmwareInventoryRow(void) {
 		return s.str();
 	};
 
+	if(!boardConfig_.identityValid || boardConfig_.boardID == INVALID_BOARDID)
+		updateBoardIdFromSerial_();
+
 	std::string boardIdString = "[CACHE_EMPTY]";
 	if(boardConfig_.identityValid && boardConfig_.boardID != INVALID_BOARDID)
 		boardIdString = std::to_string(boardConfig_.boardID);
