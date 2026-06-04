@@ -1884,7 +1884,7 @@ void ROCCalorimeterInterface::PrintROCConfiguration(__ARGS__) {
 }
 
 //==================================================================================================
-void ROCCalorimeterInterface::PrintROCFirmwareVersion(__ARGS__) {
+std::string ROCCalorimeterInterface::getFirmwareVersion(void) {
 	const uint16_t proj_id    = readRegister(ROC_ADDRESS_FW_PROJECT_ID);
 	const uint16_t git_sha    = readRegister(ROC_ADDRESS_FW_GIT_SHA);
 	const uint16_t date_lo    = readRegister(ROC_ADDRESS_FW_BUILD_DATE_LO);
@@ -1946,8 +1946,14 @@ void ROCCalorimeterInterface::PrintROCFirmwareVersion(__ARGS__) {
 		   << std::setw(2) << sw_day << "\n";
 	}
 
-	__COUT_INFO__ << os.str() << __E__;
-	__SET_ARG_OUT__("Status", os.str());
+	return os.str();
+}
+
+//==================================================================================================
+void ROCCalorimeterInterface::PrintROCFirmwareVersion(__ARGS__) {
+	const std::string status = getFirmwareVersion();
+	__COUT_INFO__ << status << __E__;
+	__SET_ARG_OUT__("Status", status);
 }
 
 //==================================================================================================

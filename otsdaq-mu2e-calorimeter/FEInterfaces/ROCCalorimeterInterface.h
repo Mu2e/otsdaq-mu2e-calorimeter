@@ -164,6 +164,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 	void ReadVoltagesFromDB(__ARGS__);
 	void ReadChannelStatusFromDB(__ARGS__);
 	void PrintROCConfiguration(__ARGS__);
+	std::string getFirmwareVersion(void) override;
 	void PrintROCFirmwareVersion(__ARGS__);
 	// void ReadVoltagesFromDB();
 
