@@ -2239,6 +2239,10 @@ std::string ROCCalorimeterInterface::getFirmwareInventoryRow(void) {
 	if(!boardConfig_.identityValid || boardConfig_.boardID == INVALID_BOARDID)
 		updateBoardIdFromSerial_();
 
+	// Fallback: populate board ID cache if configure() was not run
+	if(!boardConfig_.identityValid || boardConfig_.boardID == INVALID_BOARDID)
+		updateBoardIdFromSerial_();
+
 	std::string boardIdString = "[CACHE_EMPTY]";
 	if(boardConfig_.identityValid && boardConfig_.boardID != INVALID_BOARDID)
 		boardIdString = std::to_string(boardConfig_.boardID);
@@ -2295,6 +2299,64 @@ std::string ROCCalorimeterInterface::getFirmwareInventoryRow(void) {
 	   << std::setw(10) << (isTimeout(sw_hash) ? std::string("[TIMEOUT]") : hex4(sw_hash))
 	   << std::setw(13) << dateString(sw_date_hi, sw_date_lo);
 	return os.str();
+}
+
+//==================================================================================================
+std::string ROCCalorimeterInterface::getFirmwareInventoryJSON(void) {
+	const uint16_t timeoutWord = 0xEFFE;
+
+	const uint16_t uid_lsb    = readRegister(ROC_ADDRESS_BOARD_U_ID_LSB);
+	const uint16_t uid_csb    = readRegister(ROC_ADDRESS_BOARD_U_ID_CSB);
+	const uint16_t uid_msb    = readRegister(ROC_ADDRESS_BOARD_U_ID_MSB);
+	const uint16_t proj_id    = readRegister(ROC_ADDRESS_FW_PROJECT_ID);
+	const uint16_t git_sha    = readRegister(ROC_ADDRESS_FW_GIT_SHA);
+	const uint16_t date_lo    = readRegister(ROC_ADDRESS_FW_BUILD_DATE_LO);
+	const uint16_t date_hi    = readRegister(ROC_ADDRESS_FW_BUILD_DATE_HI);
+	const uint16_t time_lo    = readRegister(ROC_ADDRESS_FW_BUILD_TIME_LO);
+	const uint16_t time_hi    = readRegister(ROC_ADDRESS_FW_BUILD_TIME_HI);
+	const uint16_t version    = readRegister(ROC_ADDRESS_FW_VERSION);
+	const uint16_t sw_git     = readRegister(ROC_ADDRESS_SW_GIT_SHA);
+	const uint16_t sw_hash    = readRegister(ROC_ADDRESS_SW_HEX_HASH);
+	const uint16_t sw_date_lo = readRegister(ROC_ADDRESS_SW_BUILD_DATE_LO);
+	const uint16_t sw_date_hi = readRegister(ROC_ADDRESS_SW_BUILD_DATE_HI);
+
+	auto isTimeout = [timeoutWord](uint16_t v) { return v == timeoutWord; };
+
+	// Fallback: populate board ID cache if configure() was not run
+	if(!boardConfig_.identityValid || boardConfig_.boardID == INVALID_BOARDID)
+		updateBoardIdFromSerial_();
+
+	int boardId = -1;
+	if(boardConfig_.identityValid && boardConfig_.boardID != INVALID_BOARDID)
+		boardId = static_cast<int>(boardConfig_.boardID);
+
+	// Build JSON manually (no external JSON library dependency)
+	std::stringstream js;
+	js << "{";
+	js << "\"boardId\":" << boardId;
+	js << ",\"uidMsb\":" << uid_msb;
+	js << ",\"uidCsb\":" << uid_csb;
+	js << ",\"uidLsb\":" << uid_lsb;
+	js << ",\"project\":" << proj_id;
+	js << ",\"fwGit\":" << git_sha;
+	js << ",\"fwDateLo\":" << date_lo;
+	js << ",\"fwDateHi\":" << date_hi;
+	js << ",\"fwTimeLo\":" << time_lo;
+	js << ",\"fwTimeHi\":" << time_hi;
+	js << ",\"fwVersion\":" << version;
+	js << ",\"swGit\":" << sw_git;
+	js << ",\"swHash\":" << sw_hash;
+	js << ",\"swDateLo\":" << sw_date_lo;
+	js << ",\"swDateHi\":" << sw_date_hi;
+	js << ",\"timeout\":" << (isTimeout(uid_lsb) || isTimeout(uid_csb) || isTimeout(uid_msb) ||
+	                          isTimeout(proj_id) || isTimeout(git_sha) ||
+	                          isTimeout(date_lo) || isTimeout(date_hi) ||
+	                          isTimeout(time_lo) || isTimeout(time_hi) ||
+	                          isTimeout(version) || isTimeout(sw_git) ||
+	                          isTimeout(sw_hash) || isTimeout(sw_date_lo) || isTimeout(sw_date_hi)
+	                          ? "true" : "false");
+	js << "}";
+	return js.str();
 }
 
 //==================================================================================================
