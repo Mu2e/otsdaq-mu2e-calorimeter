@@ -1,1005 +1,646 @@
 <!DOCTYPE HTML>
 <html lang="en">
 <head>
-	<title>ROC Firmware Manager</title>
-
+	<title>Firmware Manager</title>
 	<link href="/WebPath/css/fonts.css?family=Inconsolata:400" rel="stylesheet" type="text/css">
-
 	<script type="text/JavaScript" src="/WebPath/js/Globals.js"></script>
 	<script type="text/JavaScript" src="/WebPath/js/Debug.js"></script>
 	<script type="text/JavaScript" src="/WebPath/js/DesktopContent.js"></script>
 
-	<style>
-		:root {
-			--border: #c7cdd4;
-			--text: #17202a;
-			--muted: #5d6975;
-			--surface: #f6f8fa;
-			--panel: #ffffff;
-			--ok: #d8f0dd;
-			--bad: #ffd9d6;
-			--timeout: #f7b9b4;
-			--warn: #fff1c4;
-			--idle: #eceff3;
-			--accent: #255f99;
-		}
-
-		body {
-			margin: 0;
-			font-family: Arial, Helvetica, sans-serif;
-			color: var(--text);
-			background: var(--surface);
-		}
-
-		#app {
-			padding: 14px;
-		}
-
-		.toolbar,
-		.filters,
-		.summary,
-		.log-panel {
-			background: var(--panel);
-			border: 1px solid var(--border);
-			border-radius: 6px;
-			padding: 10px;
-			margin-bottom: 10px;
-		}
-
-		.toolbar {
-			display: grid;
-			grid-template-columns: 1.2fr 1fr auto auto auto;
-			gap: 8px;
-			align-items: end;
-		}
-
-		.filters {
-			display: grid;
-			grid-template-columns: repeat(7, minmax(90px, 1fr));
-			gap: 8px;
-			align-items: end;
-		}
-
-		label {
-			display: block;
-			font-size: 11px;
-			font-weight: bold;
-			color: var(--muted);
-			margin-bottom: 3px;
-		}
-
-		input,
-		select,
-		button {
-			box-sizing: border-box;
-			width: 100%;
-			min-height: 30px;
-			font-size: 13px;
-		}
-
-		button {
-			border: 1px solid #8d99a6;
-			border-radius: 4px;
-			background: #f8fafc;
-			cursor: pointer;
-		}
-
-		button.primary {
-			background: var(--accent);
-			border-color: var(--accent);
-			color: white;
-		}
-
-		button.danger {
-			background: #a5382f;
-			border-color: #a5382f;
-			color: white;
-		}
-
-		button:disabled {
-			opacity: 0.5;
-			cursor: default;
-		}
-
-		.table-wrap {
-			border: 1px solid var(--border);
-			background: var(--panel);
-			overflow: auto;
-			max-height: calc(100vh - 245px);
-		}
-
-		table {
-			border-collapse: collapse;
-			width: 100%;
-			min-width: 1320px;
-			font-size: 12px;
-		}
-
-		th,
-		td {
-			border-bottom: 1px solid #d7dce2;
-			padding: 5px 6px;
-			text-align: left;
-			white-space: nowrap;
-		}
-
-		th {
-			position: sticky;
-			top: 0;
-			background: #e8edf3;
-			z-index: 1;
-		}
-
-		tr.status-ok { background: var(--ok); }
-		tr.status-mismatch { background: var(--bad); }
-		tr.status-timeout { background: var(--timeout); }
-		tr.status-warn { background: var(--warn); }
-		tr.status-idle { background: var(--idle); }
-
-		tr:hover {
-			outline: 2px solid #7aa4d1;
-			outline-offset: -2px;
-		}
-
-		.small {
-			font-size: 11px;
-			color: var(--muted);
-		}
-
-		.mono {
-			font-family: "Inconsolata", monospace;
-		}
-
-		.summary {
-			display: flex;
-			gap: 14px;
-			flex-wrap: wrap;
-			font-size: 13px;
-		}
-
-		.summary span {
-			font-weight: bold;
-		}
-
-		.log-panel {
-			font-family: "Inconsolata", monospace;
-			font-size: 12px;
-			max-height: 110px;
-			overflow: auto;
-		}
-
-		.modal-backdrop {
-			display: none;
-			position: fixed;
-			inset: 0;
-			background: rgba(0,0,0,0.45);
-			z-index: 10;
-		}
-
-		.modal {
-			position: absolute;
-			top: 44px;
-			left: 50%;
-			transform: translateX(-50%);
-			width: min(860px, calc(100vw - 42px));
-			background: white;
-			border: 1px solid #596572;
-			border-radius: 6px;
-			padding: 14px;
-			box-shadow: 0 12px 34px rgba(0,0,0,0.22);
-		}
-
-		.modal-grid {
-			display: grid;
-			grid-template-columns: 1fr 1fr;
-			gap: 8px 18px;
-			font-size: 13px;
-		}
-
-		.modal-actions {
-			display: grid;
-			grid-template-columns: repeat(4, 1fr);
-			gap: 8px;
-			margin-top: 14px;
-		}
-	</style>
-
-	<script>
-		var CODE_EDITOR_APP_ID_ = 0;
-		var FW_DIR_KEY_ = "ROCFirmwareManager.fwDir";
-		var FW_SELECTED_KEY_ = "ROCFirmwareManager.selectedFw";
-		var DEFAULT_FW_DIR_ = "/home/carrarin/workspace/dirac/firmware/releases/roc";
-		var READ_ADDRESSES_ = [145,146,147,240,241,242,243,244,245,246,247,248,249,250];
-		var rows_ = [];
-		var feMap_ = {};
-		var expected_ = {};
-		var selected_ = {};
-		var activeModalRow_ = null;
-
-		function init()
-		{
-			DesktopContent.tooltip("ROC Firmware Manager",
-				"Read ROC firmware version registers, compare against a selected release, and prepare ROC flash operations.");
-			DesktopContent.setWindowTooltip("ROC firmware inventory and programming control.");
-			document.getElementById("fwDir").value = localStorage.getItem(FW_DIR_KEY_) || DEFAULT_FW_DIR_;
-			paintEmptyTable();
-			resolveCodeEditor();
-			loadFEMacros();
-		}
-
-		function resolveCodeEditor()
-		{
-			DesktopContent.XMLHttpRequest(
-				"Request?RequestType=getAppId&classNeedle=ots::CodeEditorSupervisor",
-				"",
-				function(req)
-				{
-					CODE_EDITOR_APP_ID_ = DesktopContent.getXMLValue(req, "id") | 0;
-					if (CODE_EDITOR_APP_ID_) loadFirmwareList();
-					else log("CodeEditorSupervisor not found; firmware dropdown cannot browse a directory.");
-				},
-				0, 0, true, false, true
-			);
-		}
-
-		function loadFEMacros()
-		{
-			log("Loading FE macro list...");
-			DesktopContent.XMLHttpRequest("Request?RequestType=getFEMacroList", "", function(req)
-			{
-				feMap_ = {};
-				var feMacros = req.responseXML.getElementsByTagName("FEMacros");
-				for (var i = 0; i < feMacros.length; ++i)
-				{
-					var parts = feMacros[i].getAttribute("value").split(":");
-					if (parts.length < 5) continue;
-					var feClass = parts[2];
-					var feUID = parts[3];
-					for (var c = 4; c < parts.length;)
-					{
-						var macroName = parts[c];
-						var requiredPermissions = parts[c + 1];
-						c += 2;
-						var inputs = [];
-						var nIn = parts[c] | 0;
-						for (var j = 0; j < nIn; ++j) inputs.push(parts[c + 1 + j]);
-						c += 1 + nIn;
-						var outputs = [];
-						var nOut = parts[c] | 0;
-						for (var k = 0; k < nOut; ++k) outputs.push(parts[c + 1 + k]);
-						c += 1 + nOut;
-						if (macroName == "ROC Read")
-						{
-							feMap_[feUID] = {
-								feClass: feClass,
-								macroName: macroName,
-								inputs: inputs,
-								outputs: outputs,
-								requiredPermissions: requiredPermissions
-							};
-						}
-					}
-				}
-				var count = Object.keys(feMap_).length;
-				log("Loaded ROC Read macro for " + count + " FE target(s).");
-				paintTargetFilter();
-			});
-		}
-
-		function loadFirmwareList()
-		{
-			var dirPath = document.getElementById("fwDir").value;
-			localStorage.setItem(FW_DIR_KEY_, dirPath);
-			var select = document.getElementById("firmwareSelect");
-			select.innerHTML = '<option value="">-- loading --</option>';
-			if (!CODE_EDITOR_APP_ID_)
-			{
-				select.innerHTML = '<option value="">-- CodeEditor missing --</option>';
-				return;
-			}
-
-			var savedUrn = DesktopContent._localUrnLid;
-			DesktopContent._localUrnLid = CODE_EDITOR_APP_ID_;
-			DesktopContent.XMLHttpRequest(
-				"Request?RequestType=readOnlycodeEditor&option=getDirectoryContent&path=" + encodeURIComponent(dirPath),
-				"",
-				function(req, reqParam, errStr)
-				{
-					if (errStr || !req)
-					{
-						select.innerHTML = '<option value="">-- directory not found --</option>';
-						log("Cannot read firmware directory: " + dirPath);
-						return;
-					}
-					var files = req.responseXML.getElementsByTagName("file");
-					var items = [];
-					for (var i = 0; i < files.length; ++i)
-					{
-						var f = files[i].getAttribute("value");
-						if (/\.(json|manifest|txt)$/i.test(f)) items.push(f);
-					}
-					items.sort();
-					var html = '<option value="">-- select expected firmware --</option>';
-					for (var j = 0; j < items.length; ++j)
-						html += '<option value="' + escapeHtml(items[j]) + '">' + escapeHtml(items[j]) + '</option>';
-					if (!items.length) html = '<option value="">-- no manifest files --</option>';
-					select.innerHTML = html;
-					var saved = localStorage.getItem(FW_SELECTED_KEY_);
-					if (saved) select.value = saved;
-					if (select.value) loadSelectedFirmware();
-					log("Firmware directory loaded: " + items.length + " manifest file(s).");
-				},
-				0, 0, true
-			);
-			DesktopContent._localUrnLid = savedUrn;
-		}
-
-		function loadSelectedFirmware()
-		{
-			var fileName = document.getElementById("firmwareSelect").value;
-			localStorage.setItem(FW_SELECTED_KEY_, fileName);
-			if (!fileName) { expected_ = {}; renderRows(); return; }
-			var filePath = document.getElementById("fwDir").value.replace(/\/+$/, "") + "/" + fileName;
-			readCodeEditorFile(filePath, function(text, err)
-			{
-				if (err || text == null)
-				{
-					log("Cannot read firmware manifest: " + (err || filePath));
-					expected_ = {};
-					renderExpected();
-					renderRows();
-					return;
-				}
-				expected_ = parseManifest(text);
-				renderExpected();
-				renderRows();
-				log("Loaded expected firmware: " + fileName);
-			});
-		}
-
-		function readCodeEditorFile(filePath, cb)
-		{
-			if (!CODE_EDITOR_APP_ID_) { cb(null, "CodeEditorSupervisor missing"); return; }
-			var savedUrn = DesktopContent._localUrnLid;
-			DesktopContent._localUrnLid = CODE_EDITOR_APP_ID_;
-			DesktopContent.XMLHttpRequest(
-				"Request?RequestType=readOnlycodeEditor&option=getFileContent&path=" + encodeURIComponent(filePath),
-				"",
-				function(req, reqParam, errStr)
-				{
-					if (errStr || !req) { cb(null, errStr || "request failed"); return; }
-					var text = DesktopContent.getXMLValue(req, "text");
-					cb(text, "");
-				},
-				0, 0, true
-			);
-			DesktopContent._localUrnLid = savedUrn;
-		}
-
-		function parseManifest(text)
-		{
-			var out = {};
-			try
-			{
-				var j = JSON.parse(text);
-				out.project = parseHex(j.fw_project_id || j.project || j.FW_PROJECT_ID);
-				out.git = parseHex(j.fw_git_sha || j.git || j.FW_GIT_SHA);
-				out.dateLo = parseHex(j.fw_build_date_lo || j.date_lo || j.FW_BUILD_DATE_LO);
-				out.dateHi = parseHex(j.fw_build_date_hi || j.date_hi || j.FW_BUILD_DATE_HI);
-				out.timeLo = parseHex(j.fw_build_time_lo || j.time_lo || j.FW_BUILD_TIME_LO);
-				out.timeHi = parseHex(j.fw_build_time_hi || j.time_hi || j.FW_BUILD_TIME_HI);
-				out.version = parseHex(j.fw_version || j.version || j.FW_VERSION);
-				out.swHash = parseHex(j.sw_hex_hash || j.SW_HEX_HASH);
-				return out;
-			}
-			catch(e) {}
-
-			var lines = text.split(/\r?\n/);
-			for (var i = 0; i < lines.length; ++i)
-			{
-				var line = lines[i].trim();
-				if (!line || line[0] == "#") continue;
-				var m = line.match(/^([A-Za-z0-9_]+)\s*[:=]\s*(.+)$/);
-				if (!m) continue;
-				var key = m[1].toUpperCase();
-				var val = m[2].trim();
-				if (key == "FW_PROJECT_ID") out.project = parseHex(val);
-				else if (key == "FW_GIT_SHA") out.git = parseHex(val);
-				else if (key == "FW_BUILD_DATE_LO") out.dateLo = parseHex(val);
-				else if (key == "FW_BUILD_DATE_HI") out.dateHi = parseHex(val);
-				else if (key == "FW_BUILD_TIME_LO") out.timeLo = parseHex(val);
-				else if (key == "FW_BUILD_TIME_HI") out.timeHi = parseHex(val);
-				else if (key == "FW_VERSION") out.version = parseHex(val);
-				else if (key == "SW_HEX_HASH") out.swHash = parseHex(val);
-			}
-			return out;
-		}
-
-		function refreshVersions()
-		{
-			var targets = getFilteredTargets();
-			if (!targets.length)
-			{
-				log("No DTC target with ROC Read macro is selected.");
-				return;
-			}
-			rows_ = [];
-			selected_ = {};
-			paintEmptyTable();
-			var total = targets.length * READ_ADDRESSES_.length;
-			var done = 0;
-			document.getElementById("refreshBtn").disabled = true;
-			log("Refreshing " + targets.length + " DTC target(s), " + READ_ADDRESSES_.length + " register(s) each...");
-			for (var i = 0; i < targets.length; ++i)
-			{
-				for (var j = 0; j < READ_ADDRESSES_.length; ++j)
-				{
-					runRocRead(targets[i], READ_ADDRESSES_[j], function(target, address, value, err)
-					{
-						done++;
-						if (!err) mergeReadResult(target, address, value);
-						else log("Read failed: " + target + " addr " + address + ": " + err);
-						document.getElementById("progress").innerHTML = done + " / " + total;
-						if (done == total)
-						{
-							document.getElementById("refreshBtn").disabled = false;
-							finalizeRows();
-							renderRows();
-							log("Refresh complete.");
-						}
-					});
-				}
-			}
-		}
-
-		function runRocRead(target, address, cb)
-		{
-			var postData = "inputArgs=" +
-				encodeURIComponent("Target ROC or Mask (Default = -1 := all ROCs, or 0x111111 := all)") + ",-1;" +
-				encodeURIComponent("address") + "," + address +
-				"&outputArgs=readData";
-			DesktopContent.XMLHttpRequest(
-				"Request?RequestType=runFEMacro" +
-				"&feClassSelected=" + encodeURIComponent(feMap_[target].feClass) +
-				"&feUIDSelected=" + encodeURIComponent(target) +
-				"&macroType=fe" +
-				"&macroName=" + encodeURIComponent("ROC Read") +
-				"&saveOutputs=0",
-				postData,
-				function(req, reqParam, errStr)
-				{
-					if (errStr) { cb(target, address, "", errStr); return; }
-					var err = DesktopContent.getXMLValue(req, "Error");
-					if (err) { cb(target, address, "", err); return; }
-					var names = req.responseXML.getElementsByTagName("outputArgs_name");
-					var vals = req.responseXML.getElementsByTagName("outputArgs_value");
-					var val = "";
-					for (var i = 0; i < names.length; ++i)
-						if (names[i].getAttribute("value") == "readData")
-							val = vals[i].getAttribute("value");
-					cb(target, address, val, "");
-				}
-			);
-		}
-
-		function mergeReadResult(target, address, text)
-		{
-			var re = /\((\d+)\)\s*0x([0-9a-fA-F]+)/g;
-			var m;
-			while ((m = re.exec(text)) !== null)
-			{
-				var link = parseInt(m[1], 10);
-				var val = parseInt(m[2], 16) & 0xffff;
-				var key = target + ":" + link;
-				var row = findOrCreateRow(target, link);
-				row.regs[address] = val;
-			}
-		}
-
-		function findOrCreateRow(target, link)
-		{
-			for (var i = 0; i < rows_.length; ++i)
-				if (rows_[i].target == target && rows_[i].link == link) return rows_[i];
-			var row = {
-				target: target,
-				link: link,
-				boardId: "",
-				disk: "",
-				phi: "",
-				regs: {},
-				status: "IDLE",
-				match: "",
-				mismatches: []
-			};
-			rows_.push(row);
-			return row;
-		}
-
-		function finalizeRows()
-		{
-			for (var i = 0; i < rows_.length; ++i)
-				decodeAndCompare(rows_[i]);
-			rows_.sort(function(a, b)
-			{
-				if (a.target != b.target) return naturalCompare(a.target, b.target);
-				return a.link - b.link;
-			});
-		}
-
-		function decodeAndCompare(row)
-		{
-			row.uid = wordsToUid(row.regs[145], row.regs[146], row.regs[147]);
-			row.project = row.regs[240];
-			row.git = row.regs[241];
-			row.dateLo = row.regs[242];
-			row.dateHi = row.regs[243];
-			row.timeLo = row.regs[244];
-			row.timeHi = row.regs[245];
-			row.version = row.regs[246];
-			row.swGit = row.regs[247];
-			row.swHash = row.regs[248];
-			row.swDateLo = row.regs[249];
-			row.swDateHi = row.regs[250];
-			row.fwDate = fmtDate(row.dateHi, row.dateLo);
-			row.fwTime = fmtTime(row.timeHi, row.timeLo);
-			row.swDate = fmtDate(row.swDateHi, row.swDateLo);
-
-			row.mismatches = [];
-			if (hasTimeout(row))
-			{
-				row.status = "TIMEOUT";
-				row.match = "timeout";
-				return;
-			}
-			if (row.uid == "0x000000000000") row.mismatches.push("UID zero");
-			if (hasExpected())
-			{
-				compareField(row, "project", "project", "project");
-				compareField(row, "git", "git", "FW SHA");
-				compareField(row, "dateLo", "date low", "FW date");
-				compareField(row, "dateHi", "date high", "FW date");
-				compareField(row, "timeLo", "time low", "FW time");
-				compareField(row, "timeHi", "time high", "FW time");
-				compareField(row, "version", "version", "FW version");
-				if (expected_.swHash !== undefined) compareField(row, "swHash", "SW hash", "SW hash");
-			}
-			else
-			{
-				if (row.project === undefined) row.mismatches.push("no version regs");
-			}
-			if (!row.mismatches.length)
-			{
-				row.status = hasExpected() ? "OK" : "READ";
-				row.match = hasExpected() ? "OK" : "no expected";
-			}
-			else
-			{
-				row.status = hasExpected() ? "MISMATCH" : "WARN";
-				row.match = row.mismatches.join(", ");
-			}
-		}
-
-		function compareField(row, field, expectedField, label)
-		{
-			if (expected_[expectedField] === undefined) return;
-			if (row[field] === undefined || row[field] !== expected_[expectedField])
-				row.mismatches.push(label);
-		}
-
-		function renderRows()
-		{
-			for (var i = 0; i < rows_.length; ++i)
-				decodeAndCompare(rows_[i]);
-			var tbody = document.getElementById("tbody");
-			if (!rows_.length)
-			{
-				paintEmptyTable();
-				updateSummary();
-				return;
-			}
-			var html = "";
-			for (var r = 0; r < rows_.length; ++r)
-			{
-				var row = rows_[r];
-				if (!rowVisible(row)) continue;
-				var key = rowKey(row);
-				html += '<tr class="' + rowClass(row) + '" onclick="openDetails(\'' + key + '\')">';
-				html += '<td onclick="event.stopPropagation();"><input type="checkbox" ' +
-					(selected_[key] ? "checked " : "") + 'onchange="setSelected(\'' + key + '\', this.checked)"></td>';
-				html += '<td>' + escapeHtml(row.target) + '</td>';
-				html += '<td>' + row.link + '</td>';
-				html += '<td>' + escapeHtml(row.disk || "-") + '</td>';
-				html += '<td>' + escapeHtml(row.phi || "-") + '</td>';
-				html += '<td>' + escapeHtml(row.boardId || "-") + '</td>';
-				html += '<td class="mono">' + escapeHtml(row.uid || "-") + '</td>';
-				html += '<td>' + escapeHtml(row.status) + '</td>';
-				html += '<td>' + escapeHtml(row.match || "-") + '</td>';
-				html += '<td class="mono">' + hex(row.project) + '</td>';
-				html += '<td class="mono">' + hex(row.git) + '</td>';
-				html += '<td>' + escapeHtml(row.fwDate || "-") + '</td>';
-				html += '<td>' + escapeHtml(row.fwTime || "-") + '</td>';
-				html += '<td>' + fmtVersion(row.version) + '</td>';
-				html += '<td class="mono">' + hex(row.swHash) + '</td>';
-				html += '<td>' + escapeHtml(row.swDate || "-") + '</td>';
-				html += '</tr>';
-			}
-			tbody.innerHTML = html || '<tr><td colspan="16">No rows match the current filters.</td></tr>';
-			updateSummary();
-		}
-
-		function paintEmptyTable()
-		{
-			document.getElementById("tbody").innerHTML = '<tr><td colspan="16">No inventory loaded. Press Refresh Versions.</td></tr>';
-			updateSummary();
-		}
-
-		function rowClass(row)
-		{
-			if (row.status == "OK") return "status-ok";
-			if (row.status == "TIMEOUT") return "status-timeout";
-			if (row.status == "MISMATCH") return "status-mismatch";
-			if (row.status == "WARN" || row.status == "READ") return "status-warn";
-			return "status-idle";
-		}
-
-		function updateSummary()
-		{
-			var visible = 0, selected = 0, ok = 0, mismatch = 0, timeout = 0, warn = 0;
-			for (var i = 0; i < rows_.length; ++i)
-			{
-				if (!rowVisible(rows_[i])) continue;
-				visible++;
-				if (selected_[rowKey(rows_[i])]) selected++;
-				if (rows_[i].status == "OK") ok++;
-				else if (rows_[i].status == "MISMATCH") mismatch++;
-				else if (rows_[i].status == "TIMEOUT") timeout++;
-				else warn++;
-			}
-			document.getElementById("summary").innerHTML =
-				'<span>' + visible + '</span> visible' +
-				' <span>' + selected + '</span> selected' +
-				' <span>' + ok + '</span> OK' +
-				' <span>' + mismatch + '</span> mismatch' +
-				' <span>' + timeout + '</span> timeout' +
-				' <span>' + warn + '</span> other';
-		}
-
-		function paintTargetFilter()
-		{
-			var sel = document.getElementById("targetFilter");
-			var keys = Object.keys(feMap_).sort(naturalCompare);
-			var html = '<option value="">all DTCs</option>';
-			for (var i = 0; i < keys.length; ++i)
-				html += '<option value="' + escapeHtml(keys[i]) + '">' + escapeHtml(keys[i]) + '</option>';
-			sel.innerHTML = html;
-		}
-
-		function renderExpected()
-		{
-			var bits = [];
-			if (expected_.project !== undefined) bits.push("project " + hex(expected_.project));
-			if (expected_.git !== undefined) bits.push("FW SHA " + hex(expected_.git));
-			if (expected_.dateHi !== undefined || expected_.dateLo !== undefined)
-				bits.push("date " + fmtDate(expected_.dateHi, expected_.dateLo));
-			if (expected_.timeHi !== undefined || expected_.timeLo !== undefined)
-				bits.push("time " + fmtTime(expected_.timeHi, expected_.timeLo));
-			if (expected_.version !== undefined) bits.push("version " + fmtVersion(expected_.version));
-			if (expected_.swHash !== undefined) bits.push("SW hash " + hex(expected_.swHash));
-			document.getElementById("expectedLine").innerHTML = bits.length ? bits.join(" | ") : "No expected firmware loaded.";
-		}
-
-		function useFirstOkAsExpected()
-		{
-			for (var i = 0; i < rows_.length; ++i)
-			{
-				var r = rows_[i];
-				if (hasTimeout(r)) continue;
-				if (r.project === undefined) continue;
-				expected_ = {
-					project: r.project,
-					git: r.git,
-					dateLo: r.dateLo,
-					dateHi: r.dateHi,
-					timeLo: r.timeLo,
-					timeHi: r.timeHi,
-					version: r.version,
-					swHash: r.swHash
-				};
-				renderExpected();
-				renderRows();
-				log("Expected firmware set from " + r.target + " ROC " + r.link + ".");
-				return;
-			}
-			log("No readable ROC row found to use as expected firmware.");
-		}
-
-		function setSelected(key, val)
-		{
-			selected_[key] = val;
-			updateSummary();
-		}
-
-		function selectAllVisible(val)
-		{
-			for (var i = 0; i < rows_.length; ++i)
-				if (rowVisible(rows_[i])) selected_[rowKey(rows_[i])] = val;
-			renderRows();
-		}
-
-		function selectByStatus(status)
-		{
-			for (var i = 0; i < rows_.length; ++i)
-				if (rowVisible(rows_[i]) && rows_[i].status == status)
-					selected_[rowKey(rows_[i])] = true;
-			renderRows();
-		}
-
-		function selectByField(field)
-		{
-			var value = prompt("Select ROC rows with " + field + " equal to:");
-			if (value == null) return;
-			for (var i = 0; i < rows_.length; ++i)
-				if (rowVisible(rows_[i]) && String(rows_[i][field] || "") == value)
-					selected_[rowKey(rows_[i])] = true;
-			renderRows();
-		}
-
-		function openDetails(key)
-		{
-			var row = rowByKey(key);
-			if (!row) return;
-			activeModalRow_ = row;
-			document.getElementById("modalTitle").innerHTML = escapeHtml(row.target + " ROC " + row.link);
-			document.getElementById("modalBody").innerHTML =
-				kv("DTC", row.target) + kv("ROC link", row.link) +
-				kv("Disk", row.disk || "-") + kv("Phi", row.phi || "-") +
-				kv("BoardID", row.boardId || "-") + kv("BOARDUID", row.uid || "-") +
-				kv("Status", row.status) + kv("Mismatch", row.match || "-") +
-				kv("FW project", hex(row.project)) + kv("FW SHA", hex(row.git)) +
-				kv("FW build", (row.fwDate || "-") + " " + (row.fwTime || "-")) +
-				kv("FW version", fmtVersion(row.version)) +
-				kv("SW SHA", hex(row.swGit)) + kv("SW hash", hex(row.swHash)) +
-				kv("SW date", row.swDate || "-");
-			document.getElementById("modalBackdrop").style.display = "block";
-		}
-
-		function closeDetails()
-		{
-			document.getElementById("modalBackdrop").style.display = "none";
-			activeModalRow_ = null;
-		}
-
-		function flashModalDryRun()
-		{
-			if (!activeModalRow_) return;
-			log("DRY RUN flash requested for " + activeModalRow_.target + " ROC " + activeModalRow_.link +
-				" with firmware '" + (document.getElementById("firmwareSelect").value || "none") + "'.");
-		}
-
-		function flashSelectedDryRun()
-		{
-			var n = 0;
-			for (var k in selected_) if (selected_[k]) n++;
-			log("DRY RUN flash selected: " + n + " ROC(s), firmware '" +
-				(document.getElementById("firmwareSelect").value || "none") + "'.");
-		}
-
-		function rowVisible(row)
-		{
-			var tf = document.getElementById("targetFilter").value;
-			var sf = document.getElementById("statusFilter").value;
-			var df = document.getElementById("diskFilter").value.trim();
-			var pf = document.getElementById("phiFilter").value.trim();
-			var txt = document.getElementById("textFilter").value.toLowerCase().trim();
-			if (tf && row.target != tf) return false;
-			if (sf && row.status != sf) return false;
-			if (df && String(row.disk || "") != df) return false;
-			if (pf && String(row.phi || "") != pf) return false;
-			if (txt)
-			{
-				var blob = (row.target + " " + row.link + " " + row.boardId + " " + row.uid + " " + row.match).toLowerCase();
-				if (blob.indexOf(txt) < 0) return false;
-			}
-			return true;
-		}
-
-		function getFilteredTargets()
-		{
-			var tf = document.getElementById("targetFilter").value;
-			if (tf) return feMap_[tf] ? [tf] : [];
-			return Object.keys(feMap_).sort(naturalCompare);
-		}
-
-		function hasExpected()
-		{
-			return Object.keys(expected_).length > 0;
-		}
-
-		function hasTimeout(row)
-		{
-			for (var i = 0; i < READ_ADDRESSES_.length; ++i)
-				if (row.regs[READ_ADDRESSES_[i]] == 0xeffe) return true;
-			return false;
-		}
-
-		function wordsToUid(w0, w1, w2)
-		{
-			if (w0 === undefined || w1 === undefined || w2 === undefined) return "";
-			if (w0 == 0xeffe || w1 == 0xeffe || w2 == 0xeffe) return "timeout";
-			return "0x" + pad4(w2) + pad4(w1) + pad4(w0);
-		}
-
-		function fmtDate(hi, lo)
-		{
-			if (hi === undefined || lo === undefined || hi == 0xeffe || lo == 0xeffe) return "";
-			return "" + bcd16(hi) + "-" + pad2(bcd8((lo >> 8) & 0xff)) + "-" + pad2(bcd8(lo & 0xff));
-		}
-
-		function fmtTime(hi, lo)
-		{
-			if (hi === undefined || lo === undefined || hi == 0xeffe || lo == 0xeffe) return "";
-			return pad2(bcd8(hi & 0xff)) + ":" + pad2(bcd8((lo >> 8) & 0xff)) + ":" + pad2(bcd8(lo & 0xff));
-		}
-
-		function fmtVersion(v)
-		{
-			if (v === undefined) return "-";
-			if (v == 0xeffe) return "timeout";
-			return ((v >> 8) & 0xff) + "." + (v & 0xff);
-		}
-
-		function bcd8(v) { return ((v >> 4) & 0xf) * 10 + (v & 0xf); }
-		function bcd16(v) { return ((v >> 12) & 0xf) * 1000 + ((v >> 8) & 0xf) * 100 + ((v >> 4) & 0xf) * 10 + (v & 0xf); }
-		function pad2(v) { return (v < 10 ? "0" : "") + v; }
-		function pad4(v) { return ("0000" + ((v === undefined ? 0 : v) & 0xffff).toString(16)).slice(-4); }
-		function hex(v) { return v === undefined ? "-" : "0x" + pad4(v); }
-		function parseHex(v)
-		{
-			if (v === undefined || v === null || v === "") return undefined;
-			if (typeof v == "number") return v & 0xffff;
-			var s = String(v).trim().replace(/^x/i, "0x");
-			if (!/^0x/i.test(s) && /^[0-9a-fA-F]+$/.test(s)) s = "0x" + s;
-			var n = parseInt(s, 16);
-			return isNaN(n) ? undefined : (n & 0xffff);
-		}
-
-		function rowKey(row) { return row.target + ":" + row.link; }
-		function rowByKey(key)
-		{
-			for (var i = 0; i < rows_.length; ++i)
-				if (rowKey(rows_[i]) == key) return rows_[i];
-			return null;
-		}
-
-		function kv(k, v)
-		{
-			return '<div class="small">' + escapeHtml(k) + '</div><div class="mono">' + escapeHtml(String(v)) + '</div>';
-		}
-
-		function log(msg)
-		{
-			var el = document.getElementById("log");
-			el.innerHTML = escapeHtml(getDateString(new Date()) + "  " + msg) + "<br>" + el.innerHTML;
-		}
-
-		function escapeHtml(s)
-		{
-			return String(s === undefined || s === null ? "" : s)
-				.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-				.replace(/"/g, "&quot;").replace(/'/g, "&#39;");
-		}
-
-		function naturalCompare(a, b)
-		{
-			return String(a).localeCompare(String(b), undefined, {numeric: true, sensitivity: "base"});
-		}
-	</script>
+<style>
+/* ═══════════════════════════════════════════════════════════════════
+   DESIGN SYSTEM — Mu2e Firmware Manager
+   Optimized for control-room displays (large fonts, high contrast)
+   ═══════════════════════════════════════════════════════════════════ */
+:root {
+	--c-bg:       #0f1419;
+	--c-surface:  #1a2332;
+	--c-panel:    #1e2a3a;
+	--c-panel-hi: #243447;
+	--c-border:   #2d3f54;
+	--c-border-hi:#3d5a80;
+	--c-text:     #e8edf3;
+	--c-text-dim: #8899aa;
+	--c-text-inv: #0f1419;
+	--c-accent:   #4da6ff;
+	--c-accent-bg:#1a3a5c;
+	--c-ok:       #2ecc71;
+	--c-ok-bg:    #1a3a2a;
+	--c-warn:     #f39c12;
+	--c-warn-bg:  #3a321a;
+	--c-bad:      #e74c3c;
+	--c-bad-bg:   #3a1a1a;
+	--c-timeout:  #e67e22;
+	--c-timeout-bg:#3a2a1a;
+	--c-idle-bg:  #1e2a3a;
+	--radius:     6px;
+	--shadow:     0 2px 8px rgba(0,0,0,0.3);
+	--transition: 0.15s ease;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: var(--c-text); background: var(--c-bg); }
+.mono { font-family: "Inconsolata", "Fira Code", "Courier New", monospace; }
+
+/* ── App Shell ─────────────────────────── */
+#app { display: flex; flex-direction: column; height: 100vh; padding: 12px; gap: 8px; overflow: hidden; }
+
+/* ── Header Bar ────────────────────────── */
+.header-bar {
+	display: flex; align-items: center; gap: 16px; padding: 10px 16px;
+	background: var(--c-panel); border: 1px solid var(--c-border); border-radius: var(--radius);
+	flex-shrink: 0;
+}
+.header-bar h1 { margin: 0; font-size: 20px; font-weight: 700; color: var(--c-accent); white-space: nowrap; letter-spacing: 0.5px; }
+.header-bar .spacer { flex: 1; }
+.header-bar .status-pill {
+	display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px;
+	border-radius: 20px; font-size: 13px; font-weight: 600;
+	background: var(--c-accent-bg); color: var(--c-accent); border: 1px solid var(--c-accent);
+}
+.header-bar .status-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c-accent); }
+
+/* ── Controls Row ──────────────────────── */
+.controls-row {
+	display: grid; grid-template-columns: 1.3fr 1fr auto auto auto; gap: 10px; align-items: end;
+	padding: 10px 14px; background: var(--c-panel); border: 1px solid var(--c-border);
+	border-radius: var(--radius); flex-shrink: 0;
+}
+.field-group label {
+	display: block; font-size: 11px; font-weight: 700; color: var(--c-text-dim);
+	text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px;
+}
+input, select {
+	width: 100%; height: 36px; font-size: 14px; padding: 0 10px;
+	background: var(--c-surface); color: var(--c-text); border: 1px solid var(--c-border);
+	border-radius: 4px; outline: none; transition: border-color var(--transition);
+}
+input:focus, select:focus { border-color: var(--c-accent); box-shadow: 0 0 0 2px rgba(77,166,255,0.2); }
+select { cursor: pointer; }
+
+/* ── Buttons ───────────────────────────── */
+button, .btn {
+	display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+	height: 36px; padding: 0 16px; font-size: 13px; font-weight: 600;
+	border: 1px solid var(--c-border); border-radius: 4px; cursor: pointer;
+	background: var(--c-panel-hi); color: var(--c-text); white-space: nowrap;
+	transition: all var(--transition); width: auto;
+}
+button:hover { background: var(--c-border); border-color: var(--c-border-hi); }
+button:active { transform: scale(0.97); }
+button:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+button.primary { background: var(--c-accent); color: var(--c-text-inv); border-color: var(--c-accent); font-weight: 700; }
+button.primary:hover { background: #3d96ef; }
+button.danger { background: #c0392b; color: white; border-color: #c0392b; }
+button.danger:hover { background: #a93226; }
+
+/* ── Tab Navigation ────────────────────── */
+.tab-nav {
+	display: flex; gap: 2px; flex-shrink: 0;
+	background: var(--c-panel); border: 1px solid var(--c-border); border-bottom: none;
+	border-radius: var(--radius) var(--radius) 0 0; padding: 6px 10px 0 10px;
+}
+.tab-nav button {
+	padding: 10px 28px; font-size: 15px; font-weight: 700;
+	border: 1px solid transparent; border-bottom: 3px solid transparent;
+	border-radius: var(--radius) var(--radius) 0 0;
+	background: transparent; color: var(--c-text-dim); position: relative;
+}
+.tab-nav button:hover { color: var(--c-text); background: var(--c-panel-hi); }
+.tab-nav button.active {
+	color: var(--c-accent); background: var(--c-surface);
+	border-color: var(--c-border); border-bottom: 3px solid var(--c-accent);
+}
+.tab-nav .tab-badge {
+	display: inline-flex; align-items: center; justify-content: center;
+	min-width: 22px; height: 20px; padding: 0 6px; margin-left: 8px;
+	font-size: 11px; font-weight: 700; border-radius: 10px;
+	background: var(--c-accent-bg); color: var(--c-accent);
+}
+
+/* ── Panel Container ───────────────────── */
+.panel-container {
+	flex: 1; overflow: hidden; display: flex; flex-direction: column;
+	background: var(--c-surface); border: 1px solid var(--c-border); border-top: none;
+	border-radius: 0 0 var(--radius) var(--radius);
+}
+.tab-panel { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+.tab-panel.active { display: flex; }
+
+/* ── Action Bar (per panel) ────────────── */
+.action-bar {
+	display: flex; align-items: center; gap: 8px; padding: 8px 14px; flex-shrink: 0;
+	border-bottom: 1px solid var(--c-border); background: var(--c-panel);
+}
+.action-bar .sep { width: 1px; height: 24px; background: var(--c-border); margin: 0 4px; }
+.action-bar .info {
+	margin-left: auto; font-size: 13px; color: var(--c-text-dim);
+}
+.action-bar .info b { color: var(--c-text); font-weight: 700; }
+
+/* ── Summary Chips ─────────────────────── */
+.summary-bar {
+	display: flex; align-items: center; gap: 8px; padding: 6px 14px; flex-shrink: 0;
+	border-bottom: 1px solid var(--c-border); background: var(--c-panel); flex-wrap: wrap;
+}
+.chip {
+	display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px;
+	border-radius: 14px; font-size: 13px; font-weight: 600;
+}
+.chip-ok      { background: var(--c-ok-bg);      color: var(--c-ok); }
+.chip-bad     { background: var(--c-bad-bg);      color: var(--c-bad); }
+.chip-warn    { background: var(--c-warn-bg);     color: var(--c-warn); }
+.chip-timeout { background: var(--c-timeout-bg);  color: var(--c-timeout); }
+.chip-neutral { background: var(--c-panel-hi);    color: var(--c-text-dim); }
+
+/* ── Data Table ────────────────────────── */
+.table-scroll { flex: 1; overflow: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 8px 12px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--c-border); }
+th {
+	position: sticky; top: 0; z-index: 2;
+	font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;
+	color: var(--c-text-dim); background: var(--c-panel); border-bottom: 2px solid var(--c-border-hi);
+}
+td { transition: background var(--transition); }
+tr { cursor: pointer; transition: background var(--transition); }
+tr:hover td { background: var(--c-panel-hi); }
+td input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--c-accent); }
+th:first-child, td:first-child { width: 36px; text-align: center; }
+
+/* Row status colors */
+tr.st-ok td        { border-left: 3px solid var(--c-ok);      background: var(--c-ok-bg); }
+tr.st-ok td:not(:first-child) { border-left: none; }
+tr.st-mismatch td  { border-left: 3px solid var(--c-bad);     background: var(--c-bad-bg); }
+tr.st-mismatch td:not(:first-child) { border-left: none; }
+tr.st-timeout td   { border-left: 3px solid var(--c-timeout);  background: var(--c-timeout-bg); }
+tr.st-timeout td:not(:first-child) { border-left: none; }
+tr.st-warn td      { border-left: 3px solid var(--c-warn);    background: var(--c-warn-bg); }
+tr.st-warn td:not(:first-child) { border-left: none; }
+
+td.cell-bad { color: var(--c-bad); font-weight: 700; }
+
+/* Status badge in cell */
+.status-badge {
+	display: inline-block; padding: 2px 8px; border-radius: 3px;
+	font-size: 12px; font-weight: 700; text-transform: uppercase;
+}
+.status-badge.sb-ok      { background: var(--c-ok);      color: var(--c-text-inv); }
+.status-badge.sb-mismatch{ background: var(--c-bad);      color: white; }
+.status-badge.sb-timeout  { background: var(--c-timeout);  color: var(--c-text-inv); }
+.status-badge.sb-error    { background: var(--c-bad);      color: white; }
+.status-badge.sb-warn     { background: var(--c-warn);     color: var(--c-text-inv); }
+.status-badge.sb-read     { background: var(--c-accent-bg);color: var(--c-accent); }
+.status-badge.sb-idle     { background: var(--c-panel-hi); color: var(--c-text-dim); }
+
+/* ── Log ───────────────────────────────── */
+.log-panel {
+	flex-shrink: 0; max-height: 100px; overflow: auto;
+	padding: 6px 12px; font-family: "Inconsolata", monospace; font-size: 12px;
+	color: var(--c-text-dim); background: var(--c-surface);
+	border: 1px solid var(--c-border); border-radius: var(--radius);
+}
+
+/* ── Modal ─────────────────────────────── */
+.modal-backdrop {
+	display: none; position: fixed; inset: 0; z-index: 100;
+	background: rgba(0,0,0,0.6); backdrop-filter: blur(3px);
+}
+.modal {
+	position: absolute; top: 5vh; left: 50%; transform: translateX(-50%);
+	width: min(980px, calc(100vw - 40px)); max-height: 90vh; overflow: auto;
+	background: var(--c-panel); border: 1px solid var(--c-border-hi);
+	border-radius: 8px; box-shadow: 0 20px 60px rgba(0,0,0,0.5); padding: 0;
+}
+.modal-header {
+	display: flex; align-items: center; gap: 12px; padding: 16px 24px;
+	border-bottom: 1px solid var(--c-border); background: var(--c-panel-hi);
+	border-radius: 8px 8px 0 0;
+}
+.modal-header h3 { margin: 0; font-size: 20px; font-weight: 700; color: var(--c-accent); flex: 1; }
+.modal-header .close-x {
+	width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+	font-size: 20px; color: var(--c-text-dim); cursor: pointer; border-radius: 4px;
+	border: none; background: transparent;
+}
+.modal-header .close-x:hover { background: var(--c-border); color: var(--c-text); }
+.modal-body { padding: 20px 24px; }
+.modal-grid {
+	display: grid; grid-template-columns: 180px 1fr; gap: 8px 20px; font-size: 16px;
+}
+.modal-grid .mk { font-size: 13px; font-weight: 700; color: var(--c-text-dim); text-transform: uppercase; letter-spacing: 0.5px; align-self: center; }
+.modal-grid .mv { font-size: 17px; color: var(--c-text); align-self: center; }
+.modal-section {
+	grid-column: span 2; padding: 10px 0 4px 0; margin-top: 8px;
+	font-size: 14px; font-weight: 700; color: var(--c-accent);
+	border-bottom: 2px solid var(--c-accent); text-transform: uppercase; letter-spacing: 1px;
+}
+.modal-footer {
+	display: flex; gap: 8px; padding: 16px 24px;
+	border-top: 1px solid var(--c-border); background: var(--c-panel-hi);
+	border-radius: 0 0 8px 8px;
+}
+.modal-footer .spacer { flex: 1; }
+</style>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+ *  Firmware Manager — DTC + ROC
+ *  Professional tab-based GUI for Mu2e Calo integration
+ * ═══════════════════════════════════════════════════════════════════ */
+
+var CODE_EDITOR_APP_ID_ = 0, MACRO_MAKER_APP_ID_ = 0;
+var TIMEOUT_WORD_ = 0xEFFE;
+var FW_DIR_KEY_ = "FWMgr.fwDir", FW_SELECTED_KEY_ = "FWMgr.selFw";
+var DEFAULT_FW_DIR_ = "/home/mu2ehwdev/Calo_ROC_Firmware";
+
+var rocRows_=[], dtcInfoMap_={}, dtcMap_={}, expected_={};
+var rocSel_={}, dtcSel_={};
+var activeTab_="dtc", modalCtx_=null;
+
+// ── Init ────────────────────────────────────────────────
+function init() {
+	DesktopContent.tooltip("Firmware Manager","DTC and ROC firmware inventory, comparison, and flash control.");
+	DesktopContent.setWindowTooltip("Mu2e Firmware Manager");
+	document.getElementById("fwDir").value = localStorage.getItem(FW_DIR_KEY_)||DEFAULT_FW_DIR_;
+	switchTab("dtc");
+	resolveCodeEditor();
+	resolveMacroMaker();
+}
+
+function switchTab(t) {
+	activeTab_=t;
+	document.querySelectorAll(".tab-nav button").forEach(function(b){b.className=b.getAttribute("data-tab")===t?"active":"";});
+	document.querySelectorAll(".tab-panel").forEach(function(p){p.className="tab-panel"+(p.id==="p-"+t?" active":"");});
+}
+
+// ── Supervisor resolution ───────────────────────────────
+function resolveCodeEditor() {
+	DesktopContent.XMLHttpRequest("Request?RequestType=getAppId&classNeedle=ots::CodeEditorSupervisor","",
+	function(r){CODE_EDITOR_APP_ID_=DesktopContent.getXMLValue(r,"id")|0;if(CODE_EDITOR_APP_ID_)loadFirmwareList();else log("CodeEditor not found.");},0,0,true,false,true);
+}
+function resolveMacroMaker() {
+	DesktopContent.XMLHttpRequest("Request?RequestType=getAppId&classNeedle=ots::MacroMakerSupervisor","",
+	function(r){MACRO_MAKER_APP_ID_=DesktopContent.getXMLValue(r,"id")|0;if(MACRO_MAKER_APP_ID_){log("MacroMaker LID="+MACRO_MAKER_APP_ID_);loadDTCMacros();}else log("MacroMaker not found.");},0,0,true,false,true);
+}
+
+// ── Discover DTCs ───────────────────────────────────────
+function loadDTCMacros() {
+	if(!MACRO_MAKER_APP_ID_)return;
+	var s=DesktopContent._localUrnLid; DesktopContent._localUrnLid=MACRO_MAKER_APP_ID_;
+	DesktopContent.XMLHttpRequest("Request?RequestType=getFEMacroList","",function(r){
+		dtcMap_={};
+		var fm=r.responseXML.getElementsByTagName("FEMacros");
+		for(var i=0;i<fm.length;++i){var p=fm[i].getAttribute("value").split(";");if(p.length<4)continue;
+		var fc=p[2],fu=p[3],c=4;while(c<p.length){var mn=p[c];c+=3;var ni=p[c]|0;c+=1+ni;var no=p[c]|0;c+=1+no;
+		if(mn==="ROC Firmware Inventory")dtcMap_[fu]={feClass:fc};}}
+		updateTabBadges(); paintDTCFilter();
+		log("Found "+Object.keys(dtcMap_).length+" DTC target(s).");
+	}); DesktopContent._localUrnLid=s;
+}
+
+// ── Firmware directory ──────────────────────────────────
+function loadFirmwareList() {
+	var dir=document.getElementById("fwDir").value; localStorage.setItem(FW_DIR_KEY_,dir);
+	var sel=document.getElementById("firmwareSelect"); sel.innerHTML='<option value="">-- loading --</option>';
+	if(!CODE_EDITOR_APP_ID_){sel.innerHTML='<option value="">-- unavailable --</option>';return;}
+	var s=DesktopContent._localUrnLid; DesktopContent._localUrnLid=CODE_EDITOR_APP_ID_;
+	DesktopContent.XMLHttpRequest("Request?RequestType=readOnlycodeEditor&option=getDirectoryContent&path="+encodeURIComponent(dir),"",
+	function(r,rp,e){
+		if(e||!r){sel.innerHTML='<option value="">-- not found --</option>';return;}
+		var items=[], ds=r.responseXML.getElementsByTagName("directory");
+		for(var i=0;i<ds.length;++i){var d=ds[i].getAttribute("value");if(d&&/^CaloROC_/i.test(d))items.push(d);}
+		var fs=r.responseXML.getElementsByTagName("file");
+		for(var i=0;i<fs.length;++i){var f=fs[i].getAttribute("value");if(/\.(json|manifest)$/i.test(f))items.push(f);}
+		items.sort();items.reverse();
+		var h='<option value="">-- select firmware --</option>';
+		for(var j=0;j<items.length;++j)h+='<option value="'+esc(items[j])+'">'+esc(items[j])+'</option>';
+		if(!items.length)h='<option value="">-- none --</option>';
+		sel.innerHTML=h; var sv=localStorage.getItem(FW_SELECTED_KEY_); if(sv)sel.value=sv; if(sel.value)loadSelectedFirmware();
+		log("FW releases: "+items.length);
+	},0,0,true); DesktopContent._localUrnLid=s;
+}
+function loadSelectedFirmware(){
+	var v=document.getElementById("firmwareSelect").value; localStorage.setItem(FW_SELECTED_KEY_,v);
+	if(!v){expected_={};renderExpected();renderROC();return;}
+	var base=document.getElementById("fwDir").value.replace(/\/+$/,"");
+	var path=/\.(json|manifest)$/i.test(v)?base+"/"+v:base+"/"+v+"/manifest.json";
+	readFile(path,function(t,e){if(e||!t){expected_={};renderExpected();renderROC();return;}expected_=parseManifest(t);renderExpected();renderROC();log("Expected FW loaded.");});
+}
+function readFile(fp,cb){if(!CODE_EDITOR_APP_ID_){cb(null,"na");return;}var s=DesktopContent._localUrnLid;DesktopContent._localUrnLid=CODE_EDITOR_APP_ID_;
+DesktopContent.XMLHttpRequest("Request?RequestType=readOnlycodeEditor&option=getFileContent&path="+encodeURIComponent(fp),"",
+function(r,rp,e){if(e||!r){cb(null,e||"fail");return;}cb(DesktopContent.getXMLValue(r,"text"),"");},0,0,true);DesktopContent._localUrnLid=s;}
+function parseManifest(t){var o={};try{var j=JSON.parse(t);o.project=px(j.fw_project_id||j.project);o.fwGit=px(j.fw_git_sha||j.fw_git);
+o.fwDateLo=px(j.fw_build_date_lo);o.fwDateHi=px(j.fw_build_date_hi);o.fwTimeLo=px(j.fw_build_time_lo);o.fwTimeHi=px(j.fw_build_time_hi);
+o.fwVersion=pv(j.fw_version||j.version);o.swHash=px(j.sw_hex_hash);}catch(e){}return o;}
+function pv(v){if(v===undefined||v===null||v==="")return undefined;if(typeof v==="number")return v&0xffff;
+var s=String(v).trim(),m=s.match(/^(\d+)\.(\d+)$/);if(m)return((parseInt(m[1])&0xff)<<8)|(parseInt(m[2])&0xff);return px(v);}
+
+// ── Refresh Inventory ───────────────────────────────────
+function refreshInventory(){
+	var tgts=getFilteredTargets(); if(!tgts.length){log("No DTC targets.");return;}
+	rocRows_=[]; dtcInfoMap_={}; rocSel_={}; dtcSel_={};
+	setBusy(true); var total=tgts.length, done=0;
+	log("Querying "+total+" DTC(s)...");
+	for(var i=0;i<tgts.length;++i)(function(uid){
+		var t0=Date.now();
+		runMacro(uid,function(u,js,e){
+			var el=((Date.now()-t0)/1000).toFixed(1); done++;
+			document.getElementById("progressText").textContent=done+"/"+total;
+			if(e){log("ERR "+u+" ("+el+"s): "+e);}
+			else if(!js){log("WARN "+u+": empty response");}
+			else{try{var p=JSON.parse(js);var a=Array.isArray(p)?p:(p.rocs||[]);
+			if(!Array.isArray(p)&&p.dtc)dtcInfoMap_[u]=p.dtc;
+			for(var r=0;r<a.length;++r)rocRows_.push(toRow(u,a[r]));
+			log(u+": "+a.length+" ROC(s) "+el+"s");}catch(x){log("JSON err "+u+": "+x.message);}}
+			if(done===total){setBusy(false);rocRows_.sort(function(a,b){return a.target!==b.target?nc(a.target,b.target):a.link-b.link;});
+			compareAll(); renderDTC(); renderROC(); updateTabBadges();
+			log("Done. "+Object.keys(dtcInfoMap_).length+" DTC(s), "+rocRows_.length+" ROC(s).");}
+		});
+	})(tgts[i]);
+}
+function setBusy(b){document.getElementById("refreshBtn").disabled=b;
+	document.getElementById("busyDot").style.background=b?"var(--c-warn)":"var(--c-ok)";
+	document.getElementById("busyLabel").textContent=b?"scanning...":"ready";}
+
+function runMacro(uid,cb){var info=dtcMap_[uid];if(!info||!MACRO_MAKER_APP_ID_){cb(uid,"","n/a");return;}
+var post="inputArgs="+encodeURIComponent("Target ROC or Mask (Default = -1 := all ROCs, or 0x111111 := all)")+",-1&outputArgs=Status,InventoryJSON";
+var s=DesktopContent._localUrnLid; DesktopContent._localUrnLid=MACRO_MAKER_APP_ID_;
+DesktopContent.XMLHttpRequest("Request?RequestType=runFEMacro&feClassSelected="+encodeURIComponent(info.feClass)+
+"&feUIDSelected="+encodeURIComponent(uid)+"&macroType=fe&macroName="+encodeURIComponent("ROC Firmware Inventory")+"&saveOutputs=0",post,
+function(r,rp,e){if(e){cb(uid,"",e);return;}var se=DesktopContent.getXMLValue(r,"Error");if(se){cb(uid,"",se);return;}
+var js="",fe=r.responseXML.getElementsByTagName("feMacroExec");
+if(fe.length>0){for(var f=0;f<fe.length;++f){var n=fe[f].getElementsByTagName("outputArgs_name"),v=fe[f].getElementsByTagName("outputArgs_value");
+for(var i=0;i<n.length;++i)if(n[i].getAttribute("value")==="InventoryJSON")js=decodeURIComponent(v[i].getAttribute("value"));}}
+else{var n=r.responseXML.getElementsByTagName("outputArgs_name"),v=r.responseXML.getElementsByTagName("outputArgs_value");
+for(var i=0;i<n.length;++i)if(n[i].getAttribute("value")==="InventoryJSON")js=decodeURIComponent(v[i].getAttribute("value"));}
+cb(uid,js,"");},0,0,true); DesktopContent._localUrnLid=s;}
+
+function toRow(dtc,e){var d=e.data||{};var r={target:dtc,link:e.link,rocUID:e.rocUID||"",error:e.error||false,errorMsg:e.errorMessage||"",
+boardId:d.boardId!==undefined?d.boardId:-1,uidMsb:d.uidMsb,uidCsb:d.uidCsb,uidLsb:d.uidLsb,
+project:d.project,fwGit:d.fwGit,fwDateLo:d.fwDateLo,fwDateHi:d.fwDateHi,fwTimeLo:d.fwTimeLo,fwTimeHi:d.fwTimeHi,fwVersion:d.fwVersion,
+swGit:d.swGit,swHash:d.swHash,swDateLo:d.swDateLo,swDateHi:d.swDateHi,timeout:d.timeout||false,
+uid:"",fwDate:"",fwTime:"",swDate:"",status:"IDLE",match:"",mm:[],ms:{}};
+r.uid=uid3(r.uidLsb,r.uidCsb,r.uidMsb);r.fwDate=fmtD(r.fwDateHi,r.fwDateLo);r.fwTime=fmtT(r.fwTimeHi,r.fwTimeLo);r.swDate=fmtD(r.swDateHi,r.swDateLo);return r;}
+
+// ── Comparison ──────────────────────────────────────────
+function compareAll(){for(var i=0;i<rocRows_.length;++i)cmpRow(rocRows_[i]);}
+function cmpRow(r){r.mm=[];r.ms={};
+if(r.error){r.status="ERROR";r.match=r.errorMsg||"error";return;}
+if(r.timeout){r.status="TIMEOUT";r.match="timeout";r.ms.timeout=true;return;}
+if(r.boardId<0){r.mm.push("BOARD_ID");r.ms.boardId=true;}
+if(r.uid==="0x000000000000"){r.mm.push("UID");r.ms.uid=true;}
+if(hasExp()){cf(r,"project","project","proj");cf(r,"fwGit","fwGit","SHA");cf(r,"fwDateLo","fwDateLo","date");cf(r,"fwDateHi","fwDateHi","date");
+cf(r,"fwTimeLo","fwTimeLo","time");cf(r,"fwTimeHi","fwTimeHi","time");cf(r,"fwVersion","fwVersion","ver");cf(r,"swHash","swHash","SW");}
+if(!r.mm.length){r.status=hasExp()?"OK":"READ";r.match=hasExp()?"OK":"no ref";}
+else{r.status=hasExp()?"MISMATCH":"WARN";r.match=r.mm.join(", ");}}
+function cf(r,rf,ef,l){if(expected_[ef]===undefined)return;if(r[rf]===undefined||r[rf]!==expected_[ef]){r.mm.push(l);r.ms[rf]=true;}}
+
+// ── DTC Table ───────────────────────────────────────────
+function renderDTC(){
+	var tb=document.getElementById("dtcTb"),ks=Object.keys(dtcInfoMap_).sort(nc);
+	if(!ks.length){tb.innerHTML='<tr><td colspan="10" style="padding:24px;color:var(--c-text-dim);text-align:center;">No DTC data yet. Press <b>Refresh</b>.</td></tr>';updDTCInfo();return;}
+	var h="";
+	for(var i=0;i<ks.length;++i){var u=ks[i],d=dtcInfoMap_[u],k="d:"+u;
+	var ty=d.designType==="D"?"DTC":d.designType==="C"?"CFO":d.designType==="E"?"CRV":d.designType||"?";
+	h+='<tr onclick="openDTC(\''+ea(u)+'\')">';
+	h+='<td onclick="event.stopPropagation()"><input type="checkbox" '+(dtcSel_[k]?"checked ":"")+'onchange="dtcSel_[\''+ea(k)+'\']=this.checked;updDTCInfo()"></td>';
+	h+='<td><b>'+esc(u)+'</b></td><td>'+esc(ty)+'</td><td class="mono">'+esc(d.designVersion||"-")+'</td>';
+	h+='<td>'+esc(d.designDate||"-")+'</td><td class="mono">'+esc(d.vivadoVersion||"-")+'</td>';
+	h+='<td>'+esc(d.linkSpeed||"-")+'</td>';
+	h+='<td>'+(d.fpgaTemp!==undefined?d.fpgaTemp.toFixed(1)+" &deg;C":"-")+'</td>';
+	h+='<td>dev'+(d.deviceIndex!==undefined?d.deviceIndex:"?")+'</td>';
+	h+='<td class="mono" style="font-size:12px;">'+esc(d.driverVersion||"-")+'</td></tr>';}
+	tb.innerHTML=h; updDTCInfo();
+}
+function updDTCInfo(){var t=Object.keys(dtcInfoMap_).length,s=0;for(var k in dtcSel_)if(dtcSel_[k])s++;
+document.getElementById("dtcInfo").innerHTML='<b>'+t+'</b> DTC(s) &middot; <b>'+s+'</b> selected';}
+function selAllDTC(v){var ks=Object.keys(dtcInfoMap_);for(var i=0;i<ks.length;++i)dtcSel_["d:"+ks[i]]=v;renderDTC();}
+
+// ── ROC Table ───────────────────────────────────────────
+function renderROC(){compareAll();
+	var tb=document.getElementById("rocTb");
+	if(!rocRows_.length){tb.innerHTML='<tr><td colspan="14" style="padding:24px;color:var(--c-text-dim);text-align:center;">No ROC data yet. Press <b>Refresh</b>.</td></tr>';updROCInfo();return;}
+	var h="",vis=0;
+	for(var i=0;i<rocRows_.length;++i){var r=rocRows_[i];if(!rocVis(r))continue;vis++;
+	var k=rk(r),sc=stCls(r);
+	h+='<tr class="'+sc+'" onclick="openROC(\''+ea(k)+'\')">';
+	h+='<td onclick="event.stopPropagation()"><input type="checkbox" '+(rocSel_[k]?"checked ":"")+'onchange="rocSel_[\''+ea(k)+'\']=this.checked;updROCInfo()"></td>';
+	h+='<td>'+esc(r.target)+'</td><td>'+r.link+'</td>';
+	h+=tc(r.boardId>=0?r.boardId:"-",r.ms.boardId);
+	h+=tc(r.uid||"-",r.ms.uid,1);
+	h+='<td>'+statusBadge(r.status)+'</td>';
+	h+='<td>'+esc(r.match||"-")+'</td>';
+	h+=tc(hx(r.project),r.ms.project,1);
+	h+=tc(hx(r.fwGit),r.ms.fwGit,1);
+	h+=tc(r.fwDate||"-",r.ms.fwDateLo||r.ms.fwDateHi);
+	h+=tc(r.fwTime||"-",r.ms.fwTimeLo||r.ms.fwTimeHi);
+	h+=tc(fmtV(r.fwVersion),r.ms.fwVersion);
+	h+=tc(hx(r.swHash),r.ms.swHash,1);
+	h+=tc(r.swDate||"-",r.ms.swDateLo||r.ms.swDateHi);
+	h+='</tr>';}
+	if(!vis)h='<tr><td colspan="14" style="padding:20px;color:var(--c-text-dim);text-align:center;">No rows match current filters.</td></tr>';
+	tb.innerHTML=h; updROCInfo();
+}
+function statusBadge(s){var c="sb-"+s.toLowerCase();return'<span class="status-badge '+c+'">'+esc(s)+'</span>';}
+function updROCInfo(){var vis=0,sel=0,ok=0,mm=0,to=0,w=0;
+for(var i=0;i<rocRows_.length;++i){if(!rocVis(rocRows_[i]))continue;vis++;if(rocSel_[rk(rocRows_[i])])sel++;
+var s=rocRows_[i].status;if(s==="OK")ok++;else if(s==="MISMATCH")mm++;else if(s==="TIMEOUT"||s==="ERROR")to++;else w++;}
+document.getElementById("rocInfo").innerHTML=
+'<span class="chip chip-neutral"><b>'+vis+'</b> visible</span>'+
+'<span class="chip chip-neutral"><b>'+sel+'</b> selected</span>'+
+(ok?'<span class="chip chip-ok"><b>'+ok+'</b> OK</span>':"")+
+(mm?'<span class="chip chip-bad"><b>'+mm+'</b> MISMATCH</span>':"")+
+(to?'<span class="chip chip-timeout"><b>'+to+'</b> TIMEOUT</span>':"")+
+(w?'<span class="chip chip-warn"><b>'+w+'</b> OTHER</span>':"");}
+function rocSelAll(v){for(var i=0;i<rocRows_.length;++i)if(rocVis(rocRows_[i]))rocSel_[rk(rocRows_[i])]=v;renderROC();}
+function rocSelSt(st){for(var i=0;i<rocRows_.length;++i)if(rocVis(rocRows_[i])&&rocRows_[i].status===st)rocSel_[rk(rocRows_[i])]=true;renderROC();}
+function updateTabBadges(){
+	document.getElementById("dtcBadge").textContent=Object.keys(dtcInfoMap_).length||Object.keys(dtcMap_).length||"0";
+	document.getElementById("rocBadge").textContent=rocRows_.length||"0";}
+
+// ── Modals ──────────────────────────────────────────────
+function openDTC(uid){var d=dtcInfoMap_[uid];if(!d)return;modalCtx_={type:"dtc",uid:uid};
+document.getElementById("mTitle").textContent=uid;
+document.getElementById("mBody").innerHTML=
+	msec("DTC Firmware")+
+	mkv("FW Version",d.designVersion)+mkv("Design Date",d.designDate)+
+	mkv("Type",d.designType==="D"?"DTC":d.designType==="C"?"CFO":d.designType)+
+	mkv("Link Speed",d.linkSpeed)+mkv("Vivado",d.vivadoVersion)+
+	mkv("FPGA Temp",d.fpgaTemp!==undefined?d.fpgaTemp.toFixed(1)+" C":"-")+
+	mkv("PCIe Device","dev"+(d.deviceIndex!==undefined?d.deviceIndex:"?"))+
+	mkv("Driver",d.driverVersion);
+document.getElementById("mFlash").textContent="Flash This DTC";
+document.getElementById("mSel").onclick=function(){dtcSel_["d:"+uid]=true;renderDTC();};
+document.getElementById("modalBg").style.display="block";}
+
+function openROC(key){var r=rkFind(key);if(!r)return;modalCtx_={type:"roc",key:key,row:r};
+document.getElementById("mTitle").textContent=r.target+" / ROC "+r.link;
+var di=dtcInfoMap_[r.target],db="";
+if(di)db=msec("Parent DTC")+mkv("DTC FW",di.designVersion)+mkv("Design Date",di.designDate)+mkv("FPGA Temp",di.fpgaTemp!==undefined?di.fpgaTemp.toFixed(1)+" C":"-");
+document.getElementById("mBody").innerHTML=
+	msec("ROC Firmware")+
+	mkv("DTC",r.target)+mkv("ROC Link",r.link)+mkv("ROC UID",r.rocUID)+
+	mkv("Board ID",r.boardId>=0?r.boardId:"-")+mkv("BOARD UID",r.uid)+
+	mkv("Status",r.status)+mkv("Match",r.match)+
+	mkv("FW Project",hx(r.project))+mkv("FW SHA",hx(r.fwGit))+
+	mkv("FW Build",(r.fwDate||"-")+" "+(r.fwTime||"-"))+mkv("FW Version",fmtV(r.fwVersion))+
+	mkv("SW SHA",hx(r.swGit))+mkv("SW Hash",hx(r.swHash))+mkv("SW Date",r.swDate)+db;
+document.getElementById("mFlash").textContent="Flash This ROC";
+document.getElementById("mSel").onclick=function(){rocSel_[key]=true;renderROC();};
+document.getElementById("modalBg").style.display="block";}
+
+function closeModal(){document.getElementById("modalBg").style.display="none";}
+function flashModal(){log("DRY RUN flash "+(modalCtx_?modalCtx_.type:"?"));}
+function flashDTC(){var n=0;for(var k in dtcSel_)if(dtcSel_[k])n++;log("DRY RUN flash "+n+" DTC(s).");}
+function flashROC(){var n=0;for(var k in rocSel_)if(rocSel_[k])n++;log("DRY RUN flash "+n+" ROC(s).");}
+
+// ── Filters ─────────────────────────────────────────────
+function rocVis(r){var tf=document.getElementById("dtcFilter").value,sf=document.getElementById("stFilter").value,
+tx=document.getElementById("txFilter").value.toLowerCase().trim();
+if(tf&&r.target!==tf)return false;if(sf&&r.status!==sf)return false;
+if(tx){var b=(r.target+" "+r.link+" "+r.boardId+" "+r.uid+" "+r.match+" "+r.rocUID).toLowerCase();if(b.indexOf(tx)<0)return false;}return true;}
+function getFilteredTargets(){var f=document.getElementById("dtcFilter").value;if(f)return dtcMap_[f]?[f]:[];return Object.keys(dtcMap_).sort(nc);}
+function paintDTCFilter(){var s=document.getElementById("dtcFilter"),ks=Object.keys(dtcMap_).sort(nc);
+var h='<option value="">All DTCs ('+ks.length+')</option>';for(var i=0;i<ks.length;++i)h+='<option value="'+esc(ks[i])+'">'+esc(ks[i])+'</option>';s.innerHTML=h;}
+function renderExpected(){var b=[];if(expected_.project!==undefined)b.push("proj "+hx(expected_.project));if(expected_.fwGit!==undefined)b.push("SHA "+hx(expected_.fwGit));
+if(expected_.fwVersion!==undefined)b.push("ver "+fmtV(expected_.fwVersion));if(expected_.swHash!==undefined)b.push("SW "+hx(expected_.swHash));
+document.getElementById("expLine").innerHTML=b.length?b.join(" &middot; "):'<span style="color:var(--c-text-dim)">None loaded</span>';}
+function hasExp(){return Object.keys(expected_).length>0;}
+
+// ── Helpers ─────────────────────────────────────────────
+function tc(t,bad,mono){var c="";if(mono&&bad)c=' class="mono cell-bad"';else if(mono)c=' class="mono"';else if(bad)c=' class="cell-bad"';return"<td"+c+">"+esc(String(t))+"</td>";}
+function stCls(r){if(r.status==="OK")return"st-ok";if(r.status==="TIMEOUT"||r.status==="ERROR")return"st-timeout";if(r.status==="MISMATCH")return"st-mismatch";if(r.status==="WARN"||r.status==="READ")return"st-warn";return"";}
+function uid3(l,c,m){if(l===undefined||c===undefined||m===undefined)return"";if(l===TIMEOUT_WORD_||c===TIMEOUT_WORD_||m===TIMEOUT_WORD_)return"timeout";return"0x"+p4(m)+p4(c)+p4(l);}
+function fmtD(h,l){if(h===undefined||l===undefined||h===TIMEOUT_WORD_||l===TIMEOUT_WORD_)return"";return bcd16(h)+"-"+p2(bcd8((l>>8)&0xff))+"-"+p2(bcd8(l&0xff));}
+function fmtT(h,l){if(h===undefined||l===undefined||h===TIMEOUT_WORD_||l===TIMEOUT_WORD_)return"";return p2(bcd8(h&0xff))+":"+p2(bcd8((l>>8)&0xff))+":"+p2(bcd8(l&0xff));}
+function fmtV(v){if(v===undefined)return"-";if(v===TIMEOUT_WORD_)return"timeout";return((v>>8)&0xff)+"."+(v&0xff);}
+function bcd8(v){return((v>>4)&0xf)*10+(v&0xf);}
+function bcd16(v){return((v>>12)&0xf)*1000+((v>>8)&0xf)*100+((v>>4)&0xf)*10+(v&0xf);}
+function p2(v){return(v<10?"0":"")+v;} function p4(v){return("0000"+((v===undefined?0:v)&0xffff).toString(16)).slice(-4);}
+function hx(v){return v===undefined?"-":"0x"+p4(v);}
+function px(v){if(v===undefined||v===null||v==="")return undefined;if(typeof v==="number")return v&0xffff;var s=String(v).trim().replace(/^x/i,"0x");if(!/^0x/i.test(s)&&/^[0-9a-fA-F]+$/.test(s))s="0x"+s;var n=parseInt(s,16);return isNaN(n)?undefined:(n&0xffff);}
+function rk(r){return r.target+":"+r.link;}
+function rkFind(k){for(var i=0;i<rocRows_.length;++i)if(rk(rocRows_[i])===k)return rocRows_[i];return null;}
+function mkv(k,v){return'<div class="mk">'+esc(k)+'</div><div class="mv mono">'+esc(String(v===undefined||v===null?"-":v))+'</div>';}
+function msec(t){return'<div class="modal-section">'+esc(t)+'</div>';}
+function log(m){var e=document.getElementById("log"),t=new Date();e.innerHTML=esc(p2(t.getHours())+":"+p2(t.getMinutes())+":"+p2(t.getSeconds())+"  "+m)+"<br>"+e.innerHTML;}
+function esc(s){return String(s===undefined||s===null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
+function ea(s){return esc(s).replace(/\\/g,"\\\\").replace(/'/g,"\\'");}
+function nc(a,b){return String(a).localeCompare(String(b),undefined,{numeric:true,sensitivity:"base"});}
+</script>
 </head>
 
 <body onload="//init() called by DesktopContent.js">
-	<div id="app">
-		<div class="toolbar">
-			<div>
-				<label>Firmware manifest directory</label>
-				<input id="fwDir" type="text" onkeydown="if(event.keyCode==13) loadFirmwareList();">
-			</div>
-			<div>
-				<label>Expected firmware</label>
-				<select id="firmwareSelect" onchange="loadSelectedFirmware()">
-					<option value="">-- loading --</option>
-				</select>
-			</div>
-			<button onclick="loadFirmwareList()">Reload Files</button>
-			<button onclick="useFirstOkAsExpected()">Use First Readable</button>
-			<button id="refreshBtn" class="primary" onclick="refreshVersions()">Refresh Versions</button>
-		</div>
+<div id="app">
 
-		<div class="filters">
-			<div>
-				<label>DTC target</label>
-				<select id="targetFilter" onchange="renderRows()"><option value="">all DTCs</option></select>
-			</div>
-			<div>
-				<label>Status</label>
-				<select id="statusFilter" onchange="renderRows()">
-					<option value="">all</option>
-					<option value="OK">OK</option>
-					<option value="MISMATCH">MISMATCH</option>
-					<option value="TIMEOUT">TIMEOUT</option>
-					<option value="WARN">WARN</option>
-					<option value="READ">READ</option>
-				</select>
-			</div>
-			<div>
-				<label>Disk</label>
-				<input id="diskFilter" type="text" oninput="renderRows()">
-			</div>
-			<div>
-				<label>Phi</label>
-				<input id="phiFilter" type="text" oninput="renderRows()">
-			</div>
-			<div>
-				<label>Text filter</label>
-				<input id="textFilter" type="text" oninput="renderRows()">
-			</div>
-			<button onclick="selectAllVisible(true)">Select All</button>
-			<button onclick="selectAllVisible(false)">Clear</button>
-		</div>
-
-		<div class="filters">
-			<button onclick="selectByStatus('MISMATCH')">Select Mismatch</button>
-			<button onclick="selectByStatus('TIMEOUT')">Select Timeout</button>
-			<button onclick="selectByField('disk')">Select By Disk</button>
-			<button onclick="selectByField('phi')">Select By Phi</button>
-			<button onclick="flashSelectedDryRun()" class="danger">Flash Selected</button>
-			<div class="small" style="grid-column: span 2;">
-				Expected: <span id="expectedLine">No expected firmware loaded.</span><br>
-				Progress: <span id="progress">0 / 0</span>
-			</div>
-		</div>
-
-		<div id="summary" class="summary"></div>
-
-		<div class="table-wrap">
-			<table>
-				<thead>
-					<tr>
-						<th>Sel</th>
-						<th>DTC</th>
-						<th>ROC</th>
-						<th>Disk</th>
-						<th>Phi</th>
-						<th>BoardID</th>
-						<th>BOARDUID</th>
-						<th>Status</th>
-						<th>Match Detail</th>
-						<th>Project</th>
-						<th>FW SHA</th>
-						<th>FW Date</th>
-						<th>FW Time</th>
-						<th>FW Ver</th>
-						<th>SW Hash</th>
-						<th>SW Date</th>
-					</tr>
-				</thead>
-				<tbody id="tbody"></tbody>
-			</table>
-		</div>
-
-		<div id="log" class="log-panel"></div>
+	<!-- ═══ Header ═══ -->
+	<div class="header-bar">
+		<h1>FIRMWARE MANAGER</h1>
+		<div class="spacer"></div>
+		<div class="status-pill"><div class="dot" id="busyDot"></div><span id="busyLabel">ready</span></div>
+		<span style="font-size:13px;color:var(--c-text-dim);">Progress: <b id="progressText">--</b></span>
+		<button id="refreshBtn" class="primary" onclick="refreshInventory()" style="width:auto;padding:0 24px;">Refresh Inventory</button>
 	</div>
 
-	<div id="modalBackdrop" class="modal-backdrop">
-		<div class="modal">
-			<h3 id="modalTitle" style="margin-top:0;">ROC</h3>
-			<div id="modalBody" class="modal-grid"></div>
-			<div class="modal-actions">
-				<button onclick="refreshVersions()">Refresh All</button>
-				<button onclick="flashModalDryRun()" class="danger">Flash This ROC</button>
-				<button onclick="setSelected(rowKey(activeModalRow_), true); renderRows();">Select</button>
-				<button onclick="closeDetails()">Close</button>
+	<!-- ═══ Controls ═══ -->
+	<div class="controls-row">
+		<div class="field-group">
+			<label>Firmware Directory</label>
+			<input id="fwDir" type="text" onkeydown="if(event.keyCode==13)loadFirmwareList();">
+		</div>
+		<div class="field-group">
+			<label>Expected ROC Firmware</label>
+			<select id="firmwareSelect" onchange="loadSelectedFirmware()"><option value="">-- loading --</option></select>
+		</div>
+		<button onclick="loadFirmwareList()" style="align-self:end;">Reload</button>
+		<div class="field-group">
+			<label>DTC Filter</label>
+			<select id="dtcFilter" onchange="renderROC();renderDTC();"><option value="">All DTCs</option></select>
+		</div>
+		<div class="field-group" style="align-self:end;">
+			<label>Expected</label>
+			<div id="expLine" style="font-size:13px;color:var(--c-text-dim);padding:8px 0;">None loaded</div>
+		</div>
+	</div>
+
+	<!-- ═══ Tab Navigation ═══ -->
+	<div class="tab-nav">
+		<button class="active" data-tab="dtc" onclick="switchTab('dtc')">DTC Firmware <span class="tab-badge" id="dtcBadge">0</span></button>
+		<button data-tab="roc" onclick="switchTab('roc')">ROC Firmware <span class="tab-badge" id="rocBadge">0</span></button>
+	</div>
+
+	<!-- ═══ Panel Container ═══ -->
+	<div class="panel-container">
+
+		<!-- DTC Panel -->
+		<div id="p-dtc" class="tab-panel active">
+			<div class="action-bar">
+				<button onclick="selAllDTC(true)">Select All</button>
+				<button onclick="selAllDTC(false)">Clear</button>
+				<div class="sep"></div>
+				<button class="danger" onclick="flashDTC()">Flash Selected DTCs</button>
+				<div class="info" id="dtcInfo"><b>0</b> DTC(s)</div>
+			</div>
+			<div class="table-scroll">
+				<table>
+					<thead><tr><th>Sel</th><th>DTC</th><th>Type</th><th>FW Version</th><th>Design Date</th><th>Vivado</th><th>Link Speed</th><th>FPGA Temp</th><th>PCIe</th><th>Driver</th></tr></thead>
+					<tbody id="dtcTb"><tr><td colspan="10" style="padding:24px;color:var(--c-text-dim);text-align:center;">No DTC data yet. Press <b>Refresh Inventory</b>.</td></tr></tbody>
+				</table>
+			</div>
+		</div>
+
+		<!-- ROC Panel -->
+		<div id="p-roc" class="tab-panel">
+			<div class="action-bar">
+				<div class="field-group" style="width:120px;">
+					<select id="stFilter" onchange="renderROC()" style="height:30px;font-size:13px;">
+						<option value="">All status</option><option value="OK">OK</option><option value="MISMATCH">MISMATCH</option>
+						<option value="TIMEOUT">TIMEOUT</option><option value="ERROR">ERROR</option><option value="WARN">WARN</option>
+					</select>
+				</div>
+				<div class="field-group" style="width:160px;">
+					<input id="txFilter" type="text" placeholder="Search..." oninput="renderROC()" style="height:30px;font-size:13px;">
+				</div>
+				<div class="sep"></div>
+				<button onclick="rocSelAll(true)">Select All</button>
+				<button onclick="rocSelAll(false)">Clear</button>
+				<button onclick="rocSelSt('MISMATCH')">Sel Mismatch</button>
+				<button onclick="rocSelSt('TIMEOUT')">Sel Timeout</button>
+				<div class="sep"></div>
+				<button class="danger" onclick="flashROC()">Flash Selected ROCs</button>
+			</div>
+			<div class="summary-bar" id="rocInfo"></div>
+			<div class="table-scroll">
+				<table>
+					<thead><tr><th>Sel</th><th>DTC</th><th>ROC</th><th>Board ID</th><th>Board UID</th><th>Status</th><th>Match</th><th>Project</th><th>FW SHA</th><th>FW Date</th><th>FW Time</th><th>FW Ver</th><th>SW Hash</th><th>SW Date</th></tr></thead>
+					<tbody id="rocTb"><tr><td colspan="14" style="padding:24px;color:var(--c-text-dim);text-align:center;">No ROC data yet. Press <b>Refresh Inventory</b>.</td></tr></tbody>
+				</table>
 			</div>
 		</div>
 	</div>
+
+	<!-- ═══ Log ═══ -->
+	<div id="log" class="log-panel"></div>
+</div>
+
+<!-- ═══ Modal ═══ -->
+<div id="modalBg" class="modal-backdrop" onclick="closeModal()">
+	<div class="modal" onclick="event.stopPropagation()">
+		<div class="modal-header">
+			<h3 id="mTitle">Details</h3>
+			<button class="close-x" onclick="closeModal()">&#10005;</button>
+		</div>
+		<div class="modal-body"><div id="mBody" class="modal-grid"></div></div>
+		<div class="modal-footer">
+			<button onclick="refreshInventory()">Refresh All</button>
+			<button id="mFlash" class="danger" onclick="flashModal()">Flash</button>
+			<button id="mSel">Select</button>
+			<div class="spacer"></div>
+			<button onclick="closeModal()">Close</button>
+		</div>
+	</div>
+</div>
+
 </body>
 </html>
