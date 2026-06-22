@@ -14,6 +14,7 @@ using namespace ots;
 const std::string SubsystemCalorimeterParametersTable::DBSERVICE_ONLINE_PATH = getenv("DBSERVICE_ONLINE_PATH") ? getenv("DBSERVICE_ONLINE_PATH") : "";
 const std::string SubsystemCalorimeterParametersTable::CHANNEL_MAP_TABLE     = "SubsystemCalorimeterMapTable";
 const std::string SubsystemCalorimeterParametersTable::CHANNEL_STATUS_TABLE  = "SubsystemCalorimeterStatusTable";
+const std::string SubsystemCalorimeterParametersTable::CHANNEL_THRESHOLDS_TABLE  = "SubsystemCalorimeterThresholdsTable";
 
 //==============================================================================
 SubsystemCalorimeterParametersTable::SubsystemCalorimeterParametersTable(void) : TableBase("SubsystemCalorimeterParametersTable") {}
@@ -68,6 +69,8 @@ void SubsystemCalorimeterParametersTable::generateOfflineTableMap(const Configur
 	__COUTT__ << mapOfflineTables_["CalChannelMap"] << __E__;
 	mapOfflineTables_["CalChannelStatus"] = getStatusTableInCSVFormat(configManager, "CalChannelStatus");
 	__COUTT__ << mapOfflineTables_["CalChannelStatus"] << __E__;
+	mapOfflineTables_["CalBaselines"] = getBaselineTableInCSVFormat(configManager, "CalBaselines");
+	__COUTT__ << mapOfflineTables_["CalBaselines"] << __E__;
 }  // end generateOfflineTableMap()
 
 //==============================================================================
@@ -91,6 +94,46 @@ std::string SubsystemCalorimeterParametersTable::getChannelMapAndCSVFormat(const
 
 //==============================================================================
 std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(const ConfigurationManager* configManager, const std::string& OfflineCxxClassName) {
+	__COUTTV__(OfflineCxxClassName);
+
+	std::stringstream OfflineTable;
+	OfflineTable << "TABLE " << OfflineCxxClassName << __E__;
+	std::vector<std::pair<std::string, ConfigurationTree>> channelBaselineRecords = configManager->getNode(SubsystemCalorimeterParametersTable::CHANNEL_THRESHOLDS_TABLE).getChildren();
+
+	__COUTTV__(channelBaselineRecords.size());
+
+	// start main fe/DTC record loop
+	for(auto& channelBaselinePair : channelBaselineRecords) {
+		uint16_t                               boardID = channelBaselinePair.second.getNode(ColChannelStatus.colBoardId_).getValue<uint16_t>();
+		ConfigurationTree::BitMap<std::string> bitmap  = channelBaselinePair.second.getNode(ColChannelStatus.colStatus_).getValueAsBitMap();
+
+		// assume data is 1-dimensional
+		for(uint32_t j = 0; j < bitmap.numberOfColumns(0); j++) {
+			const uint32_t onlineID = boardID * mu2e::CaloConst::_nChPerDIRAC + j;
+			auto           it       = mapChannels_.find(onlineID);
+
+			if(it == mapChannels_.end()) {
+				__SS__ << "No channel map entry found for online ID " << onlineID << " (boardID=" << boardID << ", channel=" << j << "). Tables may be inconsistent - check "
+				       << SubsystemCalorimeterParametersTable::CHANNEL_THRESHOLDS_TABLE << " vs " << SubsystemCalorimeterParametersTable::CHANNEL_MAP_TABLE << "." << __E__;
+				ss << "Here is the channel map:\n";
+				for(const auto& channelPair : mapChannels_)
+					ss << channelPair.first << ": " << channelPair.second << ", ";
+				ss << __E__;
+				__SS_THROW__;
+			}
+			OfflineTable << it->second << ", ";
+			OfflineTable << ((bitmap.get(0, j).size() == 0) ? "0" : bitmap.get(0, j));
+			OfflineTable << ((j + 1 == bitmap.numberOfColumns(0)) ? "" : "\n");
+		}
+		OfflineTable << "\n";
+	}
+	__COUTTV__(OfflineTable.str().size());
+	return OfflineTable.str();
+}  // end getStatusTableInCSVFormat()
+
+
+//==============================================================================
+std::string SubsystemCalorimeterParametersTable::getBaselineTableInCSVFormat(const ConfigurationManager* configManager, const std::string& OfflineCxxClassName) {
 	__COUTTV__(OfflineCxxClassName);
 
 	std::stringstream OfflineTable;
@@ -127,6 +170,7 @@ std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(const
 	__COUTTV__(OfflineTable.str().size());
 	return OfflineTable.str();
 }  // end getStatusTableInCSVFormat()
+
 
 //==============================================================================
 // return status structures
