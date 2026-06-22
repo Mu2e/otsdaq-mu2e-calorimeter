@@ -14,6 +14,16 @@ cet_build_plugin(CaloDataVerifier art::module LIBRARIES REG
  artdaq::DAQdata
 )
 
+cet_build_plugin(CaloFilterDQM art::module
+  REG_SOURCE CaloFilterDQM_module.cc
+  LIBRARIES REG
+    artdaq-core-mu2e::Data
+    artdaq-core-mu2e::Data_dict
+    artdaq-core-mu2e::Overlays
+    artdaq::DAQdata
+    Offline::DAQ
+)
+
 cet_build_plugin(CaloDataAnalyzer art::module
     REG_SOURCE CaloDataAnalyzer_module.cc
     LIBRARIES REG
