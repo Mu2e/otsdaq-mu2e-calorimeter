@@ -51,11 +51,14 @@ class CaloDataVerifier : public art::EDFilter {
 
 	bool checkAndUpdateDTCEWT(const DTCLib::DTC_SubEvent& subevent);
 	bool checkAndUpdateROCEWT(const DTCLib::DTC_DataBlock& dataBlock);
+	bool checkHitBeginMarker(const mu2e::CalorimeterDataDecoder::CalorimeterHitDataPacket& hit);
 	bool checkHitBeginMarker(const mu2e::CalorimeterDataDecoder::CalorimeterHitTestDataPacket& hit);
 	bool checkHitLastMarker(const mu2e::CalorimeterDataDecoder::CalorimeterHitTestDataPacket& hit);
 	bool checkAndUpdateROCCounter(const DTCLib::DTC_DataBlock& dataBlock, const std::vector<uint32_t>& hit_counters);
 	bool checkCounters(const DTCLib::DTC_DataBlock& dataBlock, const std::vector<uint32_t>& hit_counters);
 	bool checkEmulatedCounters(const DTCLib::DTC_DataBlock& dataBlock, const std::vector<uint32_t>& hit_counters);
+	uint32_t extractBits(const uint16_t* words, size_t startBit, size_t bitLength);
+
 
 	void printEvent(const DTCLib::DTC_Event& dtcevent);
 	void printSubEvent(const DTCLib::DTC_SubEvent& subevent);
@@ -196,7 +199,7 @@ bool mu2e::CaloDataVerifier::filter(art::Event& event) {
 	TLOG(TLVL_DEBUG + 6) << "[CaloDataVerifier::filter] found " << nCaloHits << " calo hits in event" << (int)eventNumber;
 
 	if(nCaloEvents == 0) {
-		TLOG(TLVL_WARNING) << "[CaloDataVerifier::filter] found no calo subevents in event" << (int)eventNumber << "!";
+		TLOG(TLVL_WARNING) << "[CaloDataVerifier::filter] found no calo subevents in event " << (int)eventNumber << "!";
 	}
 
 	// TLOG(TLVL_INFO) << "mu2e::CaloDataVerifier::filter exiting eventNumber=" <<
@@ -301,6 +304,11 @@ void mu2e::CaloDataVerifier::processCaloData(mu2e::DTCEventFragment& eventFragme
 						                   << hit.ChannelID;
 					}
 					nCaloHits++;
+					if(!checkHitBeginMarker(hit)) {
+						event_failed_BeginMarker++;
+						failMap_BeginMarker[dtcID][iroc]++;
+						failedEvent = true;
+					}
 				}
 			} else if(data_type_ == 1) {  /////// DEBUG HITS ///////
 				auto caloHits = caloDecoder.GetCalorimeterHitTestData(iroc);
@@ -523,6 +531,7 @@ bool mu2e::CaloDataVerifier::checkAndUpdateROCCounter(const DTCLib::DTC_DataBloc
 	return true;
 }
 
+bool mu2e::CaloDataVerifier::checkHitBeginMarker(const mu2e::CalorimeterDataDecoder::CalorimeterHitDataPacket& hit) { return (hit.Reserved1 == 0xAAA); }
 bool mu2e::CaloDataVerifier::checkHitBeginMarker(const mu2e::CalorimeterDataDecoder::CalorimeterHitTestDataPacket& hit) { return (hit.BeginMarker == 0xAAA); }
 
 bool mu2e::CaloDataVerifier::checkHitLastMarker(const mu2e::CalorimeterDataDecoder::CalorimeterHitTestDataPacket& hit) { return (hit.LastSampleMarker != 0); }
@@ -596,6 +605,19 @@ void mu2e::CaloDataVerifier::printDTCHeader(const DTCLib::DTC_SubEvent& subevent
 	return;
 }
 
+uint32_t mu2e::CaloDataVerifier::extractBits(const uint16_t* words, size_t startBit, size_t bitLength)
+{
+	uint32_t result = 0;
+	for (size_t bitIndex = startBit; bitIndex < startBit + bitLength; bitIndex++)
+	{
+		size_t wordIndex = (bitIndex / 16) ^ 0x1;  // Swap pairs of 16-bit words (just flip the last bit)
+		size_t bitOffset = 15 - (bitIndex % 16);   // Big-endian
+		uint16_t bit = (words[wordIndex] >> bitOffset) & 0x1;
+		result = (result << 1) | bit;
+	}
+	return result;
+}
+
 void mu2e::CaloDataVerifier::printROC(const DTCLib::DTC_DataBlock& dataBlock) {
 	auto headerPtr = reinterpret_cast<uint16_t const*>(dataBlock.GetRawBufferPointer());
 	auto dataPtr   = reinterpret_cast<uint16_t const*>(dataBlock.GetData());
@@ -610,12 +632,65 @@ void mu2e::CaloDataVerifier::printROC(const DTCLib::DTC_DataBlock& dataBlock) {
 			std::cout << std::endl;
 	}
 	std::cout << "--- DECODED WORDS --- " << std::endl;
-	uint                                          n12bitWords = 21 * (dataBlock.GetHeader()->GetPacketCount() / 2);
-	mu2e::CalorimeterDataDecoder::Data12bitReader reader(reinterpret_cast<uint16_t const*>(dataBlock.GetData()));
-	for(size_t word = 0; word < n12bitWords; word++) {
-		std::cout << std::hex << std::setw(3) << std::setfill('0') << reader[word] << std::dec << " ";
-		if(word % 21 == 20)
-			std::cout << std::endl;
+	if (data_type_ == 0){
+
+		auto blockPos = reinterpret_cast<const uint8_t*>(dataPtr);  // byte position in block (multiple of 16)
+		auto endOfBlockPos = blockPos + dataBlock.byteSize - 16;
+		while (blockPos < endOfBlockPos)  // until the end of this block
+		{
+			//Ignore any 0xFFFF word
+			if ((reinterpret_cast<const uint16_t*>(blockPos))[0] == 0xFFFF){
+				blockPos += 2;
+				continue;
+			}
+			if (endOfBlockPos - blockPos < 12) break; //hit header is 12 bytes
+
+			const uint16_t* words = reinterpret_cast<const uint16_t*>(blockPos);
+			uint16_t Reserved1                 = static_cast<uint16_t>(extractBits(words, 0, 12));
+			uint16_t BoardID                   = static_cast<uint8_t>(extractBits(words, 12, 8));
+			uint16_t DetectorID                = static_cast<uint8_t>(extractBits(words, 20, 3));
+			uint16_t ChannelID                 = static_cast<uint8_t>(extractBits(words, 23, 5));
+			uint16_t Time                      = static_cast<uint16_t>(extractBits(words, 28, 16));
+			uint16_t InPayloadEventWindowTag   = static_cast<uint16_t>(extractBits(words, 44, 16));
+			uint16_t Baseline                  = static_cast<uint16_t>(extractBits(words, 60, 12));
+			uint16_t IndexOfMaxDigitizerSample = static_cast<uint16_t>(extractBits(words, 72, 10));
+			uint16_t ErrorFlags                = static_cast<uint8_t>(extractBits(words, 82, 4));
+			uint16_t NumberOfSamples           = static_cast<uint16_t>(extractBits(words, 86, 10));
+			// Waveform
+			mu2e::CalorimeterDataDecoder::Data12bitReader reader(reinterpret_cast<const uint16_t*>(blockPos + 12));
+			std::cout<<"HIT HEADER--\n";
+			std::cout<<std::hex<<Reserved1<<" ";
+			std::cout<<std::hex<<BoardID<<" ";
+			std::cout<<std::hex<<DetectorID<<" ";
+			std::cout<<std::hex<<ChannelID<<" ";
+			std::cout<<std::hex<<Time<<" ";
+			std::cout<<std::hex<<InPayloadEventWindowTag<<" ";
+			std::cout<<std::hex<<Baseline<<" ";
+			std::cout<<std::hex<<IndexOfMaxDigitizerSample<<" ";
+			std::cout<<std::hex<<ErrorFlags<<" ";
+			std::cout<<std::hex<<NumberOfSamples<<" ";
+			std::cout<<"\nHIT WAVEFORM--\n";
+			// Make sure we don't read over the block if there is an error
+			uint bytesLeft = endOfBlockPos - (blockPos + 12);
+			uint maxSamples = bytesLeft / 1.5;
+			if (NumberOfSamples > maxSamples) NumberOfSamples = maxSamples;
+			for(size_t word = 0; word < NumberOfSamples; word++) {
+				std::cout << std::hex << std::setw(3) << std::setfill('0') << reader[word] << std::dec << " ";
+			}
+			std::cout<<"\n";
+			// Advance to the next 12-byte packet
+			float hitByteSize = 12 + NumberOfSamples * 1.5;
+			uint8_t hitPackets = uint8_t(std::ceil(hitByteSize / 12));  // number of 12-byte packets this hit occupied
+			blockPos += hitPackets * 12;                                // advance by 12 bytes per packet
+		}
+	} else if (data_type_ == 1){
+		uint n12bitWords = 21 * (dataBlock.GetHeader()->GetPacketCount() / 2);
+		mu2e::CalorimeterDataDecoder::Data12bitReader reader(reinterpret_cast<uint16_t const*>(dataBlock.GetData()));
+		for(size_t word = 0; word < n12bitWords; word++) {
+			std::cout << std::hex << std::setw(3) << std::setfill('0') << reader[word] << std::dec << " ";
+			if(word % 21 == 20)
+				std::cout << std::endl;
+		}
 	}
 	return;
 }
