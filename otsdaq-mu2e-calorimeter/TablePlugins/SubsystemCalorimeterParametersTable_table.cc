@@ -130,7 +130,6 @@ std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(const
 
 			OfflineTable << it->second << "," << bitmap.get(0, j) << "\n";
 		}
-		OfflineTable << "\n";
 	}
 	__COUTTV__(OfflineTable.str().size());
 	return OfflineTable.str();
@@ -180,7 +179,6 @@ std::string SubsystemCalorimeterParametersTable::getThresholdsTableInCSVFormat(c
 
 			OfflineTable << it->second << "," << baselines.get(0, j) << "," << thresholds.get(0, j) << "\n";
 		}
-		OfflineTable << "\n";
 	}
 	__COUTTV__(OfflineTable.str().size());
 	return OfflineTable.str();
