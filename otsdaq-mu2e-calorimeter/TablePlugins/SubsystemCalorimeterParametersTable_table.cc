@@ -65,12 +65,12 @@ void SubsystemCalorimeterParametersTable::init(ConfigurationManager* configManag
 //==============================================================================
 void SubsystemCalorimeterParametersTable::generateOfflineTableMap(const ConfigurationManager* configManager) {
 	mapOfflineTables_.clear();
-	mapOfflineTables_["CalChannelMap"] = getChannelMapAndCSVFormat(configManager, "CalChannelMap");
-	__COUTT__ << mapOfflineTables_["CalChannelMap"] << __E__;
+	mapOfflineTables_["CalChannels"] = getChannelMapAndCSVFormat(configManager, "CalChannels");
+	__COUTT__ << mapOfflineTables_["CalChannels"] << __E__;
 	mapOfflineTables_["CalChannelStatus"] = getStatusTableInCSVFormat(configManager, "CalChannelStatus");
 	__COUTT__ << mapOfflineTables_["CalChannelStatus"] << __E__;
-	mapOfflineTables_["CalChannelBaselines"] = getThresholdsTableInCSVFormat(configManager, "CalChannelBaselines");
-	__COUTT__ << mapOfflineTables_["CalChannelBaselines"] << __E__;
+	mapOfflineTables_["CalBaselines"] = getThresholdsTableInCSVFormat(configManager, "CalBaselines");
+	__COUTT__ << mapOfflineTables_["CalBaselines"] << __E__;
 }  // end generateOfflineTableMap()
 
 //==============================================================================
@@ -86,9 +86,12 @@ std::string SubsystemCalorimeterParametersTable::getChannelMapAndCSVFormat(const
 		uint16_t onlineID      = channelMapPair.second.getNode(ColChannelMap.onlineId_).getValue<uint16_t>();
 		uint16_t offlineID     = channelMapPair.second.getNode(ColChannelMap.offlineId_).getValue<uint16_t>();
 		mapChannels_[onlineID] = offlineID;
-
-		OfflineTable << onlineID << "," << offlineID << "\n";
 	}
+
+	for(uint ichan = 0; ichan < mu2e::CaloConst::_nRawChannel; ichan++) {
+		OfflineTable << ichan << "," << (mapChannels_.find(ichan) == mapChannels_.end() ? mu2e::CaloConst::_invalid : mapChannels_[ichan]) << "\n";
+	}
+
 	return OfflineTable.str();
 }  // end getChannelMapAndCSVFormat()
 
@@ -101,6 +104,8 @@ std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(const
 	std::vector<std::pair<std::string, ConfigurationTree>> channelStatusRecords = configManager->getNode(SubsystemCalorimeterParametersTable::CHANNEL_STATUS_TABLE).getChildren();
 
 	__COUTTV__(channelStatusRecords.size());
+
+	std::map<int, std::string> channel_status;
 
 	// start main fe/DTC record loop
 	for(auto& channelStatusPair : channelStatusRecords) {
@@ -128,9 +133,17 @@ std::string SubsystemCalorimeterParametersTable::getStatusTableInCSVFormat(const
 				__SS_THROW__;
 			}
 
-			OfflineTable << it->second << "," << bitmap.get(0, j) << "\n";
+			if(it->second == mu2e::CaloConst::_invalid)
+				continue;
+
+			channel_status[it->second] = bitmap.get(0, j);
 		}
 	}
+
+	for(uint ichan = 0; ichan < mu2e::CaloConst::_nChannelDB; ichan++) {
+		OfflineTable << ichan << ",\"" << channel_status[ichan] << "\"\n";
+	}
+
 	__COUTTV__(OfflineTable.str().size());
 	return OfflineTable.str();
 }  // end getStatusTableInCSVFormat()
@@ -144,6 +157,9 @@ std::string SubsystemCalorimeterParametersTable::getThresholdsTableInCSVFormat(c
 	std::vector<std::pair<std::string, ConfigurationTree>> channelThresholdsRecords = configManager->getNode(SubsystemCalorimeterParametersTable::CHANNEL_THRESHOLDS_TABLE).getChildren();
 
 	__COUTTV__(channelThresholdsRecords.size());
+
+	std::map<int, float> channel_baselines;
+	std::map<int, float> channel_thresholds;
 
 	// start main fe/DTC record loop
 	for(auto& channelThresholdsPair : channelThresholdsRecords) {
@@ -177,9 +193,18 @@ std::string SubsystemCalorimeterParametersTable::getThresholdsTableInCSVFormat(c
 				__SS_THROW__;
 			}
 
-			OfflineTable << it->second << "," << baselines.get(0, j) << "," << thresholds.get(0, j) << "\n";
+			if(it->second == mu2e::CaloConst::_invalid)
+				continue;
+
+			channel_baselines[it->second]  = stof(baselines.get(0, j));
+			channel_thresholds[it->second] = stof(thresholds.get(0, j));
 		}
 	}
+
+	for(uint ichan = 0; ichan < mu2e::CaloConst::_nChannelDB; ichan++) {
+		OfflineTable << ichan << "," << channel_baselines[ichan] << "," << channel_thresholds[ichan] << "\n";
+	}
+
 	__COUTTV__(OfflineTable.str().size());
 	return OfflineTable.str();
 }  // end getThresholdsTableInCSVFormat()
