@@ -167,14 +167,14 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 	void SetADCsThresholds(__ARGS__);
 	void SetADCsThresholds(int offset);
 
-	void ReadVoltagesFromDB(__ARGS__);
-	void ReadChannelStatusFromDB(__ARGS__);
-	void PrintROCConfiguration(__ARGS__);
+	void        ReadVoltagesFromDB(__ARGS__);
+	void        ReadChannelStatusFromDB(__ARGS__);
+	void        PrintROCConfiguration(__ARGS__);
 	std::string getFirmwareVersion(void) override;
 	std::string getFirmwareInventoryHeader(void) override;
 	std::string getFirmwareInventoryRow(void) override;
 	std::string getFirmwareInventoryJSON(void) override;
-	void PrintROCFirmwareVersion(__ARGS__);
+	void        PrintROCFirmwareVersion(__ARGS__);
 	// void ReadVoltagesFromDB();
 
 	void ReadROCErrorCounter(__ARGS__);
