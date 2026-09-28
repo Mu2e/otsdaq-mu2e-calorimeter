@@ -27,6 +27,11 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 	// void stop	(void) override;
 	bool running(void) override;
 
+	virtual void writeDelay(uint16_t delay) override;  // 5ns steps
+	virtual int  readDelay(void) override;             // 5ns steps
+	virtual int  readDTCLinkLossCounter(void) override;
+	virtual void resetDTCLinkLossCounter(void) override;
+
 	// write and read to registers
 	virtual void     writeEmulatorRegister(uint16_t address, uint16_t data_to_write) override;
 	virtual uint16_t readEmulatorRegister(uint16_t address) override;
@@ -78,7 +83,20 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
         ROC_ADDRESS_SIMWF_ENABLE_A           = 150,
         ROC_ADDRESS_SIMWF_ENABLE_B           = 151,
         ROC_ADDRESS_SIMWF_MULTI_A            = 152,
-        ROC_ADDRESS_SIMWF_MULTI_B            = 153
+        ROC_ADDRESS_SIMWF_MULTI_B            = 153,
+
+        ROC_ADDRESS_FW_PROJECT_ID            = 240,
+        ROC_ADDRESS_FW_GIT_SHA               = 241,
+        ROC_ADDRESS_FW_BUILD_DATE_LO         = 242,
+        ROC_ADDRESS_FW_BUILD_DATE_HI         = 243,
+        ROC_ADDRESS_FW_BUILD_TIME_LO         = 244,
+        ROC_ADDRESS_FW_BUILD_TIME_HI         = 245,
+        ROC_ADDRESS_FW_VERSION               = 246,
+
+        ROC_ADDRESS_SW_GIT_SHA               = 247,
+        ROC_ADDRESS_SW_HEX_HASH              = 248,
+        ROC_ADDRESS_SW_BUILD_DATE_LO         = 249,
+        ROC_ADDRESS_SW_BUILD_DATE_HI         = 250
 		// clang-format on
 	};
 
@@ -137,6 +155,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 	void RMZB_writeAllSiPMbias(float* hv);
 	void EnableDisableLEDs(__ARGS__);
 	void FindBoardIDFromSerial(__ARGS__);
+	void DebugDatabaseLookup(__ARGS__);
 
 	void ConfigureLink(__ARGS__);
 	void ConfigureLink(std::string conf, std::string confFile, bool hvonoff, bool doCalibration, bool setThresholds, int offset);
@@ -148,9 +167,14 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 	void SetADCsThresholds(__ARGS__);
 	void SetADCsThresholds(int offset);
 
-	void ReadVoltagesFromDB(__ARGS__);
-	void ReadChannelStatusFromDB(__ARGS__);
-	void PrintROCConfiguration(__ARGS__);
+	void        ReadVoltagesFromDB(__ARGS__);
+	void        ReadChannelStatusFromDB(__ARGS__);
+	void        PrintROCConfiguration(__ARGS__);
+	std::string getFirmwareVersion(void) override;
+	std::string getFirmwareInventoryHeader(void) override;
+	std::string getFirmwareInventoryRow(void) override;
+	std::string getFirmwareInventoryJSON(void) override;
+	void        PrintROCFirmwareVersion(__ARGS__);
 	// void ReadVoltagesFromDB();
 
 	void ReadROCErrorCounter(__ARGS__);

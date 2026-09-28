@@ -13,7 +13,9 @@
 #include <ctime>
 #include <filesystem>
 #include <fstream>
+#include <initializer_list>
 #include <iomanip>
+#include <vector>
 
 using namespace ots;
 
@@ -97,6 +99,12 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(const std::string& rocUID, cons
 	                        std::vector<std::string>{"Status"},  // output
 	                        1);
 
+	registerFEMacroFunction("Debug Database Lookup",
+	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::DebugDatabaseLookup),
+	                        std::vector<std::string>{},          // input
+	                        std::vector<std::string>{"Status"},  // output
+	                        1);
+
 	registerFEMacroFunction("Set Board Voltages",
 	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::SetBoardVoltages),
 	                        std::vector<std::string>{"configuration folder, Default:= nominal",
@@ -147,6 +155,12 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(const std::string& rocUID, cons
 
 	registerFEMacroFunction("Print ROC Configuration",
 	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::PrintROCConfiguration),
+	                        std::vector<std::string>{},
+	                        std::vector<std::string>{"Status"},
+	                        1);
+
+	registerFEMacroFunction("Print ROC Firmware Version",
+	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::PrintROCFirmwareVersion),
 	                        std::vector<std::string>{},
 	                        std::vector<std::string>{"Status"},
 	                        1);
@@ -270,6 +284,28 @@ void ROCCalorimeterInterface::writeEmulatorRegister(uint16_t address, uint16_t d
 	return;
 
 }  // end writeRegister()
+
+//==================================================================================================
+/// FIXME -- get the Calo correct delay register
+void ROCCalorimeterInterface::writeDelay(uint16_t delay) {
+	// this->writeRegister(24, delay);
+	return;
+}
+
+//==================================================================================================
+/// FIXME -- get the Calo correct delay register
+int ROCCalorimeterInterface::readDelay() { return 0; }  // this->readRegister(7); }
+
+//==================================================================================================
+/// FIXME -- get the Calo correct link loss reset "soft reset" register
+int ROCCalorimeterInterface::readDTCLinkLossCounter() { return 0; }  // this->readRegister(8); }
+
+//==================================================================================================
+/// FIXME -- get the Calo correct link loss reset "soft reset" register
+void ROCCalorimeterInterface::resetDTCLinkLossCounter() {
+	// this->writeRegister(24, 0x1);
+	return;
+}
 
 //==================================================================================================
 uint16_t ROCCalorimeterInterface::readEmulatorRegister(uint16_t address)  // not useful, broken by Luca
@@ -467,6 +503,24 @@ void ROCCalorimeterInterface::ROCSlowControl(__ARGS__) {
 	for(size_t i = 0; i < data5.size(); i++) {
 		os << "Word " << i << ": 0x" << ((float)data5[i]) / 100. << __E__;
 		fileVI << ((float)data5[i]) / 100. << " ";
+	}
+
+	os << __E__;
+	os << "Reading SiPMs requested voltages:" << __E__;
+	os << __E__;
+
+	std::vector<DTCLib::roc_data_t> data6;
+	readROCBlock(data6, 267, FEE_NUM, false);
+
+	os << "vector size:" << data6.size() << __E__;
+
+	os << __E__;
+
+	for(size_t i = 0; i < data6.size(); i++) {
+		const auto raw     = data6[i];
+		const bool enabled = (raw & 0x8000) != 0;
+		const auto value   = raw & 0x7fff;
+		os << "Word " << i << ": raw=0x" << std::hex << raw << std::dec << " enabled=" << enabled << " request=" << ((float)value) / 10. << " V" << __E__;
 	}
 
 	file << std::endl;
@@ -718,7 +772,7 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 	if(ROCCalorimeterInterface::SPECIAL_BLOCK_READ_ADDRS_.find(address) == ROCCalorimeterInterface::SPECIAL_BLOCK_READ_ADDRS_.end())
 		return ROCCoreVInterface::readROCBlock(data, address, wordCount, incrementAddress);
 
-	uint16_t u;
+	uint16_t readCount = 0;
 
 	// check if special Block Write required
 	if(ROCCalorimeterInterface::SPECIAL_BLOCK_READ_ADDRS_.find(address) != ROCCalorimeterInterface::SPECIAL_BLOCK_READ_ADDRS_.end()) {
@@ -755,8 +809,8 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 			break;
 
 		case 267:
-			address   = offsetof(EE_DATABUF_t, biasVreq_tag);
-			wordCount = 2;
+			address   = offsetof(EE_DATABUF_t, biasVreq_tag) + 4;
+			wordCount = offsetof(EE_DATABUF_t, functionReq_tag) - offsetof(EE_DATABUF_t, biasVreq_tag) - 8;
 			writeROCBlock({wordCount, address}, 261, false /* incrementAddress*/);
 			wordCount = wordCount / 2;
 			address   = 261;
@@ -779,46 +833,48 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 			break;
 		}
 
-		uint16_t j = 0;
-		while((u = thisDTC_->ReadROCRegister(linkID_, 128, 100)) == 0) {
-			usleep(100);
-			j++;
-			if(j == 100) {
-				__FE_SS__ << "ROC block failed at 128" << __E__;
-				__FE_SS_THROW__;
-			}
-		}  // when the write operation ends the micropro
-		// cessor writes 0x8000 to register 0x128
-		__COUT__ << "r_128: 0x" << std::hex << u << __E__;
-		usleep(1000);
+		const uint16_t expectedReadCount = wordCount + 4;
+		uint16_t       doneReg           = 0;
+		uint16_t       countReg          = 0;
+		uint16_t       j                 = 0;
 
-		j = 0;
-		while((u = thisDTC_->ReadROCRegister(linkID_, 129, 100)) == 0) {
-			usleep(100);
-			j++;
-			if(j == 100) {
-				__FE_SS__ << "ROC block failed at 129" << __E__;
+		while(true) {
+			doneReg  = thisDTC_->ReadROCRegister(linkID_, 128, 100);
+			countReg = thisDTC_->ReadROCRegister(linkID_, 129, 100);
+
+			const bool done = (doneReg & 0x8000) != 0;
+			readCount       = countReg & 0x07ff;
+
+			if(done && readCount == expectedReadCount)
+				break;
+
+			usleep(1000);
+			if(++j == 5000) {
+				__FE_SS__ << "ROC block read timeout: address=" << address << "(0x" << std::hex << address << ") expectedReadCount=0x" << expectedReadCount << " reg128=0x" << doneReg << " reg129=0x"
+				          << countReg << std::dec << " readCount=" << readCount << " wordCount=" << wordCount << __E__;
 				__FE_SS_THROW__;
 			}
 		}
 
-		__COUT__ << "r_129: 0x" << std::hex << u << __E__;
+		__FE_COUTT__ << "ROC block read ready: reg128=0x" << std::hex << doneReg << " reg129=0x" << countReg << std::dec << " readCount=" << readCount << " expectedReadCount=" << expectedReadCount
+		             << __E__;
 
 		// wordCount = u - 4;  // number of words to read back
 	}
 	__FE_COUTV__(data.size());
 	__FE_COUTV__(wordCount);
-	__FE_COUTV__(u - 4);
-	thisDTC_->ReadROCBlock(data, linkID_, address, u - 4, incrementAddress, 0);
+	__FE_COUTV__(readCount - 4);
+	thisDTC_->ReadROCBlock(data, linkID_, address, wordCount, incrementAddress, 0);
 	__FE_COUTV__(data.size());
 	// only fix data if received more than needed - TODO fix in ROC firmware
 	while(data.size() > wordCount)
 		data.pop_back();
 
 	if(emulatedInDTC_)  // fix count for emulated ROC to survive
-		u = wordCount + 4;
-	if(data.size() != (long unsigned int)u - 4) {
-		__FE_SS__ << "ROC block read of address " << address << "(0x" << std::hex << address << std::dec << ") failed, expecting " << u - 4 << " words, and read " << data.size() << " words." << __E__;
+		readCount = wordCount + 4;
+	if(data.size() != (long unsigned int)readCount - 4) {
+		__FE_SS__ << "ROC block read of address " << address << "(0x" << std::hex << address << std::dec << ") failed, expecting " << readCount - 4 << " words, and read " << data.size() << " words."
+		          << __E__;
 		{
 			__FE_COUT_ERR__ << ss.str();  // demoted to error rather than exception on 19-Feb-2026 during Calo MC2 commissioning
 			// just pad with zeros for now if wrong
@@ -835,7 +891,7 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 void ots::ROCCalorimeterInterface::FindBoardIDFromSerial(__ARGS__) {
 	std::stringstream os;
 
-	//   updateBoardIdFromSerial_();
+	updateBoardIdFromSerial_();
 
 	os << "identityValid          = " << (boardConfig_.identityValid ? "true" : "false") << "\n";
 	os << "serial (reg 147)       = 0x" << std::hex << boardConfig_.serial << std::dec << "\n";
@@ -890,6 +946,170 @@ void ots::ROCCalorimeterInterface::FindBoardIDFromSerial(__ARGS__) {
 		os << "Thr[" << ch << "]=" << v << "\n";
 	}
 
+	__SET_ARG_OUT__("Status", os.str());
+}
+
+///////////////////////
+// Debug macro: tests each step of DB lookup independently and reports results to GUI
+void ots::ROCCalorimeterInterface::DebugDatabaseLookup(__ARGS__) {
+	std::stringstream os;
+	__FE_COUT__ << "===== DEBUG DATABASE LOOKUP =====" << __E__;
+	os << "===== DEBUG DATABASE LOOKUP =====\n\n";
+
+	// --- Step 1: read serial from register 147 ---
+	__FE_COUT__ << "STEP 1: Reading serial from register 147..." << __E__;
+	os << "--- STEP 1: Read serial from register 147 ---\n";
+	uint16_t serial = 0;
+	try {
+		serial = readRegister(147);
+		__FE_COUT__ << "STEP 1 OK: serial = 0x" << std::hex << serial << std::dec << __E__;
+		os << "OK: serial = 0x" << std::hex << serial << std::dec << " (" << serial << ")\n";
+	} catch(const std::exception& e) {
+		__FE_COUT__ << "STEP 1 FAIL: readRegister(147) threw: " << e.what() << __E__;
+		os << "FAIL: readRegister(147) threw exception: " << e.what() << "\n";
+		os << ">> Cannot continue without serial. Aborting.\n";
+		__SET_ARG_OUT__("Status", os.str());
+		return;
+	}
+
+	if(serial == 0 || serial == 0xFFFF) {
+		__FE_COUT__ << "STEP 1 WARNING: serial 0x" << std::hex << serial << std::dec << " looks invalid" << __E__;
+		os << "WARNING: serial value 0x" << std::hex << serial << std::dec << " looks invalid (0 or 0xFFFF)\n";
+	}
+
+	// --- Step 2: get ConfigurationManager ---
+	__FE_COUT__ << "STEP 2: Getting ConfigurationManager..." << __E__;
+	os << "\n--- STEP 2: Get ConfigurationManager ---\n";
+	const ots::ConfigurationManager* cfgMgr = nullptr;
+	try {
+		cfgMgr = getConfigurationManager();
+		if(cfgMgr) {
+			__FE_COUT__ << "STEP 2 OK: ConfigurationManager pointer is valid" << __E__;
+			os << "OK: ConfigurationManager pointer is valid\n";
+		} else {
+			__FE_COUT__ << "STEP 2 FAIL: getConfigurationManager() returned nullptr" << __E__;
+			os << "FAIL: getConfigurationManager() returned nullptr\n";
+			__SET_ARG_OUT__("Status", os.str());
+			return;
+		}
+	} catch(const std::exception& e) {
+		__FE_COUT__ << "STEP 2 FAIL: getConfigurationManager() threw: " << e.what() << __E__;
+		os << "FAIL: getConfigurationManager() threw: " << e.what() << "\n";
+		__SET_ARG_OUT__("Status", os.str());
+		return;
+	}
+
+	// --- Step 3: lookup serial in SubsystemCalorimeterParametersTable ---
+	__FE_COUT__ << "STEP 3: Looking up serial 0x" << std::hex << serial << std::dec << " in SubsystemCalorimeterParametersTable..." << __E__;
+	os << "\n--- STEP 3: Lookup serial in SubsystemCalorimeterParametersTable ---\n";
+	int boardID = -1;
+	try {
+		auto rows = cfgMgr->getNode("SubsystemCalorimeterParametersTable").getChildren();
+		__FE_COUT__ << "STEP 3: SubsystemCalorimeterParametersTable has " << rows.size() << " rows" << __E__;
+		os << "OK: SubsystemCalorimeterParametersTable has " << rows.size() << " rows\n";
+
+		bool found = false;
+		for(const auto& row : rows) {
+			const auto& rec         = row.second;
+			uint64_t    tableSerial = 0;
+			try {
+				tableSerial = rec.getNode("SerialNumber").getValue<uint64_t>();
+			} catch(const std::exception& e) {
+				os << "  row '" << row.first << "': FAIL reading SerialNumber: " << e.what() << "\n";
+				continue;
+			}
+
+			os << "  row '" << row.first << "': SerialNumber=0x" << std::hex << tableSerial << std::dec;
+
+			if(static_cast<uint16_t>(tableSerial) == serial) {
+				try {
+					boardID = static_cast<int>(rec.getNode("BoardId").getValue<uint64_t>());
+					__FE_COUT__ << "STEP 3 MATCH: row '" << row.first << "' serial 0x" << std::hex << tableSerial << std::dec << " -> BoardId=" << boardID << __E__;
+					os << " -> MATCH! BoardId=" << boardID << "\n";
+					found = true;
+					break;
+				} catch(const std::exception& e) {
+					__FE_COUT__ << "STEP 3 FAIL: matched serial but cannot read BoardId: " << e.what() << __E__;
+					os << " -> MATCH on serial but FAIL reading BoardId: " << e.what() << "\n";
+				}
+			} else {
+				os << " (no match)\n";
+			}
+		}
+
+		if(!found) {
+			__FE_COUT__ << "STEP 3 NOT FOUND: no row matches serial 0x" << std::hex << serial << std::dec << __E__;
+			os << "NOT FOUND: no row in ParametersTable matches serial 0x" << std::hex << serial << std::dec << "\n";
+			os << ">> Cannot continue without boardID. Aborting.\n";
+			__SET_ARG_OUT__("Status", os.str());
+			return;
+		}
+	} catch(const std::exception& e) {
+		__FE_COUT__ << "STEP 3 FAIL: exception accessing SubsystemCalorimeterParametersTable: " << e.what() << __E__;
+		os << "FAIL: exception accessing SubsystemCalorimeterParametersTable: " << e.what() << "\n";
+		__SET_ARG_OUT__("Status", os.str());
+		return;
+	}
+
+	// --- Step 4: lookup boardID in SubsystemCalorimeterThresholdsTable ---
+	__FE_COUT__ << "STEP 4: Looking up BoardID=" << boardID << " in SubsystemCalorimeterThresholdsTable..." << __E__;
+	os << "\n--- STEP 4: Lookup BoardID=" << boardID << " in SubsystemCalorimeterThresholdsTable ---\n";
+	try {
+		auto rows = cfgMgr->getNode("SubsystemCalorimeterThresholdsTable").getChildren();
+		__FE_COUT__ << "STEP 4: SubsystemCalorimeterThresholdsTable has " << rows.size() << " rows" << __E__;
+		os << "OK: SubsystemCalorimeterThresholdsTable has " << rows.size() << " rows\n";
+
+		bool found = false;
+		for(const auto& row : rows) {
+			const auto& r            = row.second;
+			int         tableBoardId = -1;
+			try {
+				tableBoardId = static_cast<int>(r.getNode("BoardID").getValue<uint64_t>());
+			} catch(const std::exception& e) {
+				os << "  row '" << row.first << "': FAIL reading BoardID: " << e.what() << "\n";
+				continue;
+			}
+
+			if(tableBoardId == boardID) {
+				__FE_COUT__ << "STEP 4 MATCH: row '" << row.first << "' BoardID=" << tableBoardId << __E__;
+				os << "  row '" << row.first << "': BoardID=" << tableBoardId << " -> MATCH!\n";
+
+				try {
+					auto thrBmp = r.getNode("Thresholds").getValueAsBitMap();
+					__FE_COUT__ << "STEP 4 OK: Thresholds bitmap rows=" << thrBmp.numberOfRows() << " cols(0)=" << thrBmp.numberOfColumns(0) << __E__;
+					os << "  Thresholds bitmap: rows=" << thrBmp.numberOfRows() << " cols(0)=" << thrBmp.numberOfColumns(0) << "\n";
+				} catch(const std::exception& e) {
+					__FE_COUT__ << "STEP 4 FAIL: reading Thresholds bitmap: " << e.what() << __E__;
+					os << "  FAIL reading Thresholds bitmap: " << e.what() << "\n";
+				}
+
+				found = true;
+				break;
+			}
+		}
+
+		if(!found) {
+			__FE_COUT__ << "STEP 4 NOT FOUND: no row matches BoardID=" << boardID << __E__;
+			os << "NOT FOUND: no row in ThresholdsTable matches BoardID=" << boardID << "\n";
+		}
+	} catch(const std::exception& e) {
+		__FE_COUT__ << "STEP 4 FAIL: exception accessing SubsystemCalorimeterThresholdsTable: " << e.what() << __E__;
+		os << "FAIL: exception accessing SubsystemCalorimeterThresholdsTable: " << e.what() << "\n";
+	}
+
+	// --- Step 5: compare with cached boardConfig_ ---
+	__FE_COUT__ << "STEP 5: Comparing with cached boardConfig_..." << __E__;
+	os << "\n--- STEP 5: Current boardConfig_ state ---\n";
+	os << "boardConfig_.identityValid = " << (boardConfig_.identityValid ? "true" : "false") << "\n";
+	os << "boardConfig_.serial        = 0x" << std::hex << boardConfig_.serial << std::dec << "\n";
+	os << "boardConfig_.boardID       = " << boardConfig_.boardID << "\n";
+	if(boardConfig_.serial != serial) {
+		__FE_COUT__ << "STEP 5 WARNING: cached serial (0x" << std::hex << boardConfig_.serial << ") != hw serial (0x" << serial << std::dec << ")" << __E__;
+		os << "WARNING: cached serial (0x" << std::hex << boardConfig_.serial << ") != hw serial (0x" << serial << std::dec << ")\n";
+	}
+
+	__FE_COUT__ << "===== DEBUG COMPLETE =====" << __E__;
+	os << "\n===== DEBUG COMPLETE =====\n";
 	__SET_ARG_OUT__("Status", os.str());
 }
 
@@ -999,6 +1219,11 @@ void ROCCalorimeterInterface::configure(void) try {
 
 	runSequenceOfCommands("ROCTypeLinkTable/LinkToConfigureSequence"); /*Run Configure Sequence Commands*/
 
+	if(emulatedInDTC_) {
+		__COUT_INFO__ << "ROC is emulated in DTC — skipping hardware configure steps." << __E__;
+		return;
+	}
+
 	__COUT_INFO__ << "Enter ROC configuration.." << __E__;
 
 	int readVal = 0;
@@ -1033,8 +1258,12 @@ void ROCCalorimeterInterface::configure(void) try {
 	}
 	__COUT_INFO__ << dbLoadStatus.str() << __E__;
 
+	// Calibrate mezzanines
 	CalibrateMZB();
-	SetADCsThresholds(50);
+	// Set DIRAC thresholds with offset
+	SetADCsThresholds(0);
+	// Set SiPM voltages (four times to be sure)
+	//  TODO to be upgraded with a set-and-verify loop
 	SetBoardVoltages(true);
 	SetBoardVoltages(true);
 	SetBoardVoltages(true);
@@ -1043,7 +1272,8 @@ void ROCCalorimeterInterface::configure(void) try {
 	writeRegister(ROC_ADDRESS_MASK_A, 1023);
 	writeRegister(ROC_ADDRESS_MASK_B, 1023);
 
-	writeRegister(ROC_ADDRESS_MZB_BUSY, 1);
+	// Turn off busy
+	// writeRegister(ROC_ADDRESS_MZB_BUSY, 1);
 
 } catch(const std::runtime_error& e) {
 	__FE_COUT__ << "Error caught: " << e.what() << __E__;
@@ -1061,6 +1291,10 @@ void ROCCalorimeterInterface::configure(void) try {
 
 //==============================================================================
 void ROCCalorimeterInterface::start(std::string runNumber) {
+	// Turn off busy
+	writeRegister(ROC_ADDRESS_MZB_BUSY, 1);
+
+	// Set acquisition for ADC data taking
 	SetupForADCsDataTaking(0, 1, 2300);
 
 	return;
@@ -1847,6 +2081,242 @@ void ROCCalorimeterInterface::PrintROCConfiguration(__ARGS__) {
 
 	__COUT_INFO__ << os.str() << __E__;
 	__SET_ARG_OUT__("Status", os.str());
+}
+
+//==================================================================================================
+std::string ROCCalorimeterInterface::getFirmwareVersion(void) {
+	const uint16_t proj_id    = readRegister(ROC_ADDRESS_FW_PROJECT_ID);
+	const uint16_t git_sha    = readRegister(ROC_ADDRESS_FW_GIT_SHA);
+	const uint16_t date_lo    = readRegister(ROC_ADDRESS_FW_BUILD_DATE_LO);
+	const uint16_t date_hi    = readRegister(ROC_ADDRESS_FW_BUILD_DATE_HI);
+	const uint16_t time_lo    = readRegister(ROC_ADDRESS_FW_BUILD_TIME_LO);
+	const uint16_t time_hi    = readRegister(ROC_ADDRESS_FW_BUILD_TIME_HI);
+	const uint16_t version    = readRegister(ROC_ADDRESS_FW_VERSION);
+	const uint16_t sw_git     = readRegister(ROC_ADDRESS_SW_GIT_SHA);
+	const uint16_t sw_hash    = readRegister(ROC_ADDRESS_SW_HEX_HASH);
+	const uint16_t sw_date_lo = readRegister(ROC_ADDRESS_SW_BUILD_DATE_LO);
+	const uint16_t sw_date_hi = readRegister(ROC_ADDRESS_SW_BUILD_DATE_HI);
+
+	auto bcd16 = [](uint16_t v) { return ((v >> 12) & 0xF) * 1000 + ((v >> 8) & 0xF) * 100 + ((v >> 4) & 0xF) * 10 + (v & 0xF); };
+	auto bcd8  = [](uint8_t v) { return ((v >> 4) & 0xF) * 10 + (v & 0xF); };
+
+	const char project_str[3] = {
+	    static_cast<char>((proj_id >> 8) & 0xFF),
+	    static_cast<char>(proj_id & 0xFF),
+	    '\0',
+	};
+	const unsigned year   = bcd16(date_hi);
+	const unsigned month  = bcd8((date_lo >> 8) & 0xFF);
+	const unsigned day    = bcd8(date_lo & 0xFF);
+	const unsigned hour   = bcd8(time_hi & 0xFF);
+	const unsigned minute = bcd8((time_lo >> 8) & 0xFF);
+	const unsigned second = bcd8(time_lo & 0xFF);
+	const unsigned major  = (version >> 8) & 0xFF;
+	const unsigned minor  = version & 0xFF;
+
+	const unsigned sw_year  = bcd16(sw_date_hi);
+	const unsigned sw_month = bcd8((sw_date_lo >> 8) & 0xFF);
+	const unsigned sw_day   = bcd8(sw_date_lo & 0xFF);
+
+	std::stringstream os;
+	os << "ROC Firmware Version\n";
+	os << "====================\n";
+	os << "Project ID     : \"" << project_str << "\"  (raw 0x" << std::hex << std::setw(4) << std::setfill('0') << proj_id << std::dec << ")\n";
+	os << "FW Git SHA     : 0x" << std::hex << std::setw(4) << std::setfill('0') << git_sha << std::dec << "\n";
+	os << "FW Build date  : " << std::setw(4) << std::setfill('0') << year << "-" << std::setw(2) << month << "-" << std::setw(2) << day << "\n";
+	os << "FW Build time  : " << std::setw(2) << std::setfill('0') << hour << ":" << std::setw(2) << minute << ":" << std::setw(2) << second << "\n";
+	os << "FW Version     : " << major << "." << minor << "\n";
+	os << "--- MIV soft-core ---\n";
+	os << "SW Git SHA     : 0x" << std::hex << std::setw(4) << std::setfill('0') << sw_git << std::dec;
+	if(sw_git == 0)
+		os << "  (manifest not present at FPGA build)";
+	os << "\n";
+	os << "SW Hex hash    : 0x" << std::hex << std::setw(4) << std::setfill('0') << sw_hash << std::dec << "\n";
+	os << "SW Build date  : ";
+	if(sw_date_hi == 0 && sw_date_lo == 0) {
+		os << "(none)\n";
+	} else {
+		os << std::setw(4) << std::setfill('0') << sw_year << "-" << std::setw(2) << sw_month << "-" << std::setw(2) << sw_day << "\n";
+	}
+
+	return os.str();
+}
+
+//==================================================================================================
+void ROCCalorimeterInterface::PrintROCFirmwareVersion(__ARGS__) {
+	const std::string status = getFirmwareVersion();
+	__COUT_INFO__ << status << __E__;
+	__SET_ARG_OUT__("Status", status);
+}
+
+//==================================================================================================
+std::string ROCCalorimeterInterface::getFirmwareInventoryHeader(void) {
+	std::stringstream os;
+	os << std::left << std::setw(14) << "Status" << std::setw(10) << "BoardID" << std::setw(10) << "UID_MSB" << std::setw(10) << "UID_CSB" << std::setw(10) << "UID_LSB" << std::setw(9) << "Project"
+	   << std::setw(10) << "FW_Git" << std::setw(13) << "FW_Date" << std::setw(10) << "FW_Time" << std::setw(8) << "FW_Ver" << std::setw(10) << "SW_Git" << std::setw(10) << "SW_Hash" << std::setw(13)
+	   << "SW_Date";
+	return os.str();
+}
+
+//==================================================================================================
+std::string ROCCalorimeterInterface::getFirmwareInventoryRow(void) {
+	const uint16_t timeoutWord = 0xEFFE;
+
+	const uint16_t uid_lsb    = readRegister(ROC_ADDRESS_BOARD_U_ID_LSB);
+	const uint16_t uid_csb    = readRegister(ROC_ADDRESS_BOARD_U_ID_CSB);
+	const uint16_t uid_msb    = readRegister(ROC_ADDRESS_BOARD_U_ID_MSB);
+	const uint16_t proj_id    = readRegister(ROC_ADDRESS_FW_PROJECT_ID);
+	const uint16_t git_sha    = readRegister(ROC_ADDRESS_FW_GIT_SHA);
+	const uint16_t date_lo    = readRegister(ROC_ADDRESS_FW_BUILD_DATE_LO);
+	const uint16_t date_hi    = readRegister(ROC_ADDRESS_FW_BUILD_DATE_HI);
+	const uint16_t time_lo    = readRegister(ROC_ADDRESS_FW_BUILD_TIME_LO);
+	const uint16_t time_hi    = readRegister(ROC_ADDRESS_FW_BUILD_TIME_HI);
+	const uint16_t version    = readRegister(ROC_ADDRESS_FW_VERSION);
+	const uint16_t sw_git     = readRegister(ROC_ADDRESS_SW_GIT_SHA);
+	const uint16_t sw_hash    = readRegister(ROC_ADDRESS_SW_HEX_HASH);
+	const uint16_t sw_date_lo = readRegister(ROC_ADDRESS_SW_BUILD_DATE_LO);
+	const uint16_t sw_date_hi = readRegister(ROC_ADDRESS_SW_BUILD_DATE_HI);
+
+	auto isTimeout    = [timeoutWord](uint16_t v) { return v == timeoutWord; };
+	auto isAnyTimeout = [&](std::initializer_list<uint16_t> values) {
+		for(const auto v : values)
+			if(isTimeout(v))
+				return true;
+		return false;
+	};
+	auto bcd16 = [](uint16_t v) { return ((v >> 12) & 0xF) * 1000 + ((v >> 8) & 0xF) * 100 + ((v >> 4) & 0xF) * 10 + (v & 0xF); };
+	auto bcd8  = [](uint8_t v) { return ((v >> 4) & 0xF) * 10 + (v & 0xF); };
+	auto hex4  = [](uint16_t v) {
+        std::stringstream s;
+        s << "0x" << std::hex << std::setw(4) << std::setfill('0') << v << std::dec;
+        return s.str();
+	};
+	auto dateString = [&](uint16_t hi, uint16_t lo) {
+		if(isAnyTimeout({hi, lo}))
+			return std::string("[TIMEOUT]");
+		std::stringstream s;
+		s << std::setw(4) << std::setfill('0') << bcd16(hi) << "-" << std::setw(2) << bcd8((lo >> 8) & 0xFF) << "-" << std::setw(2) << bcd8(lo & 0xFF);
+		return s.str();
+	};
+	auto timeString = [&](uint16_t hi, uint16_t lo) {
+		if(isAnyTimeout({hi, lo}))
+			return std::string("[TIMEOUT]");
+		std::stringstream s;
+		s << std::setw(2) << std::setfill('0') << bcd8(hi & 0xFF) << ":" << std::setw(2) << bcd8((lo >> 8) & 0xFF) << ":" << std::setw(2) << bcd8(lo & 0xFF);
+		return s.str();
+	};
+
+	if(!boardConfig_.identityValid || boardConfig_.boardID == INVALID_BOARDID)
+		updateBoardIdFromSerial_();
+
+	// Fallback: populate board ID cache if configure() was not run
+	if(!boardConfig_.identityValid || boardConfig_.boardID == INVALID_BOARDID)
+		updateBoardIdFromSerial_();
+
+	std::string boardIdString = "[CACHE_EMPTY]";
+	if(boardConfig_.identityValid && boardConfig_.boardID != INVALID_BOARDID)
+		boardIdString = std::to_string(boardConfig_.boardID);
+
+	std::vector<std::string> problems;
+	if(isAnyTimeout({uid_lsb, uid_csb, uid_msb, proj_id, git_sha, date_lo, date_hi, time_lo, time_hi, version, sw_git, sw_hash, sw_date_lo, sw_date_hi}))
+		problems.push_back("TIMEOUT");
+	if(boardIdString == "[CACHE_EMPTY]")
+		problems.push_back("BAD_BOARD_ID");
+	if(!isAnyTimeout({uid_lsb, uid_csb, uid_msb}) && uid_lsb == 0 && uid_csb == 0 && uid_msb == 0)
+		problems.push_back("BAD_UID");
+	if(!isTimeout(proj_id) && proj_id == 0)
+		problems.push_back("BAD_PROJECT");
+	if(!isTimeout(git_sha) && git_sha == 0)
+		problems.push_back("BAD_FW_GIT");
+
+	std::string status = "OK";
+	if(!problems.empty()) {
+		status.clear();
+		for(size_t i = 0; i < problems.size(); ++i) {
+			if(i)
+				status += ",";
+			status += problems[i];
+		}
+	}
+
+	const char project_str[3] = {
+	    static_cast<char>((proj_id >> 8) & 0xFF),
+	    static_cast<char>(proj_id & 0xFF),
+	    '\0',
+	};
+
+	const unsigned    major = (version >> 8) & 0xFF;
+	const unsigned    minor = version & 0xFF;
+	std::stringstream fwVersion;
+	if(isTimeout(version))
+		fwVersion << "[TIMEOUT]";
+	else
+		fwVersion << major << "." << minor;
+
+	std::stringstream os;
+	os << std::left << std::setw(14) << status << std::setw(10) << boardIdString << std::setw(10) << (isTimeout(uid_msb) ? std::string("[TIMEOUT]") : hex4(uid_msb)) << std::setw(10)
+	   << (isTimeout(uid_csb) ? std::string("[TIMEOUT]") : hex4(uid_csb)) << std::setw(10) << (isTimeout(uid_lsb) ? std::string("[TIMEOUT]") : hex4(uid_lsb)) << std::setw(9)
+	   << (isTimeout(proj_id) ? std::string("[TIMEOUT]") : std::string(project_str)) << std::setw(10) << (isTimeout(git_sha) ? std::string("[TIMEOUT]") : hex4(git_sha)) << std::setw(13)
+	   << dateString(date_hi, date_lo) << std::setw(10) << timeString(time_hi, time_lo) << std::setw(8) << fwVersion.str() << std::setw(10)
+	   << (isTimeout(sw_git) ? std::string("[TIMEOUT]") : hex4(sw_git)) << std::setw(10) << (isTimeout(sw_hash) ? std::string("[TIMEOUT]") : hex4(sw_hash)) << std::setw(13)
+	   << dateString(sw_date_hi, sw_date_lo);
+	return os.str();
+}
+
+//==================================================================================================
+std::string ROCCalorimeterInterface::getFirmwareInventoryJSON(void) {
+	const uint16_t timeoutWord = 0xEFFE;
+
+	const uint16_t uid_lsb    = readRegister(ROC_ADDRESS_BOARD_U_ID_LSB);
+	const uint16_t uid_csb    = readRegister(ROC_ADDRESS_BOARD_U_ID_CSB);
+	const uint16_t uid_msb    = readRegister(ROC_ADDRESS_BOARD_U_ID_MSB);
+	const uint16_t proj_id    = readRegister(ROC_ADDRESS_FW_PROJECT_ID);
+	const uint16_t git_sha    = readRegister(ROC_ADDRESS_FW_GIT_SHA);
+	const uint16_t date_lo    = readRegister(ROC_ADDRESS_FW_BUILD_DATE_LO);
+	const uint16_t date_hi    = readRegister(ROC_ADDRESS_FW_BUILD_DATE_HI);
+	const uint16_t time_lo    = readRegister(ROC_ADDRESS_FW_BUILD_TIME_LO);
+	const uint16_t time_hi    = readRegister(ROC_ADDRESS_FW_BUILD_TIME_HI);
+	const uint16_t version    = readRegister(ROC_ADDRESS_FW_VERSION);
+	const uint16_t sw_git     = readRegister(ROC_ADDRESS_SW_GIT_SHA);
+	const uint16_t sw_hash    = readRegister(ROC_ADDRESS_SW_HEX_HASH);
+	const uint16_t sw_date_lo = readRegister(ROC_ADDRESS_SW_BUILD_DATE_LO);
+	const uint16_t sw_date_hi = readRegister(ROC_ADDRESS_SW_BUILD_DATE_HI);
+
+	auto isTimeout = [timeoutWord](uint16_t v) { return v == timeoutWord; };
+
+	// Fallback: populate board ID cache if configure() was not run
+	if(!boardConfig_.identityValid || boardConfig_.boardID == INVALID_BOARDID)
+		updateBoardIdFromSerial_();
+
+	int boardId = -1;
+	if(boardConfig_.identityValid && boardConfig_.boardID != INVALID_BOARDID)
+		boardId = static_cast<int>(boardConfig_.boardID);
+
+	// Build JSON manually (no external JSON library dependency)
+	std::stringstream js;
+	js << "{";
+	js << "\"boardId\":" << boardId;
+	js << ",\"uidMsb\":" << uid_msb;
+	js << ",\"uidCsb\":" << uid_csb;
+	js << ",\"uidLsb\":" << uid_lsb;
+	js << ",\"project\":" << proj_id;
+	js << ",\"fwGit\":" << git_sha;
+	js << ",\"fwDateLo\":" << date_lo;
+	js << ",\"fwDateHi\":" << date_hi;
+	js << ",\"fwTimeLo\":" << time_lo;
+	js << ",\"fwTimeHi\":" << time_hi;
+	js << ",\"fwVersion\":" << version;
+	js << ",\"swGit\":" << sw_git;
+	js << ",\"swHash\":" << sw_hash;
+	js << ",\"swDateLo\":" << sw_date_lo;
+	js << ",\"swDateHi\":" << sw_date_hi;
+	js << ",\"timeout\":"
+	   << (isTimeout(uid_lsb) || isTimeout(uid_csb) || isTimeout(uid_msb) || isTimeout(proj_id) || isTimeout(git_sha) || isTimeout(date_lo) || isTimeout(date_hi) || isTimeout(time_lo) ||
+	               isTimeout(time_hi) || isTimeout(version) || isTimeout(sw_git) || isTimeout(sw_hash) || isTimeout(sw_date_lo) || isTimeout(sw_date_hi)
+	           ? "true"
+	           : "false");
+	js << "}";
+	return js.str();
 }
 
 //==================================================================================================
