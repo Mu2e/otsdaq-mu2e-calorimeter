@@ -1,0 +1,204 @@
+schema: mega-review/1
+package: otsdaq-mu2e-calorimeter
+tier: B
+group: otsdaq-plugins
+repo:
+  url: git@github.com:Mu2e/otsdaq-mu2e-calorimeter.git
+  exists: true
+  issues_enabled: true
+doc_dir: doc
+summary: >
+  Calorimeter subsystem plugins for otsdaq-mu2e and artdaq-mu2e - the
+  DIRAC/MZB ROC front-end interface, two DTC fragment generators, six art
+  modules for data verification, DQM metrics and analysis, and the table
+  plugin that exports calorimeter channel tables for the online trigger
+languages: [cpp, fhicl, bash]
+loc: 10239
+
+runtime:
+  executables:
+    - name: ROCCalorimeterInterface
+      kind: plugin
+      waiver: "otsdaq FE interface plugin loaded by name; documented in doc/INTERFACES.md section 3"
+    - name: CalorimeterVST
+      kind: plugin
+      waiver: "artdaq generator plugin; doc/INTERFACES.md section 4"
+    - name: Mu2eCaloEventReceiver
+      kind: plugin
+      waiver: "artdaq generator plugin; doc/INTERFACES.md section 4"
+    - name: CaloDataVerifier
+      kind: plugin
+      waiver: "art module; doc/INTERFACES.md section 5"
+    - name: CaloFilterDQM
+      kind: plugin
+      waiver: "art module; doc/INTERFACES.md section 5"
+    - name: CaloDataAnalyzer
+      kind: plugin
+      waiver: "art module; doc/INTERFACES.md section 5"
+    - name: CaloiercAnalyzer
+      kind: plugin
+      waiver: "art module; doc/INTERFACES.md section 5"
+    - name: CaloEventFilter
+      kind: plugin
+      waiver: "art module; doc/INTERFACES.md section 5"
+    - name: testFragments
+      kind: plugin
+      waiver: "art module; doc/INTERFACES.md section 5"
+    - name: SubsystemCalorimeterParametersTable
+      kind: plugin
+      waiver: "otsdaq table plugin; doc/INTERFACES.md section 6"
+    - name: slow_control_summary.sh
+      kind: script
+      man_page: man/man1/slow_control_summary.sh.1
+    - name: scripts/*.C
+      kind: script
+      man_page: man/man7/otsdaq-mu2e-calorimeter-root-macros.7
+  services: []
+  ports: []
+  config_files:
+    - boardConfig/boardMap.config
+    - boardConfig/configurations/voltages/diracEqualized.csv
+    - boardConfig/configurations/voltages/diracEqualized_LYSO-8V.csv
+    - boardConfig/configurations/voltages/diracEqualized_20260506_LYSO-8V.csv
+    - boardConfig/configurations/thresholds/thresholds_run120788.csv
+    - boardConfig/configurations/channelstatus/channelStatus.csv
+    - boardConfig/configurations/mezzanine/mzbCalib.csv
+  env_vars:
+    - MU2E_CALORIMETER_CONFIG_PATH
+    - DBSERVICE_ONLINE_PATH
+    - OTSDAQ_DATA
+    - OTS_DOXY
+
+interactions:
+  depends_on:
+    - package: otsdaq-mu2e
+      via: link
+      direction: out
+      evidence: "otsdaq-mu2e-calorimeter/FEInterfaces/CMakeLists.txt:18"
+    - package: artdaq-mu2e
+      via: link
+      direction: out
+      evidence: "otsdaq-mu2e-calorimeter/Generators/CMakeLists.txt:5"
+    - package: artdaq-core-mu2e
+      via: link
+      direction: out
+      evidence: "otsdaq-mu2e-calorimeter/ArtModules/CMakeLists.txt:7"
+    - package: mu2e-pcie-utils
+      via: link
+      direction: out
+      evidence: "otsdaq-mu2e-calorimeter/Generators/CMakeLists.txt:5"
+  depended_on_by: []
+  external: [otsdaq, artdaq, art, offline, root, cetmodules, graphite]
+
+quality:
+  tests: {present: false, framework: none, count: 0}
+  ci:
+    present: true
+    workflows:
+      - .github/workflows/git-whitespace.yml
+      - .github/workflows/mu2e-build-single-pkg.yml
+      - .github/workflows/mu2e-develop-cpp-ci.yml
+      - .github/workflows/mu2e-format-single-pkg.yml
+      - .github/workflows/mu2e-test-single-pkg.yml
+      - .github/workflows/mu2e-tidy-single-pkg.yml
+      - .github/workflows/track_new_issues.yml
+      - .github/workflows/track_new_prs.yml
+  license: Fermilab-BSD
+  artifacts_clean: false
+
+notes:
+  doc_dir_rationale: >
+    doc/ already existed and is wired into the Doxygen build
+    (CMakeLists.txt:86-88, doc/CMakeLists.txt). Not renamed.
+  tier_b_method: >
+    Read CMakeLists.txt files, public headers, registration macros, the
+    registerFEMacroFunction block (ROCCalorimeterInterface_interface.cc:59-255),
+    *.fcl, the shell script and the CI workflows. FHiCL parameter names for
+    modules without a header, table names, metric names and env-var reads
+    were taken from single-line greps; a few lines were read around each
+    symbol so found. No implementation body was reviewed.
+  grafana_prometheus: >
+    The brief said the package references Grafana/Prometheus. It does not:
+    there is no Grafana, Prometheus or EPICS reference anywhere in the tree.
+    The only monitoring export is the artdaq MetricManager
+    (CaloDataVerifier_module.cc:183-192, CaloFilterDQM_module.cc:143-186),
+    and the only metric-plugin configuration is a graphite plugin to
+    mu2e-dcs-01.fnal.gov:2003, namespace "test.pgirotti.", in two test FHiCL
+    files (test/CaloFilterDQM_test.fcl:4-12, test/CaloVerifierFilter_test.fcl:8-16).
+    That is an outbound connection, not a bound port, so ports is empty;
+    graphite is listed under external.
+  upstream_dependencies_not_linked: >
+    otsdaq-mu2e/doc/INTERFACES.md and artdaq-core-mu2e/doc/INTERFACES.md were
+    not committed when this review ran, so INTERFACES.md cites the base-class
+    headers (otsdaq-mu2e/FEInterfaces/ROCPolarFireCoreInterface.h,
+    otsdaq-mu2e/ROCCore/ROCCoreVInterface.h) and lists the inherited FE macro
+    names from a grep of their registration calls.
+  cross_package: >
+    otsdaq-mu2e-config/hwdev_spack_fast_setup_ots.sh:462 sources
+    ${SCRIPT_DIR}/calo_setup.sh, which exists in no repository in
+    mu2edaq-main, and :463 has the only (commented-out) export of
+    MU2E_CALORIMETER_CONFIG_PATH. Recorded in CAL-005; the otsdaq-mu2e-config
+    reviewer may want to raise it there.
+  artifacts: >
+    artifacts_clean is false because scripts/ tracks four ACLiC build
+    products (CAL-001), including a 410 KB ELF built against cvmfs ROOT
+    v6_28_04c. Also tracked: test/ierc_splines_gr4_106291.root (29 KB input
+    data for CaloiercAnalyzer, intentional) and
+    UserWebGUI/fonts/MaterialDesign-Webfont-master.zip (vendored).
+  license_note: >
+    LICENSE is the Fermilab Software Legal Information (BSD) text; GitHub
+    reports it as "Other".
+  dedup: >
+    One pre-existing issue (#24, open, SubRun fragment code in both
+    generators). No fingerprint match and no title-token overlap with any
+    finding; it is referenced from INTERFACES.md section 4.
+
+findings:
+  - id: CAL-001
+    severity: S4
+    type: bug
+    title: "[hygiene] compiled ROOT ACLiC artifacts are tracked under scripts/"
+    issue: pending
+    fingerprint: d05faf94
+  - id: CAL-002
+    severity: S3
+    type: bug
+    title: "[test] test/ is not built and four of its FHiCL files cannot run against the current plugins"
+    issue: pending
+    fingerprint: d0383a18
+  - id: CAL-003
+    severity: S4
+    type: bug
+    title: "[build] four plugin sources carry registration macros but are never built"
+    issue: pending
+    fingerprint: f0422a54
+  - id: CAL-004
+    severity: S4
+    type: bug
+    title: "[fe] ReadVoltagesFromDB and ReadChannelStatusFromDB register an input parameter with an empty name"
+    issue: pending
+    fingerprint: b235c71b
+  - id: CAL-005
+    severity: S3
+    type: documentation
+    title: "[docs] the MU2E_CALORIMETER_CONFIG_PATH and DBSERVICE_ONLINE_PATH runtime contract is documented nowhere"
+    issue: pending
+    fingerprint: fbf03a3d
+  - id: CAL-006
+    severity: S4
+    type: bug
+    title: "[fe] boardMap.config is installed and passed to ConfigureLink but no live code reads it"
+    issue: pending
+    fingerprint: bff1a916
+  - id: CAL-007
+    severity: S4
+    type: documentation
+    title: "[docs] CMakeLists.txt header documents the retired UPS build"
+    issue: pending
+    fingerprint: 64fcdd19
+  - id: CAL-008
+    severity: S4
+    type: bug
+    title: "[metrics] CaloDataVerifier metrics have no module prefix and failed_ROCEWTs reuses the DTC description"
+    issue: pending
+    fingerprint: 6d68023a
