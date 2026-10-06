@@ -1,0 +1,126 @@
+.TH OTSDAQ-MU2E-CALORIMETER-ROOT-MACROS 7 "2026-10-06" "otsdaq-mu2e-calorimeter 9.01.00" "Mu2e DAQ Manual"
+.SH NAME
+otsdaq-mu2e-calorimeter-root-macros \- index of the ROOT macros in otsdaq-mu2e-calorimeter/scripts
+.SH SYNOPSIS
+.B root \-l \-b \-q
+.RI ' macro .C+( arguments )'
+.SH DESCRIPTION
+The
+.I scripts/
+directory of otsdaq-mu2e-calorimeter holds six ROOT macros for expert
+use.
+They are not built or installed by CMake, have no command-line
+interface of their own, and are run through ROOT's interpreter or ACLiC.
+The entry point of each macro is the function with the file's base name,
+except where noted.
+.PP
+The DTC macros include headers by a path relative to a development
+area, for example
+.IR srcs/mu2e_pcie_utils/dtcInterfaceLib/DTC.h ,
+so they must be started from the top of a Spack or mrb development
+area in which
+.I srcs/
+holds the sources.
+.SS Macros
+.TP
+.BI calo_gr4_generate_txt( inputFileName ", " outputName ", " option )
+Reads the TTree
+.I pulseIERCAnalysis/tree
+written by the
+.B CaloiercAnalyzer
+art module and writes the per-channel timing data it contains to the text
+file
+.IR outputName .
+.TP
+.BI converter( run_num )
+Reads the binary file
+.IR macroOutput_ run_num .bin
+from the current directory and writes its header and payload words as
+hexadecimal text to
+.IR $OTSDAQ_DATA/header_ run_num .txt
+and
+.IR $OTSDAQ_DATA/payload_ run_num .txt .
+The progress message names
+.I $OTSDAQ_DATA
+as the input directory, but the input is opened relative to the current
+directory.
+.TP
+.BI dtc_validate( NEvents )
+A stub: it only prints
+.RB \(lq Ciao \(rq.
+.TP
+.BI validate_pattern( ievtno ", " file_name )
+Reads
+.IR file_name .bin ,
+checks a variable-size, +1-counter test pattern from the calorimeter and
+tracker ROCs, and writes mismatches to
+.RI error_ file_name .txt .
+The number of links is set by editing
+.B LINK_NO
+and
+.B FIRST_LINK
+in the source.
+.TP
+.BI write_dcs_roc_block( Link ", " ROCSleepTime )
+Builds a DCS block-write payload of 16-bit words (floats split into two
+words) for a ROC on DTC link
+.IR Link .
+The part that opens the DTC and performs the write is commented out, so
+the macro currently only builds and prints the payload.
+.TP
+.BI write_testfranco( Link ", " ROCSleepTime )
+In
+.IR write_test.C ;
+opens the DTC in
+.B DTC_SimMode_NoCFO
+mode with only
+.I Link
+enabled and runs a ROC register and block write test.
+.I write_test.C
+also defines
+.BR write_roc_1() .
+.SH FILES
+.TP
+.I scripts/*.C
+The macros.
+.TP
+.IR scripts/converter_C.so ", " scripts/converter_C.d ", " scripts/converter_C_ACLiC_dict_rdict.pcm ", " scripts/dtc_validate_C.d
+ACLiC build products that are tracked in git.
+They were built against ROOT v6_28_04c from
+.I /cvmfs/mu2e.opensciencegrid.org/artexternals
+and are stale; delete them and let ACLiC rebuild.
+.SH ENVIRONMENT
+.TP
+.B OTSDAQ_DATA
+Output directory of
+.BR converter() .
+.SH EXAMPLES
+Convert run 105 from a development area that contains
+.IR macroOutput_105.bin :
+.PP
+.RS
+.nf
+export OTSDAQ_DATA=$PWD/data
+root \-l \-b \-q 'srcs/otsdaq_mu2e_calorimeter/scripts/converter.C+("105")'
+.fi
+.RE
+.PP
+Extract IERC timing data from a
+.B CaloiercAnalyzer
+output file:
+.PP
+.RS
+.nf
+root \-l \-b \-q \e
+  'scripts/calo_gr4_generate_txt.C("ierc.root","ierc_times.txt",0)'
+.fi
+.RE
+.SH SEE ALSO
+.BR root (1),
+.BR slow_control_summary.sh (1)
+.PP
+.I doc/INTERFACES.md
+in the otsdaq-mu2e-calorimeter source tree.
+.SH AUTHOR
+Macros by the Mu2e calorimeter and DAQ groups.
+Index page written for the September 2026 Mu2e DAQ review.

@@ -1,0 +1,128 @@
+.TH SLOW_CONTROL_SUMMARY.SH 1 "2026-10-06" "otsdaq-mu2e-calorimeter 9.01.00" "Mu2e DAQ Manual"
+.SH NAME
+slow_control_summary.sh \- collect the latest calorimeter slow-control reading of every board
+.SH SYNOPSIS
+.B slow_control_summary.sh
+.SH DESCRIPTION
+.B slow_control_summary.sh
+summarises the per-board slow-control logs that the
+.B ROC Slow Control
+FE macro of the
+.B ROCCalorimeterInterface
+otsdaq plugin writes.
+Each invocation of that macro appends one timestamped line per board to
+.IR slowControl NNN .log
+and
+.IR slowControlVI NNN .log ,
+where
+.I NNN
+is the three-digit calorimeter board ID.
+The plugin writes them to the
+.I slowControl/
+subdirectory of the first element of
+.BR MU2E_CALORIMETER_CONFIG_PATH .
+.PP
+The script works on the
+.B current directory
+only (the directory is hard-coded as
+.IR ./ ),
+so it must be run from inside that
+.I slowControl/
+directory.
+It:
+.IP 1. 4
+truncates (or creates)
+.I summary.log
+and
+.I summaryVI.log
+in the current directory;
+.IP 2. 4
+appends the last line of every
+.IR slowControl [0-9]*.log
+to
+.IR summary.log ,
+and of every
+.IR slowControlVI [0-9]*.log
+to
+.IR summaryVI.log ,
+in
+.B sort \-V
+(board) order;
+.IP 3. 4
+copies the two summaries to
+.IR summary_ YYYYmmdd_HHMM .log
+and
+.IR summaryVI_ YYYYmmdd_HHMM .log ;
+.IP 4. 4
+prints the names of the two dated copies, prefixed with the Italian
+.RB \(lq "Creato riepilogo:" \(rq
+(\(lqsummary created\(rq).
+.PP
+The script is installed with the rest of
+.I boardConfig/
+by the package's
+.B install(DIRECTORY boardConfig ...)
+rule.
+.SH OPTIONS
+None.
+Arguments are ignored.
+.SH FILES
+.TP
+.IR slowControl NNN .log ", " slowControlVI NNN .log
+Input: per-board logs written by the
+.B ROC Slow Control
+macro.
+.TP
+.IR summary.log ", " summaryVI.log
+Output: overwritten on every run.
+.TP
+.IR summary_ YYYYmmdd_HHMM .log ", " summaryVI_ YYYYmmdd_HHMM .log
+Output: dated copies.
+A second run in the same minute overwrites them.
+.TP
+.I boardConfig/slowControl/.gitignore
+Ignores
+.IR *.log ,
+so logs written into a source checkout are never committed.
+.SH ENVIRONMENT
+The script itself reads no environment variables.
+.TP
+.B MU2E_CALORIMETER_CONFIG_PATH
+Read by the FE plugin, not by this script; its first colon-separated
+element plus
+.I /slowControl
+is the directory to run the script in.
+.SH EXIT STATUS
+Always 0 in practice: the script does not use
+.BR "set \-e" ,
+so the exit status is that of the final
+.BR echo .
+A failed
+.B cp
+is reported on standard error but not in the exit status.
+.SH EXAMPLES
+Summarise the readings from a run of the
+.B ROC Slow Control
+macro:
+.PP
+.RS
+.nf
+cd "${MU2E_CALORIMETER_CONFIG_PATH%%:*}/slowControl"
+bash slow_control_summary.sh
+cat summary.log
+.fi
+.RE
+.SH BUGS
+File names are produced by an unquoted
+.B $(ls ... | sort \-V)
+loop, so a path containing whitespace would be split.
+With no matching logs the summaries are empty and the script still
+succeeds.
+.SH SEE ALSO
+.BR otsdaq-mu2e-calorimeter-root-macros (7)
+.PP
+.I doc/INTERFACES.md
+in the otsdaq-mu2e-calorimeter source tree, section 3.
+.SH AUTHOR
+Script by the Mu2e calorimeter group.
+Manual page written for the September 2026 Mu2e DAQ review.
