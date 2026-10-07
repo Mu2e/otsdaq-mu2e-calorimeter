@@ -59,7 +59,15 @@ cet_build_plugin(CaloEventFilter art::module
       artdaq::DAQdata
 )
 
-
+cet_build_plugin(CaloHitFilter art::module
+    REG_SOURCE CaloHitFilter_module.cc
+    LIBRARIES REG
+      artdaq-core-mu2e::Data
+      artdaq-core-mu2e::Data_dict
+      artdaq-core-mu2e::Overlays
+      artdaq::DAQdata
+      Offline::DAQ
+)
 
 install_headers()
 install_source()
