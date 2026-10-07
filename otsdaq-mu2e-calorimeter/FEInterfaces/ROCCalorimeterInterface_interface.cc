@@ -1226,20 +1226,27 @@ void ROCCalorimeterInterface::configure(void) try {
 
 	__COUT_INFO__ << "Enter ROC configuration.." << __E__;
 
-	int readVal = 0;
-	int ntries  = 0;
-	while(readVal != 0x1234 || ntries < 3) {
+	const int   maxTries = 10;
+	int         readVal  = 0;
+	int         ntries   = 0;
+	std::string lastError;
+	while((readVal != 0x1234 || ntries < 3) && ntries < maxTries) {
 		try {
 			readVal = readRegister(0);
-		} catch(const std::exception& e) {}
+		} catch(const std::exception& e) {
+			lastError = e.what();
+		}
 		ntries++;
 		__COUT_INFO__ << "Attempt number " << ntries << __E__;
+		if(readVal != 0x1234) usleep(100000);  // do not hammer an unresponsive link
 	}
 
-	if(readVal == 0x1234)
-		__COUT_INFO__ << "Configuration correct! :)" << __E__;
-	else
-		__COUT_INFO__ << "Configuration failed! :(" << __E__;
+	if(readVal != 0x1234) {
+		__FE_SS__ << "ROC on link " << linkID_ << " is not responding: register 0 read 0x" << std::hex << readVal << std::dec << " (expected 0x1234) after "
+		          << ntries << " attempts. Last error: " << lastError << __E__;
+		__FE_SS_THROW__;
+	}
+	__COUT_INFO__ << "Configuration correct! :)" << __E__;
 
 	updateBoardIdFromSerial_();
 
