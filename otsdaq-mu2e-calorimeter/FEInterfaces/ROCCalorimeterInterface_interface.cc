@@ -15,7 +15,6 @@
 #include <fstream>
 #include <initializer_list>
 #include <iomanip>
-#include <initializer_list>
 #include <vector>
 
 using namespace ots;
@@ -521,9 +520,7 @@ void ROCCalorimeterInterface::ROCSlowControl(__ARGS__) {
 		const auto raw     = data6[i];
 		const bool enabled = (raw & 0x8000) != 0;
 		const auto value   = raw & 0x7fff;
-		os << "Word " << i << ": raw=0x" << std::hex << raw << std::dec
-		   << " enabled=" << enabled << " request=" << ((float)value) / 10. << " V"
-		   << __E__;
+		os << "Word " << i << ": raw=0x" << std::hex << raw << std::dec << " enabled=" << enabled << " request=" << ((float)value) / 10. << " V" << __E__;
 	}
 
 	file << std::endl;
@@ -853,20 +850,14 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 
 			usleep(1000);
 			if(++j == 5000) {
-				__FE_SS__ << "ROC block read timeout: address=" << address << "(0x"
-				          << std::hex << address << ") expectedReadCount=0x"
-				          << expectedReadCount << " reg128=0x" << doneReg
-				          << " reg129=0x" << countReg << std::dec
-				          << " readCount=" << readCount << " wordCount=" << wordCount
-				          << __E__;
+				__FE_SS__ << "ROC block read timeout: address=" << address << "(0x" << std::hex << address << ") expectedReadCount=0x" << expectedReadCount << " reg128=0x" << doneReg << " reg129=0x"
+				          << countReg << std::dec << " readCount=" << readCount << " wordCount=" << wordCount << __E__;
 				__FE_SS_THROW__;
 			}
 		}
 
-		__FE_COUTT__ << "ROC block read ready: reg128=0x" << std::hex << doneReg
-		             << " reg129=0x" << countReg << std::dec
-		             << " readCount=" << readCount
-		             << " expectedReadCount=" << expectedReadCount << __E__;
+		__FE_COUTT__ << "ROC block read ready: reg128=0x" << std::hex << doneReg << " reg129=0x" << countReg << std::dec << " readCount=" << readCount << " expectedReadCount=" << expectedReadCount
+		             << __E__;
 
 		// wordCount = u - 4;  // number of words to read back
 	}
@@ -882,7 +873,8 @@ void ROCCalorimeterInterface::readROCBlock(std::vector<DTCLib::roc_data_t>& data
 	if(emulatedInDTC_)  // fix count for emulated ROC to survive
 		readCount = wordCount + 4;
 	if(data.size() != (long unsigned int)readCount - 4) {
-		__FE_SS__ << "ROC block read of address " << address << "(0x" << std::hex << address << std::dec << ") failed, expecting " << readCount - 4 << " words, and read " << data.size() << " words." << __E__;
+		__FE_SS__ << "ROC block read of address " << address << "(0x" << std::hex << address << std::dec << ") failed, expecting " << readCount - 4 << " words, and read " << data.size() << " words."
+		          << __E__;
 		{
 			__FE_COUT_ERR__ << ss.str();  // demoted to error rather than exception on 19-Feb-2026 during Calo MC2 commissioning
 			// just pad with zeros for now if wrong
@@ -1113,8 +1105,7 @@ void ots::ROCCalorimeterInterface::DebugDatabaseLookup(__ARGS__) {
 	os << "boardConfig_.boardID       = " << boardConfig_.boardID << "\n";
 	if(boardConfig_.serial != serial) {
 		__FE_COUT__ << "STEP 5 WARNING: cached serial (0x" << std::hex << boardConfig_.serial << ") != hw serial (0x" << serial << std::dec << ")" << __E__;
-		os << "WARNING: cached serial (0x" << std::hex << boardConfig_.serial
-		   << ") != hw serial (0x" << serial << std::dec << ")\n";
+		os << "WARNING: cached serial (0x" << std::hex << boardConfig_.serial << ") != hw serial (0x" << serial << std::dec << ")\n";
 	}
 
 	__FE_COUT__ << "===== DEBUG COMPLETE =====" << __E__;
@@ -2161,20 +2152,9 @@ void ROCCalorimeterInterface::PrintROCFirmwareVersion(__ARGS__) {
 //==================================================================================================
 std::string ROCCalorimeterInterface::getFirmwareInventoryHeader(void) {
 	std::stringstream os;
-	os << std::left
-	   << std::setw(14) << "Status"
-	   << std::setw(10) << "BoardID"
-	   << std::setw(10) << "UID_MSB"
-	   << std::setw(10) << "UID_CSB"
-	   << std::setw(10) << "UID_LSB"
-	   << std::setw(9) << "Project"
-	   << std::setw(10) << "FW_Git"
-	   << std::setw(13) << "FW_Date"
-	   << std::setw(10) << "FW_Time"
-	   << std::setw(8) << "FW_Ver"
-	   << std::setw(10) << "SW_Git"
-	   << std::setw(10) << "SW_Hash"
-	   << std::setw(13) << "SW_Date";
+	os << std::left << std::setw(14) << "Status" << std::setw(10) << "BoardID" << std::setw(10) << "UID_MSB" << std::setw(10) << "UID_CSB" << std::setw(10) << "UID_LSB" << std::setw(9) << "Project"
+	   << std::setw(10) << "FW_Git" << std::setw(13) << "FW_Date" << std::setw(10) << "FW_Time" << std::setw(8) << "FW_Ver" << std::setw(10) << "SW_Git" << std::setw(10) << "SW_Hash" << std::setw(13)
+	   << "SW_Date";
 	return os.str();
 }
 
@@ -2197,7 +2177,7 @@ std::string ROCCalorimeterInterface::getFirmwareInventoryRow(void) {
 	const uint16_t sw_date_lo = readRegister(ROC_ADDRESS_SW_BUILD_DATE_LO);
 	const uint16_t sw_date_hi = readRegister(ROC_ADDRESS_SW_BUILD_DATE_HI);
 
-	auto isTimeout = [timeoutWord](uint16_t v) { return v == timeoutWord; };
+	auto isTimeout    = [timeoutWord](uint16_t v) { return v == timeoutWord; };
 	auto isAnyTimeout = [&](std::initializer_list<uint16_t> values) {
 		for(const auto v : values)
 			if(isTimeout(v))
@@ -2215,18 +2195,14 @@ std::string ROCCalorimeterInterface::getFirmwareInventoryRow(void) {
 		if(isAnyTimeout({hi, lo}))
 			return std::string("[TIMEOUT]");
 		std::stringstream s;
-		s << std::setw(4) << std::setfill('0') << bcd16(hi) << "-"
-		  << std::setw(2) << bcd8((lo >> 8) & 0xFF) << "-"
-		  << std::setw(2) << bcd8(lo & 0xFF);
+		s << std::setw(4) << std::setfill('0') << bcd16(hi) << "-" << std::setw(2) << bcd8((lo >> 8) & 0xFF) << "-" << std::setw(2) << bcd8(lo & 0xFF);
 		return s.str();
 	};
 	auto timeString = [&](uint16_t hi, uint16_t lo) {
 		if(isAnyTimeout({hi, lo}))
 			return std::string("[TIMEOUT]");
 		std::stringstream s;
-		s << std::setw(2) << std::setfill('0') << bcd8(hi & 0xFF) << ":"
-		  << std::setw(2) << bcd8((lo >> 8) & 0xFF) << ":"
-		  << std::setw(2) << bcd8(lo & 0xFF);
+		s << std::setw(2) << std::setfill('0') << bcd8(hi & 0xFF) << ":" << std::setw(2) << bcd8((lo >> 8) & 0xFF) << ":" << std::setw(2) << bcd8(lo & 0xFF);
 		return s.str();
 	};
 
@@ -2269,8 +2245,8 @@ std::string ROCCalorimeterInterface::getFirmwareInventoryRow(void) {
 	    '\0',
 	};
 
-	const unsigned major = (version >> 8) & 0xFF;
-	const unsigned minor = version & 0xFF;
+	const unsigned    major = (version >> 8) & 0xFF;
+	const unsigned    minor = version & 0xFF;
 	std::stringstream fwVersion;
 	if(isTimeout(version))
 		fwVersion << "[TIMEOUT]";
@@ -2278,20 +2254,12 @@ std::string ROCCalorimeterInterface::getFirmwareInventoryRow(void) {
 		fwVersion << major << "." << minor;
 
 	std::stringstream os;
-	os << std::left
-	   << std::setw(14) << status
-	   << std::setw(10) << boardIdString
-	   << std::setw(10) << (isTimeout(uid_msb) ? std::string("[TIMEOUT]") : hex4(uid_msb))
-	   << std::setw(10) << (isTimeout(uid_csb) ? std::string("[TIMEOUT]") : hex4(uid_csb))
-	   << std::setw(10) << (isTimeout(uid_lsb) ? std::string("[TIMEOUT]") : hex4(uid_lsb))
-	   << std::setw(9) << (isTimeout(proj_id) ? std::string("[TIMEOUT]") : std::string(project_str))
-	   << std::setw(10) << (isTimeout(git_sha) ? std::string("[TIMEOUT]") : hex4(git_sha))
-	   << std::setw(13) << dateString(date_hi, date_lo)
-	   << std::setw(10) << timeString(time_hi, time_lo)
-	   << std::setw(8) << fwVersion.str()
-	   << std::setw(10) << (isTimeout(sw_git) ? std::string("[TIMEOUT]") : hex4(sw_git))
-	   << std::setw(10) << (isTimeout(sw_hash) ? std::string("[TIMEOUT]") : hex4(sw_hash))
-	   << std::setw(13) << dateString(sw_date_hi, sw_date_lo);
+	os << std::left << std::setw(14) << status << std::setw(10) << boardIdString << std::setw(10) << (isTimeout(uid_msb) ? std::string("[TIMEOUT]") : hex4(uid_msb)) << std::setw(10)
+	   << (isTimeout(uid_csb) ? std::string("[TIMEOUT]") : hex4(uid_csb)) << std::setw(10) << (isTimeout(uid_lsb) ? std::string("[TIMEOUT]") : hex4(uid_lsb)) << std::setw(9)
+	   << (isTimeout(proj_id) ? std::string("[TIMEOUT]") : std::string(project_str)) << std::setw(10) << (isTimeout(git_sha) ? std::string("[TIMEOUT]") : hex4(git_sha)) << std::setw(13)
+	   << dateString(date_hi, date_lo) << std::setw(10) << timeString(time_hi, time_lo) << std::setw(8) << fwVersion.str() << std::setw(10)
+	   << (isTimeout(sw_git) ? std::string("[TIMEOUT]") : hex4(sw_git)) << std::setw(10) << (isTimeout(sw_hash) ? std::string("[TIMEOUT]") : hex4(sw_hash)) << std::setw(13)
+	   << dateString(sw_date_hi, sw_date_lo);
 	return os.str();
 }
 
@@ -2342,13 +2310,11 @@ std::string ROCCalorimeterInterface::getFirmwareInventoryJSON(void) {
 	js << ",\"swHash\":" << sw_hash;
 	js << ",\"swDateLo\":" << sw_date_lo;
 	js << ",\"swDateHi\":" << sw_date_hi;
-	js << ",\"timeout\":" << (isTimeout(uid_lsb) || isTimeout(uid_csb) || isTimeout(uid_msb) ||
-	                          isTimeout(proj_id) || isTimeout(git_sha) ||
-	                          isTimeout(date_lo) || isTimeout(date_hi) ||
-	                          isTimeout(time_lo) || isTimeout(time_hi) ||
-	                          isTimeout(version) || isTimeout(sw_git) ||
-	                          isTimeout(sw_hash) || isTimeout(sw_date_lo) || isTimeout(sw_date_hi)
-	                          ? "true" : "false");
+	js << ",\"timeout\":"
+	   << (isTimeout(uid_lsb) || isTimeout(uid_csb) || isTimeout(uid_msb) || isTimeout(proj_id) || isTimeout(git_sha) || isTimeout(date_lo) || isTimeout(date_hi) || isTimeout(time_lo) ||
+	               isTimeout(time_hi) || isTimeout(version) || isTimeout(sw_git) || isTimeout(sw_hash) || isTimeout(sw_date_lo) || isTimeout(sw_date_hi)
+	           ? "true"
+	           : "false");
 	js << "}";
 	return js.str();
 }
