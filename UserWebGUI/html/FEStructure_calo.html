@@ -45,6 +45,20 @@
 		var _dtcRecordsAlias = "DTC";
 		var _rocRecordsAlias = "ROC";
 
+		//pending status changes are accumulated locally on click (instant UI feedback)
+		//	and flushed to the server in batched, serialized writes to avoid the
+		//	lost-update race of concurrent setFieldValuesForRecords calls.
+		var _STATUS_WRITE_DEBOUNCE = 500; //ms of click inactivity before flushing to server
+		var _pendingRocStatusChanges = {}; //rocName -> "0"/"1"
+		var _rocWriteTimer = 0;
+		var _rocWriteInFlight = false;
+		var _rocFlushDoneHandlers = [];
+		var _pendingDtcStatusChanges = {}; //dtcName -> "0"/"1"
+		var _dtcWriteTimer = 0;
+		var _dtcWriteInFlight = false;
+		var _dtcFlushDoneHandlers = [];
+		var _rocBoardIdCache; //cached {rocName:boardId} map for bulk toggles
+
 		//Board numbers for TRAD and laser
 		var TRADBoards = [31, 71, 111, 151];
 		var LaserBoard = 160;
@@ -259,6 +273,9 @@
 			"Saving  DTCs configuration'. Are you sure?",
 			function () /*yes-to-save rocs tables*/
 			{
+				//make sure all pending (debounced) status changes reached the server first
+				flushPendingDtcStatusChanges(function()
+				{
 				//proceed to save (quietly) tables, groups, aliases fot dtcs
 				if (_dtcModifiedTables != undefined)
 					ConfigurationAPI.saveModifiedTables(_dtcModifiedTables,
@@ -278,6 +295,7 @@
 						_dtcModifiedTables = undefined; //clear after save
 
 					}); //end saveModifiedTables handler
+				}); //end flushPendingDtcStatusChanges handler
 				}	,
 				0,0,// val [optional], bgColor [optional],
 				0,0,0, //			textColor [optional], borderColor [optional], getUserInput [optional],
@@ -295,6 +313,9 @@
 			"Saving  ROCs configuration'. Are you sure?",
 			function () /*yes-to-save rocs tables*/
 			{
+				//make sure all pending (debounced) status changes reached the server first
+				flushPendingRocStatusChanges(function()
+				{
 				//proceed to save (quietly) tables, groups, aliases for rocs
 				if (_rocModifiedTables != undefined)
 					ConfigurationAPI.saveModifiedTables(_rocModifiedTables,
@@ -314,6 +335,7 @@
 						_rocModifiedTables = undefined; //clear after save
 
 					}); //end saveModifiedTables handler
+				}); //end flushPendingRocStatusChanges handler
 				}	,
 				0,0,// val [optional], bgColor [optional],
 				0,0,0, //			textColor [optional], borderColor [optional], getUserInput [optional],
@@ -349,58 +371,77 @@
 			else
 				dtcBox.style.backgroundColor = 'red';
 
-			var fields = ["Status"];
-			var valueArr = [status];
-			var recordArr = [dtcName];
-
-			Debug.logv({recordArr});
-			Debug.logv({valueArr});
-			Debug.logv({fields});
-			Debug.logv({status});
-
-			var subsetBasePath = "/FEInterfaceTable";
-
-			ConfigurationAPI.setFieldValuesForRecords(
-					subsetBasePath,
-					recordArr, 	//recordArr
-					fields, 	//fieldArr
-					valueArr, 	//valueArr
-					function(modifiedTables)
-					{
-						Debug.log("modifiedTables length " + modifiedTables.length);
-
-						if(!modifiedTables.length)
-						{
-							Debug.log("There was an error while writing the values.",
-									Debug.HIGH_PRIORITY);
-							return;
-						}
-
-						_dtcModifiedTables = modifiedTables;
-
-						// //proceed to save (quietly) tables, groups, aliases
-						// ConfigurationAPI.saveModifiedTables(_modifiedTables,
-						// 		function(savedTables, savedGroups, savedAliases)
-						// 		{
-						// 	if(!savedTables.length)
-						// 	{
-						// 		Debug.log("There was an error while saving the values.",
-						// 				Debug.HIGH_PRIORITY);
-						// 		return;
-						// 	}
-
-						// 	Debug.log("The values for each field were successfully written to the targeted " +
-						// 			recordsAlias + " (target count = " + recordArr.length + ")!",
-						// 			Debug.INFO_PRIORITY);
-
-						// 	_modifiedTables = undefined; //clear after save
-
-						// 		}); //end saveModifiedTables handler
-
-					}, //end setFieldValuesForRecords handler
-					_dtcModifiedTables);
+			//queue the change locally (instant), flush to server after clicks settle
+			_pendingDtcStatusChanges[dtcName] = status;
+			if(_dtcWriteTimer) window.clearTimeout(_dtcWriteTimer);
+			_dtcWriteTimer = window.setTimeout(flushPendingDtcStatusChanges, _STATUS_WRITE_DEBOUNCE);
 
 		} //end setDTCStatus()
+
+
+		//=====================================================================================
+		//flushPendingDtcStatusChanges ~~
+		//	batches all pending DTC status changes into at most two serialized server
+		//	writes (one per status value), each building on the latest modified tables.
+		function flushPendingDtcStatusChanges(doneHandler)
+		{
+			if(doneHandler) _dtcFlushDoneHandlers.push(doneHandler);
+
+			if(_dtcWriteTimer)
+			{
+				window.clearTimeout(_dtcWriteTimer);
+				_dtcWriteTimer = 0;
+			}
+
+			if(_dtcWriteInFlight) return; //in-flight write re-calls flush when done
+
+			var onDtcs = [], offDtcs = [];
+			for(var name in _pendingDtcStatusChanges)
+				(_pendingDtcStatusChanges[name] == "1" ? onDtcs : offDtcs).push(name);
+			_pendingDtcStatusChanges = {};
+
+			if(!onDtcs.length && !offDtcs.length)
+			{
+				var handlers = _dtcFlushDoneHandlers;
+				_dtcFlushDoneHandlers = [];
+				for(var i = 0; i < handlers.length; ++i) handlers[i]();
+				return;
+			}
+
+			_dtcWriteInFlight = true;
+			localWrite(onDtcs, "1", function()
+			{
+				localWrite(offDtcs, "0", function()
+				{
+					_dtcWriteInFlight = false;
+					//drain changes that accumulated during the write, or call done handlers
+					flushPendingDtcStatusChanges();
+				});
+			});
+
+			//===========
+			function localWrite(records, status, next)
+			{
+				if(!records.length) { next(); return; }
+
+				ConfigurationAPI.setFieldValuesForRecords(
+						"/FEInterfaceTable",
+						records, 	//recordArr
+						["Status"],	//fieldArr
+						[status], 	//valueArr
+						function(modifiedTables)
+						{
+							if(!modifiedTables.length)
+								Debug.log("There was an error while writing the DTC status values.",
+										Debug.HIGH_PRIORITY);
+							else
+								_dtcModifiedTables = modifiedTables;
+							next();
+						}, //end setFieldValuesForRecords handler
+						_dtcModifiedTables);
+			} //end localWrite()
+
+		} //end flushPendingDtcStatusChanges()
 
 
 		//=====================================================================================
@@ -429,57 +470,150 @@
 			else
 				rocBox.style.backgroundColor = 'red';
 
-			var fields = ["Status"];
-			var valueArr = [status];
-			var recordArr = [rocName];
-
-			Debug.logv({recordArr});
-			Debug.logv({valueArr});
-			Debug.logv({fields});
-
-			var subsetBasePath = "/ROCInterfaceTable";
-
-			ConfigurationAPI.setFieldValuesForRecords(
-					subsetBasePath,
-					recordArr, 	//recordArr
-					fields, 	//fieldArr
-					valueArr, 	//valueArr
-					function(modifiedTables)
-					{
-						Debug.log("modifiedTables length " + modifiedTables.length);
-
-						if(!modifiedTables.length)
-						{
-							Debug.log("There was an error while writing the values.",
-									Debug.HIGH_PRIORITY);
-							return;
-						}
-
-						_rocModifiedTables = modifiedTables;
-
-						// //proceed to save (quietly) tables, groups, aliases
-						// ConfigurationAPI.saveModifiedTables(_modifiedTables,
-						// 		function(savedTables, savedGroups, savedAliases)
-						// 		{
-						// 	if(!savedTables.length)
-						// 	{
-						// 		Debug.log("There was an error while saving the values.",
-						// 				Debug.HIGH_PRIORITY);
-						// 		return;
-						// 	}
-
-						// 	Debug.log("The values for each field were successfully written to the targeted " +
-						// 			recordsAlias + " (target count = " + recordArr.length + ")!",
-						// 			Debug.INFO_PRIORITY);
-
-						// 	_modifiedTables = undefined; //clear after save
-
-						// 		}); //end saveModifiedTables handler
-
-					}, //end setFieldValuesForRecords handler
-					_rocModifiedTables);
+			//queue the change locally (instant), flush to server after clicks settle
+			queueRocStatusChanges([rocName], status);
 
 		} //end setROCStatus()
+
+
+		//=====================================================================================
+		//queueRocStatusChanges ~~
+		//	record pending status for the given ROCs and (re)start the debounced flush
+		function queueRocStatusChanges(rocNames, status)
+		{
+			for(var i = 0; i < rocNames.length; ++i)
+				_pendingRocStatusChanges[rocNames[i]] = status;
+
+			if(_rocWriteTimer) window.clearTimeout(_rocWriteTimer);
+			_rocWriteTimer = window.setTimeout(flushPendingRocStatusChanges, _STATUS_WRITE_DEBOUNCE);
+		} //end queueRocStatusChanges()
+
+
+		//=====================================================================================
+		//flushPendingRocStatusChanges ~~
+		//	batches all pending ROC status changes into at most two serialized server
+		//	writes (one per status value), each building on the latest modified tables.
+		function flushPendingRocStatusChanges(doneHandler)
+		{
+			if(doneHandler) _rocFlushDoneHandlers.push(doneHandler);
+
+			if(_rocWriteTimer)
+			{
+				window.clearTimeout(_rocWriteTimer);
+				_rocWriteTimer = 0;
+			}
+
+			if(_rocWriteInFlight) return; //in-flight write re-calls flush when done
+
+			var onRocs = [], offRocs = [];
+			for(var name in _pendingRocStatusChanges)
+				(_pendingRocStatusChanges[name] == "1" ? onRocs : offRocs).push(name);
+			_pendingRocStatusChanges = {};
+
+			if(!onRocs.length && !offRocs.length)
+			{
+				var handlers = _rocFlushDoneHandlers;
+				_rocFlushDoneHandlers = [];
+				for(var i = 0; i < handlers.length; ++i) handlers[i]();
+				return;
+			}
+
+			_rocWriteInFlight = true;
+			localWrite(onRocs, "1", function()
+			{
+				localWrite(offRocs, "0", function()
+				{
+					_rocWriteInFlight = false;
+					//drain changes that accumulated during the write, or call done handlers
+					flushPendingRocStatusChanges();
+				});
+			});
+
+			//===========
+			function localWrite(records, status, next)
+			{
+				if(!records.length) { next(); return; }
+
+				ConfigurationAPI.setFieldValuesForRecords(
+						"/ROCInterfaceTable",
+						records, 	//recordArr
+						["Status"],	//fieldArr
+						[status], 	//valueArr
+						function(modifiedTables)
+						{
+							if(!modifiedTables.length)
+								Debug.log("There was an error while writing the ROC status values.",
+										Debug.HIGH_PRIORITY);
+							else
+								_rocModifiedTables = modifiedTables;
+							next();
+						}, //end setFieldValuesForRecords handler
+						_rocModifiedTables);
+			} //end localWrite()
+
+		} //end flushPendingRocStatusChanges()
+
+
+		//=====================================================================================
+		//getRocBoardIds ~~
+		//	fetch (once) and cache the {fieldUID, boardId} list for all ROCs,
+		//	then hand it to the callback. Bulk toggles reuse the cache, so only
+		//	the first toggle pays the server round-trip.
+		function getRocBoardIds(callback)
+		{
+			if(_rocBoardIdCache)
+			{
+				callback(_rocBoardIdCache);
+				return;
+			}
+
+			var allRocNames = [];
+			for(var i = 0; i < FEstructure_.apps.length; ++i)
+				for(var j = 0; j < FEstructure_.apps[i].dtcs.length; ++j)
+					for(var k = 0; k < FEstructure_.apps[i].dtcs[j].rocs.length; ++k)
+						allRocNames.push(FEstructure_.apps[i].dtcs[j].rocs[k].name);
+
+			ConfigurationAPI.getFieldValuesForRecords(
+				"/ROCInterfaceTable",
+				allRocNames,
+				["ROCTypeLinkUID"],
+				function(fieldValues)
+				{
+					if(!fieldValues.length)
+					{
+						Debug.log("No boardID values returned from ROCInterfaceTable.",
+								Debug.HIGH_PRIORITY);
+						return;
+					}
+
+					_rocBoardIdCache = [];
+					for(var i = 0; i < fieldValues.length; ++i)
+						_rocBoardIdCache.push({
+							name: fieldValues[i].fieldUID,
+							boardId: parseInt(fieldValues[i].fieldValue)});
+
+					callback(_rocBoardIdCache);
+				},
+				_rocModifiedTables
+			);
+		} //end getRocBoardIds()
+
+
+		//=====================================================================================
+		//markRocButtonsSelected ~~
+		//	paint the given ROC buttons as selected with the target status color
+		function markRocButtonsSelected(rocNames, targetStatus)
+		{
+			var rocButtons = document.querySelectorAll('.rocBox');
+			for(var b = 0; b < rocButtons.length; ++b){
+				if(rocNames.indexOf(rocButtons[b].innerText) >= 0)
+				{
+					rocButtons[b].style.backgroundColor = targetStatus == 1 ? 'green' : 'red';
+					rocButtons[b].style.border = "1px solid black";
+					rocButtons[b].style.opacity = 0.5;
+				}
+			}
+		} //end markRocButtonsSelected()
 
 
 		function toggleDiskPhi (disk, phi, targetStatus){
@@ -487,232 +621,92 @@
 
 			var excludeBoards = TRADBoards.concat(LaserBoard); //Make sure to exclude TRAD and laser boards
 
-			var allRocNames = [];
-			for(var i = 0; i < FEstructure_.apps.length; ++i)
-				for(var j = 0; j < FEstructure_.apps[i].dtcs.length; ++j)
-					for(var k = 0; k < FEstructure_.apps[i].dtcs[j].rocs.length; ++k)
-						allRocNames.push(FEstructure_.apps[i].dtcs[j].rocs[k].name);
-
-			ConfigurationAPI.getFieldValuesForRecords(
-				"/ROCInterfaceTable",
-				allRocNames,
-				["ROCTypeLinkUID"],
-				function(fieldValues)
+			getRocBoardIds(function(rocBoardIds)
+			{
+				// Collect ROC names whose board ID falls in the disk's board ID range
+				var diskROCs = [];
+				for(var i = 0; i < rocBoardIds.length; ++i)
 				{
-					if(!fieldValues.length)
-					{
-						Debug.log("No boardID values returned from ROCInterfaceTable.",
-								Debug.HIGH_PRIORITY);
-						return;
+					var boardId = rocBoardIds[i].boardId;
+					if (boardId < MinValidBoardId || boardId > MaxValidBoardId) continue;
+
+					var thisDisk = Math.floor(boardId / 80);
+					var thisPhi = Math.floor((boardId % 80) / 40);
+
+					if (excludeBoards.indexOf(boardId) < 0 &&
+						(disk < 0 || thisDisk == disk) &&
+						(phi < 0 || thisPhi == phi)){
+						diskROCs.push(rocBoardIds[i].name);
 					}
+				}
 
-					// Collect ROC names whose ROCTypeLinkUID falls in the disk's board ID range
-					var diskROCs = [];
-					for(var i = 0; i < fieldValues.length; ++i)
-					{
-						var boardId = parseInt(fieldValues[i].fieldValue);
-						if (boardId < MinValidBoardId || boardId > MaxValidBoardId) continue;
+				if(!diskROCs.length)
+				{
+					Debug.log("No ROCs found for disk " + disk + ".",
+						Debug.HIGH_PRIORITY);
+					return;
+				}
+				Debug.log("Found " + diskROCs.length + " ROC(s) for disk " + disk);
 
-						var thisDisk = Math.floor(boardId / 80);
-						var thisPhi = Math.floor((boardId % 80) / 40);
-
-						if (excludeBoards.indexOf(boardId) < 0 &&
-							(disk < 0 || thisDisk == disk) &&
-							(phi < 0 || thisPhi == phi)){
-							diskROCs.push(fieldValues[i].fieldUID);
-						}
-					}
-
-					if(!diskROCs.length)
-					{
-						Debug.log("No ROCs found for disk " + disk + ".",
-							Debug.HIGH_PRIORITY);
-						return;
-					}
-					Debug.log("Found " + diskROCs.length + " ROC(s) for disk " + disk);
-
-					var rocButtons = document.querySelectorAll('.rocBox');
-					for(var b = 0; b < rocButtons.length; ++b){
-						if(diskROCs.indexOf(rocButtons[b].innerText) >= 0)
-						{
-							rocButtons[b].style.backgroundColor = targetStatus == 1 ? 'green' : 'red';
-							rocButtons[b].style.border = "1px solid black";
-							rocButtons[b].style.opacity = 0.5;
-						}
-					}
-					var targetStatusStr = targetStatus == 1 ? "1" : "0";
-					ConfigurationAPI.setFieldValuesForRecords(
-						"/ROCInterfaceTable",
-						diskROCs,
-						["Status"],
-						[targetStatusStr],
-						function(modifiedTables)
-						{
-							if(!modifiedTables.length)
-							{
-								Debug.log("Error writing status for disk " + disk + " ROCs.",
-										Debug.HIGH_PRIORITY);
-								return;
-							}
-							_rocModifiedTables = modifiedTables;
-							Debug.log("Disk " + disk + " ROCs (" + diskROCs.length +
-									") set to " + (targetStatus == 1 ? "ON" : "OFF") + ".");
-						},
-						_rocModifiedTables
-					);
-				},
-				_rocModifiedTables
-			);
+				markRocButtonsSelected(diskROCs, targetStatus);
+				queueRocStatusChanges(diskROCs, targetStatus == 1 ? "1" : "0");
+			});
 
 		} //end toggleDiskPhi()
 
 		function toggleLaser (targetStatus){
 			Debug.log("toggleLaser()", targetStatus);
 
-			var allRocNames = [];
-			for(var i = 0; i < FEstructure_.apps.length; ++i)
-				for(var j = 0; j < FEstructure_.apps[i].dtcs.length; ++j)
-					for(var k = 0; k < FEstructure_.apps[i].dtcs[j].rocs.length; ++k)
-						allRocNames.push(FEstructure_.apps[i].dtcs[j].rocs[k].name);
-
-			ConfigurationAPI.getFieldValuesForRecords(
-				"/ROCInterfaceTable",
-				allRocNames,
-				["ROCTypeLinkUID"],
-				function(fieldValues)
+			getRocBoardIds(function(rocBoardIds)
+			{
+				// Collect the ROC name matching the laser board ID
+				var laserROCs = [];
+				for(var i = 0; i < rocBoardIds.length; ++i)
 				{
-					if(!fieldValues.length)
-					{
-						Debug.log("No boardID values returned from ROCInterfaceTable.",
-								Debug.HIGH_PRIORITY);
-						return;
+					if(rocBoardIds[i].boardId == LaserBoard){
+						laserROCs.push(rocBoardIds[i].name);
+						break;
 					}
+				}
 
-					// Collect ROC names whose ROCTypeLinkUID falls in the disk's board ID range
-					var laserROCs = [];
-					for(var i = 0; i < fieldValues.length; ++i)
-					{
-						var boardId = parseInt(fieldValues[i].fieldValue);
-						if(boardId == LaserBoard){
-							laserROCs.push(fieldValues[i].fieldUID);
-							break;
-						}
-					}
+				if(!laserROCs.length)
+				{
+					Debug.log("No Laser ROCs found!",
+						Debug.HIGH_PRIORITY);
+					return;
+				}
 
-					if(!laserROCs.length)
-					{
-						Debug.log("No Laser ROCs found!",
-							Debug.HIGH_PRIORITY);
-						return;
-					}
+				markRocButtonsSelected(laserROCs, targetStatus);
+				queueRocStatusChanges(laserROCs, targetStatus == 1 ? "1" : "0");
+			});
 
-					var rocButtons = document.querySelectorAll('.rocBox');
-					for(var b = 0; b < rocButtons.length; ++b){
-						if(laserROCs.indexOf(rocButtons[b].innerText) >= 0)
-						{
-							rocButtons[b].style.backgroundColor = targetStatus == 1 ? 'green' : 'red';
-							rocButtons[b].style.border = "1px solid black";
-							rocButtons[b].style.opacity = 0.5;
-						}
-					}
-					var targetStatusStr = targetStatus == 1 ? "1" : "0";
-					ConfigurationAPI.setFieldValuesForRecords(
-						"/ROCInterfaceTable",
-						laserROCs,
-						["Status"],
-						[targetStatusStr],
-						function(modifiedTables)
-						{
-							if(!modifiedTables.length)
-							{
-								Debug.log("Error writing status for laser ROCs.",
-										Debug.HIGH_PRIORITY);
-								return;
-							}
-							_rocModifiedTables = modifiedTables;
-							Debug.log("Laser ROC set to " + (targetStatus == 1 ? "ON" : "OFF") + ".");
-						},
-						_rocModifiedTables
-					);
-				},
-				_rocModifiedTables
-			);
-
-		} //end toggleTRADs()
+		} //end toggleLaser()
 
 		function toggleTRADs (targetStatus){
 			Debug.log("toggleTRADs()", targetStatus);
 
-			var allRocNames = [];
-			for(var i = 0; i < FEstructure_.apps.length; ++i)
-				for(var j = 0; j < FEstructure_.apps[i].dtcs.length; ++j)
-					for(var k = 0; k < FEstructure_.apps[i].dtcs[j].rocs.length; ++k)
-						allRocNames.push(FEstructure_.apps[i].dtcs[j].rocs[k].name);
-
-			ConfigurationAPI.getFieldValuesForRecords(
-				"/ROCInterfaceTable",
-				allRocNames,
-				["ROCTypeLinkUID"],
-				function(fieldValues)
+			getRocBoardIds(function(rocBoardIds)
+			{
+				// Collect ROC names matching the TRAD board IDs
+				var TRADROCs = [];
+				for(var i = 0; i < rocBoardIds.length; ++i)
 				{
-					if(!fieldValues.length)
-					{
-						Debug.log("No boardID values returned from ROCInterfaceTable.",
-								Debug.HIGH_PRIORITY);
-						return;
+					if(TRADBoards.indexOf(rocBoardIds[i].boardId) >= 0){
+						TRADROCs.push(rocBoardIds[i].name);
 					}
+				}
 
-					// Collect ROC names whose ROCTypeLinkUID falls in the disk's board ID range
-					var TRADROCs = [];
-					for(var i = 0; i < fieldValues.length; ++i)
-					{
-						var boardId = parseInt(fieldValues[i].fieldValue);
+				if(!TRADROCs.length)
+				{
+					Debug.log("No TRAD ROCs found!",
+						Debug.HIGH_PRIORITY);
+					return;
+				}
+				Debug.log("Found " + TRADROCs.length + " ROC(s)");
 
-						if(TRADBoards.indexOf(boardId) >= 0){
-							TRADROCs.push(fieldValues[i].fieldUID);
-						}
-					}
-
-					if(!TRADROCs.length)
-					{
-						Debug.log("No ROCs found for disk " + diskNumber + ".",
-							Debug.HIGH_PRIORITY);
-						return;
-					}
-					Debug.log("Found " + TRADROCs.length + " ROC(s)");
-
-					var rocButtons = document.querySelectorAll('.rocBox');
-					for(var b = 0; b < rocButtons.length; ++b){
-						if(TRADROCs.indexOf(rocButtons[b].innerText) >= 0)
-						{
-							rocButtons[b].style.backgroundColor = targetStatus == 1 ? 'green' : 'red';
-							rocButtons[b].style.border = "1px solid black";
-							rocButtons[b].style.opacity = 0.5;
-						}
-					}
-					var targetStatusStr = targetStatus == 1 ? "1" : "0";
-					ConfigurationAPI.setFieldValuesForRecords(
-						"/ROCInterfaceTable",
-						TRADROCs,
-						["Status"],
-						[targetStatusStr],
-						function(modifiedTables)
-						{
-							if(!modifiedTables.length)
-							{
-								Debug.log("Error writing status for TRAD ROCs.",
-										Debug.HIGH_PRIORITY);
-								return;
-							}
-							_rocModifiedTables = modifiedTables;
-							Debug.log("TRAD ROCs (" + TRADROCs.length +
-									") set to " + (targetStatus == 1 ? "ON" : "OFF") + ".");
-						},
-						_rocModifiedTables
-					);
-				},
-				_rocModifiedTables
-			);
+				markRocButtonsSelected(TRADROCs, targetStatus);
+				queueRocStatusChanges(TRADROCs, targetStatus == 1 ? "1" : "0");
+			});
 
 		} //end toggleTRADs()
 
@@ -811,6 +805,13 @@
 				window.clearTimeout(_checkActiveGroupsTimer);
 				_checkActiveGroupsTimer = 0;
 			}
+
+			//reloading from the active configuration: drop any stale local state
+			_rocBoardIdCache = undefined;
+			_pendingRocStatusChanges = {};
+			_pendingDtcStatusChanges = {};
+			if(_rocWriteTimer) { window.clearTimeout(_rocWriteTimer); _rocWriteTimer = 0; }
+			if(_dtcWriteTimer) { window.clearTimeout(_dtcWriteTimer); _dtcWriteTimer = 0; }
 
 			ConfigurationAPI.getStructureStatus("DTCInterfaceTable",
 				function(json)
