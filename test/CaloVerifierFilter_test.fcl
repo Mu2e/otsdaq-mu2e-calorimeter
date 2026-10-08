@@ -79,7 +79,6 @@ physics: {
       module_type    : CaloHitsFromFragments
       caloTag        : "caloVerifier"
       diagLevel      : 1
-      digiSampling   : 5
       deltaTPulses   : 5.
       nPEperMeV      : 30
       noiseLevelMeV  : 0.55
