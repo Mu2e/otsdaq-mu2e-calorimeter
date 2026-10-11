@@ -624,12 +624,25 @@ function extractOutputArg(r,name){
 	return js;
 }
 
+// ── Board ID → calo geometry ────────────────────────────
+// boardID = side + 2*board + 8*crate + 40*phi + 80*disk (ROCCalorimeterInterface::SetBoardVoltages).
+// crate is the index inside the half-disk (0-4); board is the slot inside the crate (0-3 in the formula,
+// shown 1-4 because the physical crate slots are counted from 1); side L/R.
+function boardGeometry(boardId){
+	if(boardId===undefined||boardId<0)return{disk:-1,phi:-1,crate:-1,boardNum:-1,side:"",slot:""};
+	var disk=Math.floor(boardId/80),rem=boardId%80,phi=Math.floor(rem/40);rem%=40;
+	var crate=Math.floor(rem/8);rem%=8;
+	var boardNum=Math.floor(rem/2)+1,side=rem%2?"R":"L";
+	return{disk:disk,phi:phi,crate:crate,boardNum:boardNum,side:side,slot:boardNum+side};
+}
+
 function toRow(dtc,e){var d=e.data||{};var r={target:dtc,link:e.link,rocUID:e.rocUID||"",error:e.error||false,errorMsg:e.errorMessage||"",
 boardId:d.boardId!==undefined?d.boardId:-1,uidMsb:d.uidMsb,uidCsb:d.uidCsb,uidLsb:d.uidLsb,
 project:d.project,fwGit:d.fwGit,fwDateLo:d.fwDateLo,fwDateHi:d.fwDateHi,fwTimeLo:d.fwTimeLo,fwTimeHi:d.fwTimeHi,fwVersion:d.fwVersion,
 swGit:d.swGit,swHash:d.swHash,swDateLo:d.swDateLo,swDateHi:d.swDateHi,timeout:d.timeout||false,
 uid:"",fwDate:"",fwTime:"",swDate:"",status:"IDLE",match:"",mm:[],ms:{}};
-r.uid=uid3(r.uidLsb,r.uidCsb,r.uidMsb);r.fwDate=fmtD(r.fwDateHi,r.fwDateLo);r.fwTime=fmtT(r.fwTimeHi,r.fwTimeLo);r.swDate=fmtD(r.swDateHi,r.swDateLo);return r;}
+r.uid=uid3(r.uidLsb,r.uidCsb,r.uidMsb);r.fwDate=fmtD(r.fwDateHi,r.fwDateLo);r.fwTime=fmtT(r.fwTimeHi,r.fwTimeLo);r.swDate=fmtD(r.swDateHi,r.swDateLo);
+var geometry=boardGeometry(r.boardId);r.disk=geometry.disk;r.phi=geometry.phi;r.crate=geometry.crate;r.boardNum=geometry.boardNum;r.side=geometry.side;r.slot=geometry.slot;return r;}
 
 // ── Comparison ──────────────────────────────────────────
 function compareAll(){for(var i=0;i<rocRows_.length;++i)cmpRow(rocRows_[i]);}
@@ -734,7 +747,7 @@ function rocSortedRows(){
 function renderROC(){compareAll();
 	var tb=document.getElementById("rocTb");
 	updateFlashBar();
-	if(!rocRows_.length){tb.innerHTML='<tr><td colspan="15" style="padding:24px;color:var(--c-text-dim);text-align:center;">No ROC data yet. Press <b>Refresh</b>.</td></tr>';updROCInfo();updateSortHeaders();return;}
+	if(!rocRows_.length){tb.innerHTML='<tr><td colspan="19" style="padding:24px;color:var(--c-text-dim);text-align:center;">No ROC data yet. Press <b>Refresh</b>.</td></tr>';updROCInfo();updateSortHeaders();return;}
 	var sorted=rocSortedRows(), h="",vis=0;
 	for(var i=0;i<sorted.length;++i){var r=sorted[i];if(!rocVis(r))continue;vis++;
 	var k=rk(r),sc=stCls(r);
@@ -742,6 +755,10 @@ function renderROC(){compareAll();
 	h+='<td onclick="event.stopPropagation()"><input type="checkbox" '+(rocSel_[k]?"checked ":"")+'onchange="rocSel_[\''+ea(k)+'\']=this.checked;updROCInfo()"></td>';
 	h+='<td>'+esc(r.target)+'</td><td>'+r.link+'</td>';
 	h+=tc(r.boardId>=0?r.boardId:"-",r.ms.boardId);
+	h+=tc(r.disk>=0?r.disk:"-",false);
+	h+=tc(r.phi>=0?r.phi:"-",false);
+	h+=tc(r.crate>=0?r.crate:"-",false);
+	h+=tc(r.slot||"-",false);
 	h+=tc(r.uid||"-",r.ms.uid,1);
 	h+='<td>'+statusBadge(r.status)+'</td>';
 	h+=flashCell(r);
@@ -754,7 +771,7 @@ function renderROC(){compareAll();
 	h+=tc(hx(r.swHash),r.ms.swHash,1);
 	h+=tc(r.swDate||"-",r.ms.swDateLo||r.ms.swDateHi);
 	h+='</tr>';}
-	if(!vis)h='<tr><td colspan="15" style="padding:20px;color:var(--c-text-dim);text-align:center;">No rows match current filters.</td></tr>';
+	if(!vis)h='<tr><td colspan="19" style="padding:20px;color:var(--c-text-dim);text-align:center;">No rows match current filters.</td></tr>';
 	tb.innerHTML=h; updROCInfo(); updateSortHeaders();
 }
 function statusBadge(s){var c="sb-"+s.toLowerCase();return'<span class="status-badge '+c+'">'+esc(s)+'</span>';}
@@ -809,7 +826,10 @@ if(di)db=msec("Parent DTC")+mkv("DTC FW",di.designVersion)+mkv("Design Date",di.
 document.getElementById("mBody").innerHTML=
 	msec("ROC Firmware")+
 	mkv("DTC",r.target)+mkv("ROC Link",r.link)+mkv("ROC UID",r.rocUID)+
-	mkv("Board ID",r.boardId>=0?r.boardId:"-")+mkv("BOARD UID",r.uid)+
+	mkv("Board ID",r.boardId>=0?r.boardId:"-")+
+	mkv("Disk / Phi / Crate",r.disk>=0?r.disk+" / "+r.phi+" / "+r.crate:"-")+
+	mkv("Slot in crate",r.slot||"-")+
+	mkv("BOARD UID",r.uid)+
 	mkv("Status",r.status)+mkv("Match",r.match)+
 	mkv("FW Project",hx(r.project))+mkv("FW SHA",hx(r.fwGit))+
 	mkv("FW Build",(r.fwDate||"-")+" "+(r.fwTime||"-"))+mkv("FW Version",fmtV(r.fwVersion))+
@@ -1093,11 +1113,12 @@ function updateFlashBar(){
 
 function exportInventoryCSV(){
 	if(!rocRows_.length){log("Nothing to export — run Refresh first.");return;}
-	var lines=["DTC,Link,BoardID,FW_Date,FW_Time"];
+	var lines=["DTC,Link,BoardID,Disk,Phi,Crate,Slot,FW_Date,FW_Time"];
 	for(var i=0;i<rocRows_.length;++i){
 		var r=rocRows_[i];
 		if(!rocVis(r))continue;
-		lines.push([r.target,r.link,r.boardId>=0?r.boardId:"",r.fwDate||"",r.fwTime||""].join(","));
+		lines.push([r.target,r.link,r.boardId>=0?r.boardId:"",r.disk>=0?r.disk:"",r.phi>=0?r.phi:"",r.crate>=0?r.crate:"",
+			r.slot,r.fwDate||"",r.fwTime||""].join(","));
 	}
 	var blob=new Blob([lines.join("\n")+"\n"],{type:"text/csv"});
 	var a=document.createElement("a");
@@ -1113,7 +1134,8 @@ function exportInventoryCSV(){
 function rocVis(r){var tf=document.getElementById("dtcFilter").value,sf=document.getElementById("stFilter").value,
 tx=document.getElementById("txFilter").value.toLowerCase().trim();
 if(tf&&r.target!==tf)return false;if(sf&&r.status!==sf)return false;
-if(tx){var b=(r.target+" "+r.link+" "+r.boardId+" "+r.uid+" "+r.match+" "+r.rocUID).toLowerCase();if(b.indexOf(tx)<0)return false;}return true;}
+if(tx){var geometryTokens=r.disk>=0?" disk"+r.disk+" phi"+r.phi+" crate"+r.crate+" slot"+r.slot+" "+r.slot:"";
+var b=(r.target+" "+r.link+" "+r.boardId+" "+r.uid+" "+r.match+" "+r.rocUID+geometryTokens).toLowerCase();if(b.indexOf(tx)<0)return false;}return true;}
 function getFilteredTargets(){var f=document.getElementById("dtcFilter").value;if(f)return dtcMap_[f]?[f]:[];return Object.keys(dtcMap_).sort(nc);}
 function paintDTCFilter(){var s=document.getElementById("dtcFilter"),ks=Object.keys(dtcMap_).sort(nc);
 var h='<option value="">All DTCs ('+ks.length+')</option>';for(var i=0;i<ks.length;++i)h+='<option value="'+esc(ks[i])+'">'+esc(ks[i])+'</option>';s.innerHTML=h;}
@@ -1376,8 +1398,8 @@ function nc(a,b){return String(a).localeCompare(String(b),undefined,{numeric:tru
 			<div class="summary-bar" id="rocInfo"></div>
 			<div class="table-scroll">
 				<table>
-					<thead id="rocTable"><tr><th>Sel</th><th class="sortable" data-sort="dtc" onclick="sortROC('dtc')">DTC</th><th class="sortable" data-sort="link" onclick="sortROC('link')">ROC</th><th class="sortable" data-sort="boardId" onclick="sortROC('boardId')">Board ID</th><th>Board UID</th><th class="sortable" data-sort="status" onclick="sortROC('status')">Status</th><th>Flash</th><th>Match</th><th>Project</th><th>FW SHA</th><th class="sortable" data-sort="fwDate" onclick="sortROC('fwDate')">FW Date</th><th>FW Time</th><th class="sortable" data-sort="fwVersion" onclick="sortROC('fwVersion')">FW Ver</th><th>SW Hash</th><th>SW Date</th></tr></thead>
-					<tbody id="rocTb"><tr><td colspan="15" style="padding:24px;color:var(--c-text-dim);text-align:center;">No ROC data yet. Press <b>Refresh Inventory</b>.</td></tr></tbody>
+					<thead id="rocTable"><tr><th>Sel</th><th class="sortable" data-sort="dtc" onclick="sortROC('dtc')">DTC</th><th class="sortable" data-sort="link" onclick="sortROC('link')">ROC</th><th class="sortable" data-sort="boardId" onclick="sortROC('boardId')">Board ID</th><th class="sortable" data-sort="disk" onclick="sortROC('disk')" title="Disk = boardID / 80">Disk</th><th class="sortable" data-sort="phi" onclick="sortROC('phi')" title="Phi (half-disk) = (boardID % 80) / 40">Phi</th><th class="sortable" data-sort="crate" onclick="sortROC('crate')" title="Crate inside the half-disk (0-4) = (boardID % 40) / 8">Crate</th><th class="sortable" data-sort="slot" onclick="sortROC('slot')" title="Slot in crate (1-4) + side: (boardID % 8) / 2 + 1, L if boardID even, R if odd">Slot</th><th>Board UID</th><th class="sortable" data-sort="status" onclick="sortROC('status')">Status</th><th>Flash</th><th>Match</th><th>Project</th><th>FW SHA</th><th class="sortable" data-sort="fwDate" onclick="sortROC('fwDate')">FW Date</th><th>FW Time</th><th class="sortable" data-sort="fwVersion" onclick="sortROC('fwVersion')">FW Ver</th><th>SW Hash</th><th>SW Date</th></tr></thead>
+					<tbody id="rocTb"><tr><td colspan="19" style="padding:24px;color:var(--c-text-dim);text-align:center;">No ROC data yet. Press <b>Refresh Inventory</b>.</td></tr></tbody>
 				</table>
 			</div>
 		</div>
