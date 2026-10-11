@@ -162,6 +162,10 @@ th {
 	font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;
 	color: var(--c-text-dim); background: var(--c-panel); border-bottom: 2px solid var(--c-border-hi);
 }
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--c-accent); }
+th.sort-asc::after  { content: " ▲"; font-size: 9px; }
+th.sort-desc::after { content: " ▼"; font-size: 9px; }
 td { transition: background var(--transition); }
 tr { cursor: pointer; transition: background var(--transition); }
 tr:hover td { background: var(--c-panel-hi); }
@@ -192,6 +196,38 @@ td.cell-bad { color: var(--c-bad); font-weight: 700; }
 .status-badge.sb-warn     { background: var(--c-warn);     color: white; }
 .status-badge.sb-read     { background: var(--c-accent-bg);color: var(--c-accent); }
 .status-badge.sb-idle     { background: var(--c-panel-hi); color: var(--c-text-dim); }
+
+/* ── Flash progress bar (per ROC) ──────── */
+.fwbar {
+	position: relative; display: inline-block; vertical-align: middle;
+	width: 140px; height: 16px; border-radius: 3px; overflow: hidden;
+	background: var(--c-surface); border: 1px solid var(--c-border);
+}
+.fwbar > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--c-accent); transition: width 0.4s ease; }
+.fwbar > span { position: absolute; inset: 0; font-size: 10px; line-height: 16px; text-align: center; font-weight: 700; color: var(--c-text); }
+.fwbar.ok  > i { background: var(--c-ok); }
+.fwbar.bad > i { background: var(--c-bad); }
+.fwbar.stale > i { background: var(--c-warn); }
+.fwchip { font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 3px; }
+.fwchip.ready { background: var(--c-ok-bg); color: var(--c-ok); }
+.fwchip.locked { background: var(--c-warn-bg); color: var(--c-warn); }
+.flash-bar label.cb { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--c-text); text-transform: none; letter-spacing: 0; margin: 0; }
+.flash-bar label.cb input { width: 16px; height: 16px; accent-color: var(--c-accent); }
+button.warn { background: var(--c-warn); color: var(--c-text-inv); border-color: var(--c-warn); font-weight: 700; }
+button.warn:hover { background: #d9a520; }
+
+/* ── Flash confirm dialog ───────────────── */
+#fcBg { z-index: 200; }
+#fcBg .modal { width: min(760px, calc(100vw - 40px)); top: 10vh; }
+.fc-info { padding: 10px 12px; border-radius: 4px; background: var(--c-accent-bg); border: 1px solid var(--c-accent); color: var(--c-text); font-size: 14px; line-height: 1.4; }
+.fc-warn { padding: 10px 12px; border-radius: 4px; background: var(--c-bad-bg); border: 1px solid var(--c-bad); color: var(--c-text); font-size: 14px; line-height: 1.4; }
+.fc-note { margin-top: 10px; padding: 8px 12px; border-radius: 4px; background: var(--c-warn-bg); border: 1px solid var(--c-warn); color: var(--c-warn); font-size: 13px; }
+.fc-bad { color: var(--c-bad); font-weight: 700; }
+.fc-grid { display: grid; grid-template-columns: 130px 1fr; gap: 8px 16px; margin-top: 14px; font-size: 15px; }
+.fc-grid .mk { font-size: 12px; font-weight: 700; color: var(--c-text-dim); text-transform: uppercase; letter-spacing: 0.5px; align-self: start; padding-top: 2px; }
+.fc-grid .mv { color: var(--c-text); word-break: break-all; }
+.fc-grid .dim { color: var(--c-text-dim); font-weight: 400; }
+.fc-list { margin: 0; padding-left: 20px; font-size: 15px; line-height: 1.6; }
 
 /* ── Log ───────────────────────────────── */
 .log-panel {
@@ -256,13 +292,32 @@ var TIMEOUT_WORD_ = 0xEFFE;
 var tabFwCfg_ = {
 	dtc: { dirKey: "FWMgr.dtcDir", selKey: "FWMgr.dtcSel", defaultDir: "/DTC_Firmware",
 	       dirFilter: /^DTC/i, dirId: "dtcFwDir", selId: "dtcFwSel", expId: "dtcExpLine", expected: {} },
-	roc: { dirKey: "FWMgr.rocDir", selKey: "FWMgr.rocSel", defaultDir: "/Calo_ROC_Firmware",
+	roc: { dirKey: "FWMgr.rocDir", selKey: "FWMgr.rocSel", defaultDir: "/home/mu2eshift/ots_calo/Calo_ROC_Firmware",
 	       dirFilter: /^(CaloROC_|ROC)/i, dirId: "rocFwDir", selId: "rocFwSel", expId: "rocExpLine", expected: {} }
 };
 
 var rocRows_=[], dtcInfoMap_={}, dtcMap_={};
 var rocSel_={}, dtcSel_={};
 var activeTab_="dtc", modalCtx_=null;
+var rocSortCol_="default", rocSortAsc_=true;
+
+// Flash jobs: one per DTC, persisted so a page reload resumes polling
+var FW_JOBS_KEY_="FWMgr.flashJobs";
+var FW_POLL_MS_=3000;
+var fwJobs_={};      // dtcUID -> {phase,links,state,percent,msg,notDoneID,startedAt,bitfile,imageIndex}
+var PROGRAM_MACRO_="Program ROCs";
+var PROGRAM_ARGS_={
+	target:"Target ROC or Mask (Default = -1 := all ROCs, or 0x111111 := all)",
+	mapPath:"Path to Directory map file (Default := do not use)",
+	writeMap:"Write Directory map to SPI Flash (Default := false)",
+	verifyMap:"Verify Directory map (Default := false)",
+	imageIndex:"Image Index (Default := 0)",
+	bitfile:"Path to Bitfile (Default := do not write bitfile, only program from Image Index)",
+	write:"Write Bitfile to SPI Flash (Default := false)",
+	forceSize:"For Debug, force Write size (Default := do not force)",
+	verify:"Verify with Bitfile Readback (Default := false)",
+	program:"Do program from Image Index (Default := false)"
+};
 var fwItemsCache_ = { dtc: [], roc: [] };  // cached full list of firmware entries per tab
 
 // ── Init ────────────────────────────────────────────────
@@ -272,8 +327,18 @@ function init() {
 	// Init per-tab firmware directory inputs
 	for(var tab in tabFwCfg_) {
 		var cfg = tabFwCfg_[tab];
-		document.getElementById(cfg.dirId).value = localStorage.getItem(cfg.dirKey) || cfg.defaultDir;
+		var savedDir = localStorage.getItem(cfg.dirKey);
+		// drop the old root-level defaults ("/Calo_ROC_Firmware") that browsers remembered
+		if(savedDir && /^\/(Calo_ROC_Firmware|DTC_Firmware)\/?$/.test(savedDir)) savedDir = "";
+		document.getElementById(cfg.dirId).value = savedDir || cfg.defaultDir;
 	}
+	document.getElementById("rocBitfileName").value=localStorage.getItem("FWMgr.rocBitfileName")||"";
+	document.getElementById("rocImageIndex").value=localStorage.getItem("FWMgr.rocImageIndex")||"1";
+	var savedMap=localStorage.getItem("FWMgr.rocMapPath");
+	if(savedMap&&/^\/Calo_ROC_Firmware\//.test(savedMap))savedMap="";
+	document.getElementById("rocMapPath").value=savedMap||(tabFwCfg_.roc.defaultDir+"/flash_map.txt");
+	document.getElementById("rocMapMode").value=localStorage.getItem("FWMgr.rocMapMode")||"lookup";
+	loadFlashState();
 	switchTab("dtc");
 	resolveCodeEditor();
 	resolveMacroMaker();
@@ -389,7 +454,15 @@ function loadSelFw(tab){
 		return;
 	}
 
-	// ROC: read manifest.json from inside the folder
+	// ROC bitfile named ROC-YYYYMMDD-MAJ-MIN.spi: date and version come from the name
+	var fromName=parseROCFileName(v);
+	if(fromName){
+		cfg.expected=fromName; renderExpected(); renderROC();
+		log("ROC expected FW from file name: build "+fromName.label);
+		return;
+	}
+
+	// ROC release folder: read manifest.json from inside it
 	var base=document.getElementById(cfg.dirId).value.replace(/\/+$/,"");
 	var path=/\.(json|manifest)$/i.test(v)?base+"/"+v:base+"/"+v+"/manifest.json";
 	readFile(path,function(t,e){
@@ -434,6 +507,21 @@ function parseDTCDirName(name) {
 function readFile(fp,cb){if(!CODE_EDITOR_APP_ID_){cb(null,"na");return;}var s=DesktopContent._localUrnLid;DesktopContent._localUrnLid=CODE_EDITOR_APP_ID_;
 DesktopContent.XMLHttpRequest("Request?RequestType=readOnlycodeEditor&option=getFileContent&path="+encodeURIComponent(fp),"",
 function(r,rp,e){if(e||!r){cb(null,e||"fail");return;}cb(DesktopContent.getXMLValue(r,"text"),"");},0,0,true);DesktopContent._localUrnLid=s;}
+// ROC-YYYYMMDD-MAJ-MIN.spi  ->  build date (BCD, as the ROC registers report it) + version
+function parseROCFileName(name){
+	var m=String(name).match(/^ROC-(\d{4})(\d{2})(\d{2})-(\d+)-(\d+)\.(spi|bit)$/i);
+	if(!m)return null;
+	var y=parseInt(m[1]),mo=parseInt(m[2]),d=parseInt(m[3]),maj=parseInt(m[4]),min=parseInt(m[5]);
+	return {
+		fileName:name, year:y, month:mo, day:d, major:maj, minor:min,
+		label:m[1]+"-"+m[2]+"-"+m[3]+"  v"+maj+"."+min,
+		fwDateHi:toBcd16(y), fwDateLo:(toBcd8(mo)<<8)|toBcd8(d),
+		fwVersion:((maj&0xff)<<8)|(min&0xff)
+	};
+}
+function toBcd8(v){return((Math.floor(v/10)%10)<<4)|(v%10);}
+function toBcd16(v){return(Math.floor(v/1000)%10<<12)|(Math.floor(v/100)%10<<8)|(Math.floor(v/10)%10<<4)|(v%10);}
+function rocFwOptionLabel(name){var p=parseROCFileName(name);return p?p.label+"   ("+name+")":name;}
 function parseManifest(t){var o={};try{var j=JSON.parse(t);o.project=px(j.fw_project_id||j.project);o.fwGit=px(j.fw_git_sha||j.fw_git);
 o.fwDateLo=px(j.fw_build_date_lo);o.fwDateHi=px(j.fw_build_date_hi);o.fwTimeLo=px(j.fw_build_time_lo);o.fwTimeHi=px(j.fw_build_time_hi);
 o.fwVersion=pv(j.fw_version||j.version);o.swHash=px(j.sw_hex_hash);}catch(e){}return o;}
@@ -443,7 +531,7 @@ var s=String(v).trim(),m=s.match(/^(\d+)\.(\d+)$/);if(m)return((parseInt(m[1])&0
 // ── Refresh Inventory ───────────────────────────────────
 function refreshInventory(){
 	var tgts=getFilteredTargets(); if(!tgts.length){log("No DTC targets.");return;}
-	rocRows_=[]; dtcInfoMap_={}; rocSel_={}; dtcSel_={};
+	rocRows_=[]; dtcInfoMap_={}; rocSel_={}; dtcSel_={}; inventoryFailed_={};
 	setBusy(true); var total=tgts.length, done=0;
 	log("Querying "+total+" DTC(s)...");
 	for(var i=0;i<tgts.length;++i)(function(uid){
@@ -451,34 +539,90 @@ function refreshInventory(){
 		runMacro(uid,function(u,js,e){
 			var el=((Date.now()-t0)/1000).toFixed(1); done++;
 			document.getElementById("progressText").textContent=done+"/"+total;
-			if(e){log("ERR "+u+" ("+el+"s): "+e);}
-			else if(!js){log("WARN "+u+": empty response");}
+			if(e){inventoryFailed_[u]=e;log("ERR "+u+" ("+el+"s): "+e);}
+			else if(!js){inventoryFailed_[u]="empty response";log("WARN "+u+": empty response");}
 			else{try{var p=JSON.parse(js);var a=Array.isArray(p)?p:(p.rocs||[]);
 			if(!Array.isArray(p)&&p.dtc)dtcInfoMap_[u]=p.dtc;
 			for(var r=0;r<a.length;++r)rocRows_.push(toRow(u,a[r]));
-			log(u+": "+a.length+" ROC(s) "+el+"s");}catch(x){log("JSON err "+u+": "+x.message);}}
+			log(u+": "+a.length+" ROC(s) "+el+"s");}catch(x){inventoryFailed_[u]="bad JSON: "+x.message;log("JSON err "+u+": "+x.message);}}
 			if(done===total){setBusy(false);rocRows_.sort(function(a,b){return a.target!==b.target?nc(a.target,b.target):a.link-b.link;});
 			compareAll(); renderDTC(); renderROC(); updateTabBadges();
-			log("Done. "+Object.keys(dtcInfoMap_).length+" DTC(s), "+rocRows_.length+" ROC(s).");}
+			var failed=Object.keys(inventoryFailed_).sort(nc);
+			log("Done. "+Object.keys(dtcInfoMap_).length+"/"+total+" DTC(s), "+rocRows_.length+" ROC(s)."+(failed.length?" MISSING: "+failed.join(", "):""));
+			if(failed.length)showFlashMessage(failed.length+" of "+total+" DTC(s) did not answer",
+				failed.map(function(u){return "<b>"+esc(u)+"</b>: "+esc(inventoryFailed_[u]);}).concat(["Use <b>Retry Missing</b> to query only these again."]));}
 		});
 	})(tgts[i]);
+}
+var inventoryFailed_={};
+function retryMissing(){
+	var failed=Object.keys(inventoryFailed_).sort(nc);
+	if(!failed.length){showFlashMessage("Nothing to retry",["All DTCs answered on the last refresh."]);return;}
+	setBusy(true); var total=failed.length, done=0; inventoryFailed_={};
+	log("Retrying "+total+" DTC(s): "+failed.join(", "));
+	for(var i=0;i<failed.length;++i)(function(uid){
+		var t0=Date.now();
+		runMacro(uid,function(u,js,e){
+			var el=((Date.now()-t0)/1000).toFixed(1); done++;
+			document.getElementById("progressText").textContent=done+"/"+total;
+			if(e){inventoryFailed_[u]=e;log("ERR "+u+" ("+el+"s): "+e);}
+			else{try{var p=JSON.parse(js);var a=Array.isArray(p)?p:(p.rocs||[]);
+			if(!Array.isArray(p)&&p.dtc)dtcInfoMap_[u]=p.dtc;
+			rocRows_=rocRows_.filter(function(r){return r.target!==u;});
+			for(var r=0;r<a.length;++r)rocRows_.push(toRow(u,a[r]));
+			log(u+": "+a.length+" ROC(s) "+el+"s");}catch(x){inventoryFailed_[u]="bad JSON: "+x.message;log("JSON err "+u+": "+x.message);}}
+			if(done===total){setBusy(false);rocRows_.sort(function(a,b){return a.target!==b.target?nc(a.target,b.target):a.link-b.link;});
+			compareAll(); renderDTC(); renderROC(); updateTabBadges();
+			var still=Object.keys(inventoryFailed_).sort(nc);
+			log("Retry done. "+Object.keys(dtcInfoMap_).length+" DTC(s), "+rocRows_.length+" ROC(s)."+(still.length?" STILL MISSING: "+still.join(", "):""));}
+		});
+	})(failed[i]);
 }
 function setBusy(b){document.getElementById("refreshBtn").disabled=b;
 	document.getElementById("busyDot").style.background=b?"var(--c-warn)":"var(--c-ok)";
 	document.getElementById("busyLabel").textContent=b?"scanning...":"ready";}
 
-function runMacro(uid,cb){var info=dtcMap_[uid];if(!info||!MACRO_MAKER_APP_ID_){cb(uid,"","n/a");return;}
-var post="inputArgs="+encodeURIComponent("Target ROC or Mask (Default = -1 := all ROCs, or 0x111111 := all)")+",-1&outputArgs=Status,InventoryJSON";
-var s=DesktopContent._localUrnLid; DesktopContent._localUrnLid=MACRO_MAKER_APP_ID_;
-DesktopContent.XMLHttpRequest("Request?RequestType=runFEMacro&feClassSelected="+encodeURIComponent(info.feClass)+
-"&feUIDSelected="+encodeURIComponent(uid)+"&macroType=fe&macroName="+encodeURIComponent("ROC Firmware Inventory")+"&saveOutputs=0",post,
-function(r,rp,e){if(e){cb(uid,"",e);return;}var se=DesktopContent.getXMLValue(r,"Error");if(se){cb(uid,"",se);return;}
-var js="",fe=r.responseXML.getElementsByTagName("feMacroExec");
-if(fe.length>0){for(var f=0;f<fe.length;++f){var n=fe[f].getElementsByTagName("outputArgs_name"),v=fe[f].getElementsByTagName("outputArgs_value");
-for(var i=0;i<n.length;++i)if(n[i].getAttribute("value")==="InventoryJSON")js=decodeURIComponent(v[i].getAttribute("value"));}}
-else{var n=r.responseXML.getElementsByTagName("outputArgs_name"),v=r.responseXML.getElementsByTagName("outputArgs_value");
-for(var i=0;i<n.length;++i)if(n[i].getAttribute("value")==="InventoryJSON")js=decodeURIComponent(v[i].getAttribute("value"));}
-cb(uid,js,"");},0,0,true); DesktopContent._localUrnLid=s;}
+var INVENTORY_POLL_MS_=1500, INVENTORY_TIMEOUT_MS_=120000, INVENTORY_RETRIES_=1;
+function runMacro(uid,cb,attempt){
+	attempt=attempt||0;
+	var info=dtcMap_[uid];if(!info||!MACRO_MAKER_APP_ID_){cb(uid,"","n/a");return;}
+	var post="inputArgs="+encodeURIComponent("Target ROC or Mask (Default = -1 := all ROCs, or 0x111111 := all)")+",-1&outputArgs=Status,InventoryJSON";
+	var t0=Date.now();
+	function fail(msg){
+		if(attempt<INVENTORY_RETRIES_){log("retry "+uid+" after: "+msg);setTimeout(function(){runMacro(uid,cb,attempt+1);},1000);}
+		else cb(uid,"",msg);
+	}
+	function handle(r,rp,e){
+		if(e){fail(e);return;}
+		var se=DesktopContent.getXMLValue(r,"Error");if(se){fail(se);return;}
+		// macro still running on the server: MacroMaker only waits ~300 ms before going async
+		var notDoneID=DesktopContent.getXMLValue(r,"NotDoneID");
+		if(notDoneID){
+			if(Date.now()-t0>INVENTORY_TIMEOUT_MS_){fail("timeout waiting for inventory (NotDoneID "+notDoneID+")");return;}
+			setTimeout(function(){
+				var s=DesktopContent._localUrnLid; DesktopContent._localUrnLid=MACRO_MAKER_APP_ID_;
+				DesktopContent.XMLHttpRequest("Request?RequestType=runFEMacro&NotDoneID="+notDoneID,"",handle,0,0,true,true);
+				DesktopContent._localUrnLid=s;
+			},INVENTORY_POLL_MS_);
+			return;
+		}
+		var js=extractOutputArg(r,"InventoryJSON");
+		if(!js){fail("empty response");return;}
+		cb(uid,js,"");
+	}
+	var s=DesktopContent._localUrnLid; DesktopContent._localUrnLid=MACRO_MAKER_APP_ID_;
+	DesktopContent.XMLHttpRequest("Request?RequestType=runFEMacro&feClassSelected="+encodeURIComponent(info.feClass)+
+		"&feUIDSelected="+encodeURIComponent(uid)+"&macroType=fe&macroName="+encodeURIComponent("ROC Firmware Inventory")+"&saveOutputs=0",
+		post,handle,0,0,true,true);
+	DesktopContent._localUrnLid=s;
+}
+function extractOutputArg(r,name){
+	var js="",fe=r.responseXML.getElementsByTagName("feMacroExec");
+	var scope=fe.length?fe:[r.responseXML];
+	for(var f=0;f<scope.length;++f){var n=scope[f].getElementsByTagName("outputArgs_name"),v=scope[f].getElementsByTagName("outputArgs_value");
+		for(var i=0;i<n.length;++i)if(n[i].getAttribute("value")===name){try{js=decodeURIComponent(v[i].getAttribute("value"));}catch(x){js=v[i].getAttribute("value");}}}
+	return js;
+}
 
 function toRow(dtc,e){var d=e.data||{};var r={target:dtc,link:e.link,rocUID:e.rocUID||"",error:e.error||false,errorMsg:e.errorMessage||"",
 boardId:d.boardId!==undefined?d.boardId:-1,uidMsb:d.uidMsb,uidCsb:d.uidCsb,uidLsb:d.uidLsb,
@@ -560,12 +704,39 @@ document.getElementById("dtcInfo").innerHTML='<b>'+t+'</b> DTC(s) &middot; <b>'+
 (mm?' &middot; <span style="color:var(--c-bad)"><b>'+mm+'</b> MISMATCH</span>':'');}
 function selAllDTC(v){var ks=Object.keys(dtcInfoMap_);for(var i=0;i<ks.length;++i)dtcSel_["d:"+ks[i]]=v;renderDTC();}
 
+// ── ROC Sort ────────────────────────────────────────────
+function sortROC(col){
+	if(rocSortCol_===col) rocSortAsc_=!rocSortAsc_;
+	else { rocSortCol_=col; rocSortAsc_=true; }
+	renderROC();
+}
+function rocSortedRows(){
+	var rows=rocRows_.slice();
+	var col=rocSortCol_, asc=rocSortAsc_;
+	if(col==="default") return rows.sort(function(a,b){return a.target!==b.target?nc(a.target,b.target):a.link-b.link;});
+	rows.sort(function(a,b){
+		var va,vb;
+		if(col==="boardId"){va=a.boardId;vb=b.boardId;}
+		else if(col==="fwDate"){va=(a.fwDate||"")+" "+(a.fwTime||"");vb=(b.fwDate||"")+" "+(b.fwTime||"");}
+		else if(col==="dtc"){va=a.target;vb=b.target;}
+		else if(col==="link"){va=a.link;vb=b.link;}
+		else if(col==="status"){va=a.status;vb=b.status;}
+		else if(col==="fwVersion"){va=a.fwVersion===undefined?-1:a.fwVersion;vb=b.fwVersion===undefined?-1:b.fwVersion;}
+		else{va=a[col];vb=b[col];}
+		if(va===vb) return a.target!==b.target?nc(a.target,b.target):a.link-b.link;
+		if(typeof va==="number"&&typeof vb==="number") return asc?va-vb:vb-va;
+		return asc?nc(String(va),String(vb)):nc(String(vb),String(va));
+	});
+	return rows;
+}
+
 // ── ROC Table ───────────────────────────────────────────
 function renderROC(){compareAll();
 	var tb=document.getElementById("rocTb");
-	if(!rocRows_.length){tb.innerHTML='<tr><td colspan="14" style="padding:24px;color:var(--c-text-dim);text-align:center;">No ROC data yet. Press <b>Refresh</b>.</td></tr>';updROCInfo();return;}
-	var h="",vis=0;
-	for(var i=0;i<rocRows_.length;++i){var r=rocRows_[i];if(!rocVis(r))continue;vis++;
+	updateFlashBar();
+	if(!rocRows_.length){tb.innerHTML='<tr><td colspan="15" style="padding:24px;color:var(--c-text-dim);text-align:center;">No ROC data yet. Press <b>Refresh</b>.</td></tr>';updROCInfo();updateSortHeaders();return;}
+	var sorted=rocSortedRows(), h="",vis=0;
+	for(var i=0;i<sorted.length;++i){var r=sorted[i];if(!rocVis(r))continue;vis++;
 	var k=rk(r),sc=stCls(r);
 	h+='<tr class="'+sc+'" onclick="openROC(\''+ea(k)+'\')">';
 	h+='<td onclick="event.stopPropagation()"><input type="checkbox" '+(rocSel_[k]?"checked ":"")+'onchange="rocSel_[\''+ea(k)+'\']=this.checked;updROCInfo()"></td>';
@@ -573,6 +744,7 @@ function renderROC(){compareAll();
 	h+=tc(r.boardId>=0?r.boardId:"-",r.ms.boardId);
 	h+=tc(r.uid||"-",r.ms.uid,1);
 	h+='<td>'+statusBadge(r.status)+'</td>';
+	h+=flashCell(r);
 	h+='<td>'+esc(r.match||"-")+'</td>';
 	h+=tc(hx(r.project),r.ms.project,1);
 	h+=tc(hx(r.fwGit),r.ms.fwGit,1);
@@ -582,8 +754,8 @@ function renderROC(){compareAll();
 	h+=tc(hx(r.swHash),r.ms.swHash,1);
 	h+=tc(r.swDate||"-",r.ms.swDateLo||r.ms.swDateHi);
 	h+='</tr>';}
-	if(!vis)h='<tr><td colspan="14" style="padding:20px;color:var(--c-text-dim);text-align:center;">No rows match current filters.</td></tr>';
-	tb.innerHTML=h; updROCInfo();
+	if(!vis)h='<tr><td colspan="15" style="padding:20px;color:var(--c-text-dim);text-align:center;">No rows match current filters.</td></tr>';
+	tb.innerHTML=h; updROCInfo(); updateSortHeaders();
 }
 function statusBadge(s){var c="sb-"+s.toLowerCase();return'<span class="status-badge '+c+'">'+esc(s)+'</span>';}
 function updROCInfo(){var vis=0,sel=0,ok=0,mm=0,to=0,w=0;
@@ -597,6 +769,14 @@ document.getElementById("rocInfo").innerHTML=
 (to?'<span class="chip chip-timeout"><b>'+to+'</b> TIMEOUT</span>':"")+
 (w?'<span class="chip chip-warn"><b>'+w+'</b> OTHER</span>':"");}
 function rocSelAll(v){for(var i=0;i<rocRows_.length;++i)if(rocVis(rocRows_[i]))rocSel_[rk(rocRows_[i])]=v;renderROC();}
+function updateSortHeaders(){
+	var ths=document.querySelectorAll("#rocTable th.sortable");
+	for(var i=0;i<ths.length;++i){
+		ths[i].classList.remove("sort-asc","sort-desc");
+		if(ths[i].getAttribute("data-sort")===rocSortCol_)
+			ths[i].classList.add(rocSortAsc_?"sort-asc":"sort-desc");
+	}
+}
 function rocSelSt(st){for(var i=0;i<rocRows_.length;++i)if(rocVis(rocRows_[i])&&rocRows_[i].status===st)rocSel_[rk(rocRows_[i])]=true;renderROC();}
 function updateTabBadges(){
 	document.getElementById("dtcBadge").textContent=Object.keys(dtcInfoMap_).length||Object.keys(dtcMap_).length||"0";
@@ -639,9 +819,295 @@ document.getElementById("mSel").onclick=function(){rocSel_[key]=true;renderROC()
 document.getElementById("modalBg").style.display="block";}
 
 function closeModal(){document.getElementById("modalBg").style.display="none";}
-function flashModal(){log("DRY RUN flash "+(modalCtx_?modalCtx_.type:"?"));}
-function flashDTC(){var n=0;for(var k in dtcSel_)if(dtcSel_[k])n++;log("DRY RUN flash "+n+" DTC(s).");}
-function flashROC(){var n=0;for(var k in rocSel_)if(rocSel_[k])n++;log("DRY RUN flash "+n+" ROC(s).");}
+function flashModal(){
+	if(!modalCtx_)return;
+	if(modalCtx_.type==="dtc"){closeModal();flashDTC();return;}
+	closeModal(); rocSel_={}; rocSel_[modalCtx_.key]=true; renderROC(); flashROC();
+}
+function flashDTC(){showFlashMessage("DTC flashing not available",["Flashing DTC firmware from this page is not implemented yet. Use the Vivado scripts in otsdaq-mu2e/tools (program_flash_*.sh)."]);}
+
+// ── ROC flashing (Program ROCs macro) ───────────────────
+// "flash": one macro call does erase + write + read-back verify, and programs the FPGA
+// only if the read-back matched (the macro throws before the program step otherwise,
+// leaving the ROC on its current firmware). "program": reboot from the image already in
+// the flash slot, nothing written.
+function loadFlashState(){
+	try{fwJobs_=JSON.parse(localStorage.getItem(FW_JOBS_KEY_)||"{}")||{};}catch(e){fwJobs_={};}
+	var resumed=0;
+	for(var dtc in fwJobs_){var j=fwJobs_[dtc];
+		if(j.state==="running"){resumed++; j.resumed=true; setTimeout((function(d){return function(){pollFlashJob(d);};})(dtc),500);}}
+	if(resumed)log("Resumed polling of "+resumed+" running flash job(s) after page reload.");
+}
+function saveFlashState(){
+	localStorage.setItem(FW_JOBS_KEY_,JSON.stringify(fwJobs_));
+}
+
+// ── Persistent flash history (one line per event, on the shared disk) ─────────
+// $USER_DATA/ServiceData/ROCFirmwareFlash/flash_history.txt via the CodeEditor
+// supervisor: read, append, write back. Appends are serialized through a queue
+// because the CodeEditor has no append and parallel DTC jobs finish together.
+var FLASH_HISTORY_PATH_="$USER_DATA/ServiceData/ROCFirmwareFlash/flash_history";
+var FLASH_HISTORY_EXT_="txt";
+var flashHistoryQueue_=[], flashHistoryBusy_=false;
+function nowStamp(){var t=new Date();return t.getFullYear()+"-"+p2(t.getMonth()+1)+"-"+p2(t.getDate())+" "+p2(t.getHours())+":"+p2(t.getMinutes())+":"+p2(t.getSeconds());}
+function boardIdsFor(dtc,links){var ids=[];for(var l=0;l<links.length;++l){var r=rkFind(dtc+":"+links[l]);ids.push(r&&r.boardId>=0?r.boardId:"?");}return ids.join("/");}
+function appendFlashHistory(event,dtc,j,extra){
+	var user=(DesktopContent.getUsername&&DesktopContent.getUsername())||"?";
+	var fields=[nowStamp(),user,event,j.phase,dtc,"link="+j.links.slice().sort().join("/"),"boardId="+boardIdsFor(dtc,j.links),
+		"image="+j.imageIndex,"bitfile="+(j.bitfile||"-"),"map="+(j.mapPath||"-")+(j.writeMap?"(write)":j.verifyMap?"(verify)":"(lookup)")];
+	if(j.finishedAt)fields.push("elapsed="+Math.round((j.finishedAt-j.startedAt)/1000)+"s");
+	if(extra)fields.push(String(extra).replace(/\s+/g," ").slice(0,500));
+	flashHistoryQueue_.push(fields.join("\t"));
+	flushFlashHistory();
+}
+function showFlashHistory(){
+	readFile(FLASH_HISTORY_PATH_+"."+FLASH_HISTORY_EXT_,function(t,e){
+		var path=FLASH_HISTORY_PATH_.replace("$USER_DATA","Data_calo")+"."+FLASH_HISTORY_EXT_;
+		if(e||t===null){showFlashMessage("Flash history",["Cannot read "+esc(path)+": "+esc(e||"empty")]);return;}
+		var lines=t.split("\n").filter(Boolean).reverse().slice(0,200);
+		var html='<div class="dim" style="font-size:12px;margin-bottom:8px;">'+esc(path)+' &mdash; newest first, '+lines.length+' shown</div>';
+		html+='<pre style="white-space:pre-wrap;font-size:12px;margin:0;max-height:60vh;overflow:auto;">'+esc(lines.join("\n"))+'</pre>';
+		showFlashConfirm("Flash history",html,null,null);
+	});
+}
+function flushFlashHistory(){
+	if(flashHistoryBusy_||!flashHistoryQueue_.length)return;
+	if(!CODE_EDITOR_APP_ID_){log("flash history not written (CodeEditor supervisor not found): "+flashHistoryQueue_.join(" | "));flashHistoryQueue_=[];return;}
+	flashHistoryBusy_=true;
+	var batch=flashHistoryQueue_.splice(0,flashHistoryQueue_.length);
+	var s=DesktopContent._localUrnLid; DesktopContent._localUrnLid=CODE_EDITOR_APP_ID_;
+	DesktopContent.XMLHttpRequest("Request?RequestType=codeEditor&option=getFileContent&path="+encodeURIComponent(FLASH_HISTORY_PATH_+"."+FLASH_HISTORY_EXT_),"",
+		function(r,rp,e){
+			var old=(e||!r)?"":(DesktopContent.getXMLValue(r,"text")||"");
+			if(old.length&&old[old.length-1]!=="\n")old+="\n";
+			var content=old+batch.join("\n")+"\n";
+			var s2=DesktopContent._localUrnLid; DesktopContent._localUrnLid=CODE_EDITOR_APP_ID_;
+			DesktopContent.XMLHttpRequest("Request?RequestType=codeEditor&option=saveFileContent&path="+encodeURIComponent(FLASH_HISTORY_PATH_)+"&ext="+FLASH_HISTORY_EXT_,
+				"content="+encodeURIComponent(content),
+				function(r2,rp2,e2){
+					flashHistoryBusy_=false;
+					if(e2){log("flash history write FAILED: "+e2+" | "+batch.join(" | "));}
+					flushFlashHistory();
+				},0,0,true,true);
+			DesktopContent._localUrnLid=s2;
+		},0,0,true,true);
+	DesktopContent._localUrnLid=s;
+}
+function selectedBitfilePath(){
+	var sel=document.getElementById("rocFwSel").value; if(!sel)return "";
+	var base=document.getElementById("rocFwDir").value.replace(/\/+$/,"");
+	if(/\.(spi|bit)$/i.test(sel))return base+"/"+sel;
+	if(/\.(json|manifest)$/i.test(sel))return "";
+	var custom=document.getElementById("rocBitfileName").value.trim();
+	return base+"/"+sel+"/"+(custom||"roc.spi");
+}
+function linkMask(links){var m=0;for(var i=0;i<links.length;++i)m|=(1<<(links[i]*4));return "0x"+m.toString(16);}
+function jobFor(dtc){return fwJobs_[dtc]&&fwJobs_[dtc].state==="running"?fwJobs_[dtc]:null;}
+
+function flashROC(){
+	var phase=document.getElementById("flashPhase").value;
+	var bitfile=selectedBitfilePath();
+	var imageIndex=parseInt(document.getElementById("rocImageIndex").value)||0;
+	var mapPath=document.getElementById("rocMapPath").value.trim();
+	var mapMode=document.getElementById("rocMapMode").value;
+	var writeMap=(mapMode==="write"), verifyMap=(mapMode!=="lookup");
+
+	var nSel=0;for(var k in rocSel_)if(rocSel_[k])nSel++;
+	var problems=[];
+	if(!nSel)problems.push("No ROC selected. Tick the checkbox of the ROCs to flash (or use Select All / Sel Mismatch).");
+	if(!bitfile&&phase!=="program")problems.push("No bitfile chosen. Pick the firmware in the <b>Expected ROC Firmware</b> menu: that file is what gets written.");
+	if(!mapPath)problems.push("Directory map file is empty. The macro needs it to know the SPI address of image index "+imageIndex+".");
+	if(!MACRO_MAKER_APP_ID_)problems.push("MacroMaker supervisor not found: cannot run FE macros.");
+	if(problems.length){showFlashMessage("Cannot flash",problems);return;}
+
+	// group selected ROCs by DTC
+	var byDtc={}, skippedBusy=[];
+	for(var i=0;i<rocRows_.length;++i){var r=rocRows_[i],k=rk(r);
+		if(!rocSel_[k])continue;
+		if(jobFor(r.target)){skippedBusy.push(k);continue;}
+		(byDtc[r.target]=byDtc[r.target]||[]).push(r.link);}
+	var dtcs=Object.keys(byDtc).sort(nc);
+	var notes=[];
+	if(skippedBusy.length)notes.push("Skipped, DTC already flashing: "+skippedBusy.join(", "));
+	if(!dtcs.length){showFlashMessage("Nothing to flash",notes.length?notes:["Selected ROCs are not in the inventory table. Press Refresh Inventory first."]);return;}
+
+	var n=0,lines=[];for(var d=0;d<dtcs.length;++d){n+=byDtc[dtcs[d]].length;
+		lines.push("<b>"+esc(dtcs[d])+"</b> &rarr; link "+byDtc[dtcs[d]].sort().join(", ")+(byDtc[dtcs[d]].length>=6?" (all)":""));}
+	var ctx={dtcs:dtcs,byDtc:byDtc,phase:phase,bitfile:bitfile,imageIndex:imageIndex,mapPath:mapPath,writeMap:writeMap,verifyMap:verifyMap};
+	var body='';
+	if(phase==="program"){
+		body+='<div class="fc-warn">PROGRAM ONLY &mdash; no write. The ROCs below <b>reboot</b> from whatever is already in SPI image '+imageIndex+'. Use this only if that slot was written and verified before (e.g. after a STALE job).</div>';
+	}else{
+		body+='<div class="fc-info">FLASH &mdash; the bitfile is erased, written and read back in SPI slot '+imageIndex+' (~15 min per DTC, DTCs in parallel). The ROCs keep running meanwhile. <b>Only if the read-back matches</b>, the FPGA is told to reboot from the new image; if anything fails before that, the ROC keeps its current firmware.</div>';
+		body+='<div class="fc-warn" style="margin-top:8px;">At the end the ROCs below will <b>reboot</b> and go offline for a short while.</div>';
+	}
+	body+='<div class="fc-grid">';
+	body+='<div class="mk">Bitfile</div><div class="mv mono">'+(phase==="program"?'<span class="dim">(not written: using image already in flash)</span>':esc(bitfile))+'</div>';
+	body+='<div class="mk">Image index</div><div class="mv mono">'+imageIndex+(imageIndex===0?' <span class="fc-bad">(0 is the GOLDEN slot!)</span>':'')+'</div>';
+	body+='<div class="mk">Directory map</div><div class="mv mono">'+esc(mapPath)+(writeMap?' <span class="fc-bad">WILL BE REWRITTEN at flash address 0, then verified</span>':verifyMap?' <span class="dim">(verified against flash: fails if the ROC has no directory)</span>':' <span class="dim">(lookup only: image '+imageIndex+' address taken from the file)</span>')+'</div>';
+	body+='<div class="mk">Targets</div><div class="mv">'+n+' ROC(s) on '+dtcs.length+' DTC(s)<br>'+lines.join("<br>")+'</div>';
+	body+='</div>';
+	if(notes.length)body+='<div class="fc-note">'+notes.map(esc).join("<br>")+'</div>';
+	body+='<div class="fc-warn" style="margin-top:12px;">Do <b>not</b> Halt, Configure or power-cycle while this runs: an interrupted programming can brick the board.</div>';
+	showFlashConfirm(phase==="program"?"Program "+n+" ROC(s) from flash?":"Flash "+n+" ROC(s)?",body,
+		phase==="program"?"YES, PROGRAM NOW":"YES, FLASH NOW",
+		function(){for(var d=0;d<ctx.dtcs.length;++d)startFlashJob(ctx.dtcs[d],ctx.byDtc[ctx.dtcs[d]],ctx.phase,ctx.bitfile,ctx.imageIndex,ctx.mapPath,ctx.writeMap,ctx.verifyMap);renderROC();});
+}
+function showFlashMessage(title,items){
+	showFlashConfirm(title,'<ul class="fc-list">'+items.map(function(s){return "<li>"+s+"</li>";}).join("")+'</ul>',null,null);
+}
+function showFlashConfirm(title,bodyHtml,okLabel,onOk){
+	document.getElementById("fcTitle").textContent=title;
+	document.getElementById("fcBody").innerHTML=bodyHtml;
+	var ok=document.getElementById("fcOk");
+	ok.style.display=onOk?"":"none";
+	ok.textContent=okLabel||"OK";
+	ok.onclick=function(){closeFlashConfirm();if(onOk)onOk();};
+	document.getElementById("fcBg").style.display="block";
+}
+function closeFlashConfirm(){document.getElementById("fcBg").style.display="none";}
+
+function startFlashJob(dtc,links,phase,bitfile,imageIndex,mapPath,writeMap,verifyMap){
+	var info=dtcMap_[dtc];
+	var inputs={};
+	inputs[PROGRAM_ARGS_.target]=links.length>=6?"0x111111":linkMask(links);
+	inputs[PROGRAM_ARGS_.mapPath]=mapPath;
+	inputs[PROGRAM_ARGS_.writeMap]=writeMap?"true":"false";
+	inputs[PROGRAM_ARGS_.verifyMap]=verifyMap?"true":"false";
+	inputs[PROGRAM_ARGS_.imageIndex]=String(imageIndex);
+	inputs[PROGRAM_ARGS_.forceSize]="Default";
+	if(phase==="flash"){
+		// one macro call: erase+write, read back, and only then program (the macro
+		// throws before programming if the read-back does not match)
+		inputs[PROGRAM_ARGS_.bitfile]=bitfile;
+		inputs[PROGRAM_ARGS_.write]="true";
+		inputs[PROGRAM_ARGS_.verify]="true";
+		inputs[PROGRAM_ARGS_.program]="true";
+	}else{
+		inputs[PROGRAM_ARGS_.bitfile]="Default";
+		inputs[PROGRAM_ARGS_.write]="false";
+		inputs[PROGRAM_ARGS_.verify]="false";
+		inputs[PROGRAM_ARGS_.program]="true";
+	}
+	var post="inputArgs=";var first=true;
+	for(var name in PROGRAM_ARGS_){var a=PROGRAM_ARGS_[name];
+		post+=(first?"":";")+encodeURIComponent(a)+","+encodeURIComponent(inputs[a]);first=false;}
+	post+="&outputArgs=Result";
+
+	fwJobs_[dtc]={phase:phase,links:links,state:"running",percent:0,msg:"launching",notDoneID:0,
+		startedAt:Date.now(),bitfile:bitfile,imageIndex:imageIndex,mapPath:mapPath,writeMap:writeMap,verifyMap:verifyMap};
+	saveFlashState(); renderROC();
+	log(dtc+": "+phase+" started on link "+links.join(",")+" (mask "+inputs[PROGRAM_ARGS_.target]+")");
+	appendFlashHistory("START",dtc,fwJobs_[dtc],"mask="+inputs[PROGRAM_ARGS_.target]);
+
+	var s=DesktopContent._localUrnLid; DesktopContent._localUrnLid=MACRO_MAKER_APP_ID_;
+	DesktopContent.XMLHttpRequest("Request?RequestType=runFEMacro&feClassSelected="+encodeURIComponent(info.feClass)+
+		"&feUIDSelected="+encodeURIComponent(dtc)+"&macroType=fe&macroName="+encodeURIComponent(PROGRAM_MACRO_)+"&saveOutputs=0",
+		post,function(r,rp,e){handleFlashResponse(dtc,r,e);},0,0,true,true);
+	DesktopContent._localUrnLid=s;
+}
+
+function pollFlashJob(dtc){
+	var j=fwJobs_[dtc]; if(!j||j.state!=="running")return;
+	if(!MACRO_MAKER_APP_ID_){setTimeout(function(){pollFlashJob(dtc);},FW_POLL_MS_);return;}
+	if(!j.notDoneID){ // resumed after reload before we ever got an ID: nothing to poll
+		j.state="stale"; j.msg="page reloaded before job ID was known; check MacroMaker / messages";
+		saveFlashState(); renderROC(); return;}
+	var s=DesktopContent._localUrnLid; DesktopContent._localUrnLid=MACRO_MAKER_APP_ID_;
+	DesktopContent.XMLHttpRequest("Request?RequestType=runFEMacro&NotDoneID="+j.notDoneID,"",
+		function(r,rp,e){handleFlashResponse(dtc,r,e);},0,0,true,true);
+	DesktopContent._localUrnLid=s;
+}
+
+function handleFlashResponse(dtc,r,errStr){
+	var j=fwJobs_[dtc]; if(!j)return;
+	var err=errStr||(r&&DesktopContent.getXMLValue(r,"Error"));
+	if(err){
+		// a "not found" after reload means the server already finished and forgot the job
+		if(j.resumed&&/not found|invalid ID|more than 5 minutes/i.test(err)){
+			j.state="stale"; j.msg="finished while page was closed; result unknown, run Refresh Inventory";
+		}else{
+			var full=String(err).replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&amp;/g,"&");
+			// keep the last, innermost line: the outer wrappers are MacroMaker/FESupervisor boilerplate
+			var lines=full.split(/\s*\|\s*(?=[A-Za-z]+:)/).map(function(s){return s.trim();}).filter(Boolean);
+			j.state="failed"; j.msg=(lines[lines.length-1]||full).replace(/\s+/g," ").slice(0,600); j.fullError=full.slice(0,6000);
+		}
+		j.finishedAt=Date.now();
+		saveFlashState(); renderROC(); log(dtc+": "+j.phase+" FAILED: "+j.msg);
+		appendFlashHistory(j.state==="stale"?"STALE":"FAIL",dtc,j,j.msg);
+		if(j.fullError)showFlashMessage(dtc+": "+j.phase+" failed",["<pre style='white-space:pre-wrap;font-size:12px;margin:0'>"+esc(j.fullError)+"</pre>"]);
+		return;
+	}
+	var notDoneID=DesktopContent.getXMLValue(r,"NotDoneID");
+	if(notDoneID){
+		j.notDoneID=notDoneID;
+		var prog=DesktopContent.getXMLChildren(r,"feMacroProgress");
+		if(prog&&prog.length)for(var p=0;p<prog.length;++p)if(prog[p].getAttribute("value")===dtc){
+			var pct=parseInt(DesktopContent.getXMLValue(prog[p],"progress"));if(!isNaN(pct))j.percent=pct;}
+		j.msg=flashStageLabel(j);
+		saveFlashState(); renderROC();
+		setTimeout(function(){pollFlashJob(dtc);},FW_POLL_MS_);
+		return;
+	}
+	// done
+	var result="";
+	var fe=r.responseXML.getElementsByTagName("feMacroExec");
+	var scope=fe.length?fe:[r.responseXML];
+	for(var f=0;f<scope.length;++f){var n=scope[f].getElementsByTagName("outputArgs_name"),v=scope[f].getElementsByTagName("outputArgs_value");
+		for(var i=0;i<n.length;++i)if(n[i].getAttribute("value")==="Result"){try{result=decodeURIComponent(v[i].getAttribute("value"));}catch(x){result=v[i].getAttribute("value");}}}
+	j.percent=100; j.state="done"; j.msg="programmed";
+	j.finishedAt=Date.now(); j.result=result.slice(0,2000);
+	saveFlashState(); renderROC();
+	log(dtc+": "+j.phase+" DONE in "+Math.round((j.finishedAt-j.startedAt)/1000)+"s on link "+j.links.join(",")+" - run Refresh Inventory to confirm the new firmware version.");
+	appendFlashHistory("DONE",dtc,j,(result||"").replace(/\s+/g," ").slice(0,300));
+}
+function flashStageLabel(j){
+	if(j.phase==="program")return "programming";
+	var p=j.percent; if(p<10)return "erasing"; if(p<80)return "writing"; if(p<90)return "verifying"; return "programming";
+}
+function clearFlashJob(dtc){var j=fwJobs_[dtc];if(!j||j.state==="running")return;delete fwJobs_[dtc];saveFlashState();renderROC();}
+function clearFinishedJobs(){for(var d in fwJobs_)if(fwJobs_[d].state!=="running")delete fwJobs_[d];saveFlashState();renderROC();}
+function selFailedJobs(){rocSel_={};
+	for(var d in fwJobs_){var j=fwJobs_[d];if(j.state!=="failed"&&j.state!=="stale")continue;
+		for(var l=0;l<j.links.length;++l)rocSel_[d+":"+j.links[l]]=true;}
+	renderROC();}
+function flashCell(r){
+	var k=rk(r), j=fwJobs_[r.target];
+	if(j&&j.links.indexOf(r.link)>=0){
+		var cls=j.state==="done"?"ok":j.state==="failed"?"bad":j.state==="stale"?"stale":"";
+		var txt=j.state==="running"?(j.msg+" "+j.percent+"%"):j.state==="done"?"programmed":j.state;
+		var tip=esc(j.phase+" | "+j.msg+(j.result?" | "+j.result:""));
+		var clr=j.state!=="running"?' <span style="cursor:pointer;color:var(--c-text-dim)" title="dismiss" onclick="event.stopPropagation();clearFlashJob(\''+ea(r.target)+'\')">&#10005;</span>':"";
+		return '<td onclick="event.stopPropagation()" title="'+tip+'"><div class="fwbar '+cls+'"><i style="width:'+j.percent+'%"></i><span>'+esc(txt)+'</span></div>'+clr+'</td>';
+	}
+	return '<td style="color:var(--c-text-dim)">-</td>';
+}
+function updateFlashBar(){
+	var running=0;for(var d in fwJobs_)if(fwJobs_[d].state==="running")running++;
+	var el=document.getElementById("flashRunning");
+	el.innerHTML=running?'<span class="fwchip locked">'+running+' flash job(s) running</span>':"";
+	var programOnly=document.getElementById("flashPhase").value==="program";
+	document.getElementById("flashBtn").textContent=programOnly?"Program Selected ROCs (no write)":"Flash Selected ROCs";
+	document.getElementById("flashBtn").className="danger";
+}
+
+function exportInventoryCSV(){
+	if(!rocRows_.length){log("Nothing to export — run Refresh first.");return;}
+	var lines=["DTC,Link,BoardID,FW_Date,FW_Time"];
+	for(var i=0;i<rocRows_.length;++i){
+		var r=rocRows_[i];
+		if(!rocVis(r))continue;
+		lines.push([r.target,r.link,r.boardId>=0?r.boardId:"",r.fwDate||"",r.fwTime||""].join(","));
+	}
+	var blob=new Blob([lines.join("\n")+"\n"],{type:"text/csv"});
+	var a=document.createElement("a");
+	a.href=URL.createObjectURL(blob);
+	var ts=new Date();
+	a.download="firmware_inventory_"+ts.getFullYear()+p2(ts.getMonth()+1)+p2(ts.getDate())+"_"+p2(ts.getHours())+p2(ts.getMinutes())+".csv";
+	a.click();
+	URL.revokeObjectURL(a.href);
+	log("Exported "+lines.length+" rows (incl. header).");
+}
 
 // ── Filters ─────────────────────────────────────────────
 function rocVis(r){var tf=document.getElementById("dtcFilter").value,sf=document.getElementById("stFilter").value,
@@ -654,6 +1120,8 @@ var h='<option value="">All DTCs ('+ks.length+')</option>';for(var i=0;i<ks.leng
 function renderExpected(){
 	// ROC expected
 	var re=tabFwCfg_.roc.expected, b=[];
+	if(re.fileName)b.push(re.fileName);
+	if(re.fwDateHi!==undefined&&re.fwDateLo!==undefined)b.push("build "+fmtD(re.fwDateHi,re.fwDateLo));
 	if(re.project!==undefined)b.push("proj "+hx(re.project));if(re.fwGit!==undefined)b.push("SHA "+hx(re.fwGit));
 	if(re.fwVersion!==undefined)b.push("ver "+fmtV(re.fwVersion));if(re.swHash!==undefined)b.push("SW "+hx(re.swHash));
 	document.getElementById("rocExpLine").innerHTML=b.length?b.join(" &middot; "):'<span style="color:var(--c-text-dim)">None</span>';
@@ -675,8 +1143,8 @@ function extractYearMonth(name) {
 	// DTC pattern: DTC{YYYY}{Mon}{DD}_...
 	var m = name.match(/^DTC(\d{4})([A-Za-z]{3})/);
 	if(m) return { year: m[1], month: m[2] };
-	// ROC pattern: ROC{YYYYMMDD}... or CaloROC_{YYYYMMDD}_...
-	m = name.match(/^(?:CaloROC_|ROC)(\d{4})(\d{2})/);
+	// ROC pattern: ROC-{YYYYMMDD}-{MAJ}-{MIN}.spi, ROC{YYYYMMDD}... or CaloROC_{YYYYMMDD}_...
+	m = name.match(/^(?:CaloROC_|ROC-?)(\d{4})(\d{2})/);
 	if(m) {
 		var monNames = ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
 		return { year: m[1], month: monNames[parseInt(m[2])] || m[2] };
@@ -728,7 +1196,11 @@ function filterFwDropdown(tab) {
 
 	var sel = document.getElementById(cfg.selId);
 	var h='<option value="">-- select firmware ('+filtered.length+'/'+items.length+') --</option>';
-	for(var j=0;j<filtered.length;++j)h+='<option value="'+esc(filtered[j])+'">'+esc(filtered[j])+'</option>';
+	if(tab==="roc")filtered.sort(function(a,b){var pa=parseROCFileName(a),pb=parseROCFileName(b);
+		if(pa&&pb){var da=pa.year*10000+pa.month*100+pa.day,db=pb.year*10000+pb.month*100+pb.day;
+			if(da!==db)return db-da; if(pa.major!==pb.major)return pb.major-pa.major; return pb.minor-pa.minor;}
+		if(pa)return -1; if(pb)return 1; return nc(b,a);});
+	for(var j=0;j<filtered.length;++j)h+='<option value="'+esc(filtered[j])+'">'+esc(tab==="roc"?rocFwOptionLabel(filtered[j]):filtered[j])+'</option>';
 	if(!filtered.length)h='<option value="">-- none match --</option>';
 	sel.innerHTML=h;
 
@@ -770,6 +1242,7 @@ function nc(a,b){return String(a).localeCompare(String(b),undefined,{numeric:tru
 		<div class="status-pill"><div class="dot" id="busyDot"></div><span id="busyLabel">ready</span></div>
 		<span style="font-size:13px;color:var(--c-text-dim);">Progress: <b id="progressText">--</b></span>
 		<button id="refreshBtn" class="primary" onclick="refreshInventory()" style="width:auto;padding:0 24px;">Refresh Inventory</button>
+		<button onclick="retryMissing()" title="Query again only the DTCs that failed or timed out on the last refresh">Retry Missing</button>
 	</div>
 
 	<!-- ═══ Global Controls ═══ -->
@@ -862,14 +1335,49 @@ function nc(a,b){return String(a).localeCompare(String(b),undefined,{numeric:tru
 				<button onclick="rocSelSt('MISMATCH')">Sel Mismatch</button>
 				<button onclick="rocSelSt('TIMEOUT')">Sel Timeout</button>
 				<div class="sep"></div>
-				<button class="danger" onclick="flashROC()">Flash Selected ROCs</button>
+				<button onclick="exportInventoryCSV()">Export CSV</button>
 				<div class="info"><span id="rocExpLine" style="font-size:12px;color:var(--c-text-dim);">None</span></div>
+			</div>
+			<div class="action-bar flash-bar" style="flex-wrap:wrap;">
+				<div class="field-group" style="width:150px;">
+					<label>Bitfile in release</label>
+					<input id="rocBitfileName" type="text" placeholder="roc.spi" title="File name inside the selected release folder (ignored if the selection is itself a .spi/.bit file)" style="height:30px;font-size:13px;" onchange="localStorage.setItem('FWMgr.rocBitfileName',this.value)">
+				</div>
+				<div class="field-group" style="width:260px;">
+					<label>Directory map file (required)</label>
+					<input id="rocMapPath" type="text" placeholder="/home/mu2eshift/ots_calo/Calo_ROC_Firmware/flash_map.txt" title="One 32-bit hex SPI address per line, one line per image index (0x10000 golden, 0x1010000 operational, 0x5000000). Always verified against the ROC flash before anything else." style="height:30px;font-size:13px;" onchange="localStorage.setItem('FWMgr.rocMapPath',this.value)">
+				</div>
+				<div class="field-group" style="width:190px;">
+					<label>Flash directory</label>
+					<select id="rocMapMode" title="lookup: only use the file to find the SPI address of the image index (programming is by address, the on-flash directory is not needed). verify: also require the ROC flash at address 0 to match the file (fails on ROCs whose directory was never written, reads 0xffffffff). write: rewrite the directory at address 0 from the file." style="height:30px;font-size:13px;" onchange="localStorage.setItem('FWMgr.rocMapMode',this.value)">
+						<option value="lookup">lookup only (default)</option>
+						<option value="verify">verify against flash</option>
+						<option value="write">write to flash + verify</option>
+					</select>
+				</div>
+				<div class="field-group" style="width:70px;">
+					<label>Image idx</label>
+					<input id="rocImageIndex" type="number" min="0" max="15" value="1" title="0 = golden (0x10000), 1 = operational (0x1010000), 2 = 0x5000000" style="height:30px;font-size:13px;" onchange="localStorage.setItem('FWMgr.rocImageIndex',this.value)">
+				</div>
+				<div class="field-group" style="width:230px;">
+					<label>Action</label>
+					<select id="flashPhase" onchange="updateFlashBar()" title="flash: write + read back + reboot in one go (reboot only if read-back matches). program only: reboot from the image already in flash, nothing written." style="height:30px;font-size:13px;">
+						<option value="flash">Write + verify + program</option>
+						<option value="program">Program only (image already in flash)</option>
+					</select>
+				</div>
+				<button id="flashBtn" class="danger" onclick="flashROC()">Flash Selected ROCs</button>
+				<div class="sep"></div>
+				<button onclick="selFailedJobs()">Sel Failed</button>
+				<button onclick="clearFinishedJobs()">Clear Finished</button>
+				<button onclick="showFlashHistory()" title="Persistent log of every flash start/done/fail, on the shared disk">History</button>
+				<div class="info" id="flashRunning"></div>
 			</div>
 			<div class="summary-bar" id="rocInfo"></div>
 			<div class="table-scroll">
 				<table>
-					<thead><tr><th>Sel</th><th>DTC</th><th>ROC</th><th>Board ID</th><th>Board UID</th><th>Status</th><th>Match</th><th>Project</th><th>FW SHA</th><th>FW Date</th><th>FW Time</th><th>FW Ver</th><th>SW Hash</th><th>SW Date</th></tr></thead>
-					<tbody id="rocTb"><tr><td colspan="14" style="padding:24px;color:var(--c-text-dim);text-align:center;">No ROC data yet. Press <b>Refresh Inventory</b>.</td></tr></tbody>
+					<thead id="rocTable"><tr><th>Sel</th><th class="sortable" data-sort="dtc" onclick="sortROC('dtc')">DTC</th><th class="sortable" data-sort="link" onclick="sortROC('link')">ROC</th><th class="sortable" data-sort="boardId" onclick="sortROC('boardId')">Board ID</th><th>Board UID</th><th class="sortable" data-sort="status" onclick="sortROC('status')">Status</th><th>Flash</th><th>Match</th><th>Project</th><th>FW SHA</th><th class="sortable" data-sort="fwDate" onclick="sortROC('fwDate')">FW Date</th><th>FW Time</th><th class="sortable" data-sort="fwVersion" onclick="sortROC('fwVersion')">FW Ver</th><th>SW Hash</th><th>SW Date</th></tr></thead>
+					<tbody id="rocTb"><tr><td colspan="15" style="padding:24px;color:var(--c-text-dim);text-align:center;">No ROC data yet. Press <b>Refresh Inventory</b>.</td></tr></tbody>
 				</table>
 			</div>
 		</div>
@@ -877,6 +1385,22 @@ function nc(a,b){return String(a).localeCompare(String(b),undefined,{numeric:tru
 
 	<!-- ═══ Log ═══ -->
 	<div id="log" class="log-panel"></div>
+</div>
+
+<!-- ═══ Flash confirm dialog ═══ -->
+<div id="fcBg" class="modal-backdrop" onclick="closeFlashConfirm()">
+	<div class="modal" onclick="event.stopPropagation()">
+		<div class="modal-header">
+			<h3 id="fcTitle">Confirm</h3>
+			<button class="close-x" onclick="closeFlashConfirm()">&#10005;</button>
+		</div>
+		<div class="modal-body"><div id="fcBody"></div></div>
+		<div class="modal-footer">
+			<button onclick="closeFlashConfirm()">Cancel</button>
+			<div class="spacer"></div>
+			<button id="fcOk" class="danger">OK</button>
+		</div>
+	</div>
 </div>
 
 <!-- ═══ Modal ═══ -->
