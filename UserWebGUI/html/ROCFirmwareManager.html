@@ -847,10 +847,13 @@ function flashModal(){
 function flashDTC(){showFlashMessage("DTC flashing not available",["Flashing DTC firmware from this page is not implemented yet. Use the Vivado scripts in otsdaq-mu2e/tools (program_flash_*.sh)."]);}
 
 // ── ROC flashing (Program ROCs macro) ───────────────────
-// "flash": one macro call does erase + write + read-back verify, and programs the FPGA
-// only if the read-back matched (the macro throws before the program step otherwise,
-// leaving the ROC on its current firmware). "program": reboot from the image already in
-// the flash slot, nothing written.
+// "flash": one macro call does erase + write and then programs the FPGA. The write is
+// already checked by the ROC itself (each 128-byte chunk is read back and compared on
+// the board; a mismatch aborts the macro before the program step). The separate
+// software read-back verify is NOT requested: it re-reads the whole image with a
+// zero-timeout DCS block read that fails when two DTCs on the same node verify at the
+// same time ("ROC block read failed ... read 0 words", 2026-10-12). "program": reboot
+// from the image already in the flash slot, nothing written.
 function loadFlashState(){
 	try{fwJobs_=JSON.parse(localStorage.getItem(FW_JOBS_KEY_)||"{}")||{};}catch(e){fwJobs_={};}
 	var resumed=0;
@@ -958,7 +961,7 @@ function flashROC(){
 	if(phase==="program"){
 		body+='<div class="fc-warn">PROGRAM ONLY &mdash; no write. The ROCs below <b>reboot</b> from whatever is already in SPI image '+imageIndex+'. Use this only if that slot was written and verified before (e.g. after a STALE job).</div>';
 	}else{
-		body+='<div class="fc-info">FLASH &mdash; the bitfile is erased, written and read back in SPI slot '+imageIndex+' (~15 min per DTC, DTCs in parallel). The ROCs keep running meanwhile. <b>Only if the read-back matches</b>, the FPGA is told to reboot from the new image; if anything fails before that, the ROC keeps its current firmware.</div>';
+		body+='<div class="fc-info">FLASH &mdash; the bitfile is erased and written in SPI slot '+imageIndex+' (~12 min per DTC, DTCs in parallel). The ROCs keep running meanwhile. Each 128-byte chunk is read back and checked <b>on the ROC</b> as it is written; only if every chunk matches, the FPGA is told to reboot from the new image. If anything fails before that, the ROC keeps its current firmware.</div>';
 		body+='<div class="fc-warn" style="margin-top:8px;">At the end the ROCs below will <b>reboot</b> and go offline for a short while.</div>';
 	}
 	body+='<div class="fc-grid">';
@@ -997,11 +1000,11 @@ function startFlashJob(dtc,links,phase,bitfile,imageIndex,mapPath,writeMap,verif
 	inputs[PROGRAM_ARGS_.imageIndex]=String(imageIndex);
 	inputs[PROGRAM_ARGS_.forceSize]="Default";
 	if(phase==="flash"){
-		// one macro call: erase+write, read back, and only then program (the macro
-		// throws before programming if the read-back does not match)
+		// one macro call: erase+write (checked chunk by chunk on the ROC), then program.
+		// No software read-back verify, see the note above flashROC().
 		inputs[PROGRAM_ARGS_.bitfile]=bitfile;
 		inputs[PROGRAM_ARGS_.write]="true";
-		inputs[PROGRAM_ARGS_.verify]="true";
+		inputs[PROGRAM_ARGS_.verify]="false";
 		inputs[PROGRAM_ARGS_.program]="true";
 	}else{
 		inputs[PROGRAM_ARGS_.bitfile]="Default";
@@ -1083,7 +1086,8 @@ function handleFlashResponse(dtc,r,errStr){
 }
 function flashStageLabel(j){
 	if(j.phase==="program")return "programming";
-	var p=j.percent; if(p<10)return "erasing"; if(p<80)return "writing"; if(p<90)return "verifying"; return "programming";
+	// macro percent: erase 0-10, write 10-80, then (verify skipped) program at 90
+	var p=j.percent; if(p<10)return "erasing"; if(p<90)return "writing"; return "programming";
 }
 function clearFlashJob(dtc){var j=fwJobs_[dtc];if(!j||j.state==="running")return;delete fwJobs_[dtc];saveFlashState();renderROC();}
 function clearFinishedJobs(){for(var d in fwJobs_)if(fwJobs_[d].state!=="running")delete fwJobs_[d];saveFlashState();renderROC();}
@@ -1383,8 +1387,8 @@ function nc(a,b){return String(a).localeCompare(String(b),undefined,{numeric:tru
 				</div>
 				<div class="field-group" style="width:230px;">
 					<label>Action</label>
-					<select id="flashPhase" onchange="updateFlashBar()" title="flash: write + read back + reboot in one go (reboot only if read-back matches). program only: reboot from the image already in flash, nothing written." style="height:30px;font-size:13px;">
-						<option value="flash">Write + verify + program</option>
+					<select id="flashPhase" onchange="updateFlashBar()" title="flash: write (checked chunk by chunk on the ROC) + reboot in one go. program only: reboot from the image already in flash, nothing written." style="height:30px;font-size:13px;">
+						<option value="flash">Write + program</option>
 						<option value="program">Program only (image already in flash)</option>
 					</select>
 				</div>
