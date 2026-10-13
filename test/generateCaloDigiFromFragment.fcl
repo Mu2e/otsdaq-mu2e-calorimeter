@@ -62,7 +62,6 @@ physics : {
       module_type : CaloHitsFromDTCEvents
       dataType : 0
       diagLevel : 1
-      digiSampling : 5
       deltaTPulses : 6
       nPEperMeV : 16
       noiseLevelMeV : 2
