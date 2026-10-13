@@ -72,8 +72,8 @@ bool mu2e::CaloLaserFilter::filter(art::Event& event) {
 	if(!fragments.empty()) {
 		++eventsWithDtcevt_;
 	}
-	uint laser_hits = 0;
-    bool found_laser = false;
+	uint laser_hits  = 0;
+	bool found_laser = false;
 	for(const auto& frag : fragments) {
 		mu2e::DTCEventFragment eventFragment(frag);
 		const auto&            caloSubEvents = eventFragment.getSubsystemData(DTCLib::DTC_Subsystem::DTC_Subsystem_Calorimeter);
@@ -85,17 +85,19 @@ bool mu2e::CaloLaserFilter::filter(art::Event& event) {
 			for(size_t iROC = 0; iROC < caloDecoder.block_count(); iROC++) {
 				auto calHitTestDataVec = caloDecoder.GetCalorimeterHitsForTrigger(iROC);
 
-                if (calHitTestDataVec->size() > 0) {
-                    if (calHitTestDataVec->at(0).first.BoardID == mu2e::CaloConst::_laserBoardId) {
-                        laser_hits = calHitTestDataVec->size();
-                        found_laser = true;
-                        break;
-                    }
-                }
+				if(calHitTestDataVec->size() > 0) {
+					if(calHitTestDataVec->at(0).first.BoardID == mu2e::CaloConst::_laserBoardId) {
+						laser_hits  = calHitTestDataVec->size();
+						found_laser = true;
+						break;
+					}
+				}
 			}
-            if (found_laser) break;
+			if(found_laser)
+				break;
 		}
-        if (found_laser) break;
+		if(found_laser)
+			break;
 	}
 
 	bool pass = false;
