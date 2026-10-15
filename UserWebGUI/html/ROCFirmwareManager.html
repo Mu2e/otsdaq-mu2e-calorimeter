@@ -504,9 +504,11 @@ function parseDTCDirName(name) {
 
 	return o;
 }
+// CodeEditor wants the extension in its own "ext" argument, not in the path
 function readFile(fp,cb){if(!CODE_EDITOR_APP_ID_){cb(null,"na");return;}var s=DesktopContent._localUrnLid;DesktopContent._localUrnLid=CODE_EDITOR_APP_ID_;
-DesktopContent.XMLHttpRequest("Request?RequestType=readOnlycodeEditor&option=getFileContent&path="+encodeURIComponent(fp),"",
-function(r,rp,e){if(e||!r){cb(null,e||"fail");return;}cb(DesktopContent.getXMLValue(r,"text"),"");},0,0,true);DesktopContent._localUrnLid=s;}
+var m=String(fp).match(/^(.*)\.([A-Za-z]+)$/),path=m?m[1]:fp,ext=m?m[2]:"";
+DesktopContent.XMLHttpRequest("Request?RequestType=readOnlycodeEditor&option=getFileContent&path="+encodeURIComponent(path)+"&ext="+encodeURIComponent(ext),"",
+function(r,rp,e){if(e||!r){cb(null,e||"fail");return;}cb(DesktopContent.getXMLValue(r,"text")||"","");},0,0,true);DesktopContent._localUrnLid=s;}
 // ROC-YYYYMMDD-MAJ-MIN.spi  ->  build date (BCD, as the ROC registers report it) + version
 function parseROCFileName(name){
 	var m=String(name).match(/^ROC-(\d{4})(\d{2})(\d{2})-(\d+)-(\d+)\.(spi|bit)$/i);
@@ -869,7 +871,8 @@ function saveFlashState(){
 // $USER_DATA/ServiceData/ROCFirmwareFlash/flash_history.txt via the CodeEditor
 // supervisor: read, append, write back. Appends are serialized through a queue
 // because the CodeEditor has no append and parallel DTC jobs finish together.
-var FLASH_HISTORY_PATH_="$USER_DATA/ServiceData/ROCFirmwareFlash/flash_history";
+// leading "/" required: CodeEditor saveFileContent only maps "/$USER_DATA/..."
+var FLASH_HISTORY_PATH_="/$USER_DATA/ServiceData/ROCFirmwareFlash/flash_history";
 var FLASH_HISTORY_EXT_="txt";
 var flashHistoryQueue_=[], flashHistoryBusy_=false;
 function nowStamp(){var t=new Date();return t.getFullYear()+"-"+p2(t.getMonth()+1)+"-"+p2(t.getDate())+" "+p2(t.getHours())+":"+p2(t.getMinutes())+":"+p2(t.getSeconds());}
@@ -885,7 +888,7 @@ function appendFlashHistory(event,dtc,j,extra){
 }
 function showFlashHistory(){
 	readFile(FLASH_HISTORY_PATH_+"."+FLASH_HISTORY_EXT_,function(t,e){
-		var path=FLASH_HISTORY_PATH_.replace("$USER_DATA","Data_calo")+"."+FLASH_HISTORY_EXT_;
+		var path=FLASH_HISTORY_PATH_.replace(/^\/?\$USER_DATA/,"Data_calo")+"."+FLASH_HISTORY_EXT_;
 		if(e||t===null){showFlashMessage("Flash history",["Cannot read "+esc(path)+": "+esc(e||"empty")]);return;}
 		var lines=t.split("\n").filter(Boolean).reverse().slice(0,200);
 		var html='<div class="dim" style="font-size:12px;margin-bottom:8px;">'+esc(path)+' &mdash; newest first, '+lines.length+' shown</div>';
@@ -898,23 +901,27 @@ function flushFlashHistory(){
 	if(!CODE_EDITOR_APP_ID_){log("flash history not written (CodeEditor supervisor not found): "+flashHistoryQueue_.join(" | "));flashHistoryQueue_=[];return;}
 	flashHistoryBusy_=true;
 	var batch=flashHistoryQueue_.splice(0,flashHistoryQueue_.length);
-	var s=DesktopContent._localUrnLid; DesktopContent._localUrnLid=CODE_EDITOR_APP_ID_;
-	DesktopContent.XMLHttpRequest("Request?RequestType=codeEditor&option=getFileContent&path="+encodeURIComponent(FLASH_HISTORY_PATH_+"."+FLASH_HISTORY_EXT_),"",
-		function(r,rp,e){
-			var old=(e||!r)?"":(DesktopContent.getXMLValue(r,"text")||"");
-			if(old.length&&old[old.length-1]!=="\n")old+="\n";
-			var content=old+batch.join("\n")+"\n";
-			var s2=DesktopContent._localUrnLid; DesktopContent._localUrnLid=CODE_EDITOR_APP_ID_;
-			DesktopContent.XMLHttpRequest("Request?RequestType=codeEditor&option=saveFileContent&path="+encodeURIComponent(FLASH_HISTORY_PATH_)+"&ext="+FLASH_HISTORY_EXT_,
-				"content="+encodeURIComponent(content),
-				function(r2,rp2,e2){
-					flashHistoryBusy_=false;
-					if(e2){log("flash history write FAILED: "+e2+" | "+batch.join(" | "));}
-					flushFlashHistory();
-				},0,0,true,true);
-			DesktopContent._localUrnLid=s2;
-		},0,0,true,true);
-	DesktopContent._localUrnLid=s;
+	readFile(FLASH_HISTORY_PATH_+"."+FLASH_HISTORY_EXT_,function(old,e){
+		// a missing file is created; any other read error must not overwrite the history
+		if(e&&!/Could not open file/i.test(e)){
+			flashHistoryBusy_=false;
+			log("flash history read FAILED, not written: "+e+" | "+batch.join(" | "));
+			flushFlashHistory();
+			return;
+		}
+		old=e?"":(old||"");
+		if(old.length&&old[old.length-1]!=="\n")old+="\n";
+		var content=old+batch.join("\n")+"\n";
+		var s=DesktopContent._localUrnLid; DesktopContent._localUrnLid=CODE_EDITOR_APP_ID_;
+		DesktopContent.XMLHttpRequest("Request?RequestType=codeEditor&option=saveFileContent&path="+encodeURIComponent(FLASH_HISTORY_PATH_)+"&ext="+FLASH_HISTORY_EXT_,
+			"content="+encodeURIComponent(content),
+			function(r2,rp2,e2){
+				flashHistoryBusy_=false;
+				if(e2){log("flash history write FAILED: "+e2+" | "+batch.join(" | "));}
+				flushFlashHistory();
+			},0,0,true,true);
+		DesktopContent._localUrnLid=s;
+	});
 }
 function selectedBitfilePath(){
 	var sel=document.getElementById("rocFwSel").value; if(!sel)return "";
