@@ -1249,7 +1249,8 @@ void ROCCalorimeterInterface::configure(void) try {
 	__COUT_INFO__ << "Configuration correct! :)" << __E__;
 
 	updateBoardIdFromSerial_();
-
+    
+	
 	std::stringstream dbLoadStatus;
 	if(!loadVoltagesFromDB_(dbLoadStatus)) {
 		__FE_SS__ << dbLoadStatus.str() << __E__;
@@ -1269,6 +1270,8 @@ void ROCCalorimeterInterface::configure(void) try {
 	CalibrateMZB();
 	// Set DIRAC thresholds with offset
 	SetADCsThresholds(0);
+	// Channel type (SensorType of the voltages table) into the DET field of the hits
+	SetChannelTypes();
 	// Set SiPM voltages (four times to be sure)
 	//  TODO to be upgraded with a set-and-verify loop
 	SetBoardVoltages(true);
@@ -1278,6 +1281,8 @@ void ROCCalorimeterInterface::configure(void) try {
 
 	writeRegister(ROC_ADDRESS_MASK_A, 1023);
 	writeRegister(ROC_ADDRESS_MASK_B, 1023);
+
+    
 
 	// Turn off busy
 	// writeRegister(ROC_ADDRESS_MZB_BUSY, 1);
@@ -1798,6 +1803,38 @@ void ROCCalorimeterInterface::SetADCsThresholds(int offset) {
 // void ROCCalorimeterInterface::ReadVoltagesFromDB(__ARGS__) {
 //	ReadVoltagesFromDB();
 // }
+
+//==================================================================================================
+
+void ROCCalorimeterInterface::SetChannelTypes() {
+	if(!boardConfig_.voltagesLoaded) {
+		__COUT_ERR__ << "Skipping channel types: sensor types not loaded (loadVoltagesFromDB_)" << __E__;
+		return;
+	}
+
+	uint16_t reg[3] = {0, 0, 0};
+	for(int ichan = 0; ichan < 20; ++ichan) {
+		const std::string& type = boardConfig_.channels[ichan].sensorType;
+		uint16_t           code = 0;
+		if(type == "CAL")
+			code = 0;
+		else if(type == "CAPHRI")
+			code = 1;
+		else if(type == "PIN-DIODE")
+			code = 2;
+		else if(type == "EMPTY")
+			code = 3;
+		else
+			__COUT_ERR__ << "Board " << boardConfig_.boardID << " ch " << ichan << ": unknown sensor type '" << type << "', DET written as CAL (0)" << __E__;
+		reg[ichan / 8] |= static_cast<uint16_t>(code << (2 * (ichan % 8)));
+	}
+
+	writeRegister(ROC_ADDRESS_CHTYPE_0, reg[0]);
+	writeRegister(ROC_ADDRESS_CHTYPE_1, reg[1]);
+	writeRegister(ROC_ADDRESS_CHTYPE_2, reg[2]);
+	__COUT_INFO__ << "Board " << boardConfig_.boardID << " channel types written: 0x" << std::hex << reg[0] << " 0x" << reg[1] << " 0x" << reg[2]
+	              << std::dec << __E__;
+}  // end SetChannelTypes()
 
 bool ROCCalorimeterInterface::isPinDiodeChannel_(int ch) const {
 	if(ch < 0 || ch >= 20)
