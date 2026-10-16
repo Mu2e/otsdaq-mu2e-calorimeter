@@ -305,19 +305,23 @@ var rocSortCol_="default", rocSortAsc_=true;
 var FW_JOBS_KEY_="FWMgr.flashJobs";
 var FW_POLL_MS_=3000;
 var fwJobs_={};      // dtcUID -> {phase,links,state,percent,msg,notDoneID,startedAt,bitfile,imageIndex}
-var PROGRAM_MACRO_="Program ROCs";
+// "Program ROCs Safe" (otsdaq-mu2e DTCFrontEndInterface, 2026-10-15): segmented upload, every segment
+// verified against the file and retried, IAP only of a fully verified image, directory never touched,
+// slow controls of the DTC paused while it runs. Works with the older MiV (read-back) and the
+// solid-programming MiV (CRC, completion tags, authentication before the IAP).
+var PROGRAM_MACRO_="Program ROCs Safe";
 var PROGRAM_ARGS_={
 	target:"Target ROC or Mask (Default = -1 := all ROCs, or 0x111111 := all)",
-	mapPath:"Path to Directory map file (Default := do not use)",
-	writeMap:"Write Directory map to SPI Flash (Default := false)",
-	verifyMap:"Verify Directory map (Default := false)",
-	imageIndex:"Image Index (Default := 0)",
-	bitfile:"Path to Bitfile (Default := do not write bitfile, only program from Image Index)",
-	write:"Write Bitfile to SPI Flash (Default := false)",
-	forceSize:"For Debug, force Write size (Default := do not force)",
-	verify:"Verify with Bitfile Readback (Default := false)",
-	program:"Do program from Image Index (Default := false)"
+	bitfile:"Path to SPI image file (.spi)",
+	sha:"Expected SHA-256 of the SPI image (Default := read the .sha256 file next to the image)",
+	address:"SPI flash start address (Default := 0x1010000)",
+	write:"Write the image to the SPI flash (Default := true; false = only verify the flash against the file)",
+	program:"Program the FPGA after a verified upload (Default := false)",
+	version:"Expected firmware version after programming, e.g. 0x0108 (Default := 0, do not check)",
+	quiet:"Seconds to wait after pausing slow controls (Default := 5)"
 };
+// image index -> SPI address (flash_map.txt); index 0 is the golden image and is never written from here
+var IMAGE_ADDR_={1:0x1010000,2:0x5000000};
 var fwItemsCache_ = { dtc: [], roc: [] };  // cached full list of firmware entries per tab
 
 // ── Init ────────────────────────────────────────────────
@@ -333,11 +337,8 @@ function init() {
 		document.getElementById(cfg.dirId).value = savedDir || cfg.defaultDir;
 	}
 	document.getElementById("rocBitfileName").value=localStorage.getItem("FWMgr.rocBitfileName")||"";
-	document.getElementById("rocImageIndex").value=localStorage.getItem("FWMgr.rocImageIndex")||"1";
-	var savedMap=localStorage.getItem("FWMgr.rocMapPath");
-	if(savedMap&&/^\/Calo_ROC_Firmware\//.test(savedMap))savedMap="";
-	document.getElementById("rocMapPath").value=savedMap||(tabFwCfg_.roc.defaultDir+"/flash_map.txt");
-	document.getElementById("rocMapMode").value=localStorage.getItem("FWMgr.rocMapMode")||"lookup";
+	var savedIdx=localStorage.getItem("FWMgr.rocImageIndex");
+	document.getElementById("rocImageIndex").value=(savedIdx==="1"||savedIdx==="2")?savedIdx:"1";  // never 0 (golden)
 	loadFlashState();
 	switchTab("dtc");
 	resolveCodeEditor();
@@ -848,14 +849,15 @@ function flashModal(){
 }
 function flashDTC(){showFlashMessage("DTC flashing not available",["Flashing DTC firmware from this page is not implemented yet. Use the Vivado scripts in otsdaq-mu2e/tools (program_flash_*.sh)."]);}
 
-// ── ROC flashing (Program ROCs macro) ───────────────────
-// "flash": one macro call does erase + write and then programs the FPGA. The write is
-// already checked by the ROC itself (each 128-byte chunk is read back and compared on
-// the board; a mismatch aborts the macro before the program step). The separate
-// software read-back verify is NOT requested: it re-reads the whole image with a
-// zero-timeout DCS block read that fails when two DTCs on the same node verify at the
-// same time ("ROC block read failed ... read 0 words", 2026-10-12). "program": reboot
-// from the image already in the flash slot, nothing written.
+// ── ROC flashing (Program ROCs Safe macro) ──────────────
+// "flash":   erase + write + verify every 64 kB segment against the file (retried), then program.
+// "upload":  same, without programming (the ROC keeps running its current firmware).
+// "program": nothing written; the flash is verified against the file, then programmed.
+// The on-ROC check of each 128-byte chunk used before compares the flash with what the ROC
+// RECEIVED, so it cannot see a record damaged on the link: on 2026-10-15 (1.7) damaged images
+// were programmed and ~50 ROCs stopped answering. The verification is now against the file.
+// The old "read 0 words" failure of the read-back (2026-10-12) came from the 0 ms reply timeout of
+// the ROC block read; the new macro reads with a 200 ms timeout.
 function loadFlashState(){
 	try{fwJobs_=JSON.parse(localStorage.getItem(FW_JOBS_KEY_)||"{}")||{};}catch(e){fwJobs_={};}
 	var resumed=0;
@@ -880,7 +882,7 @@ function boardIdsFor(dtc,links){var ids=[];for(var l=0;l<links.length;++l){var r
 function appendFlashHistory(event,dtc,j,extra){
 	var user=(DesktopContent.getUsername&&DesktopContent.getUsername())||"?";
 	var fields=[nowStamp(),user,event,j.phase,dtc,"link="+j.links.slice().sort().join("/"),"boardId="+boardIdsFor(dtc,j.links),
-		"image="+j.imageIndex,"bitfile="+(j.bitfile||"-"),"map="+(j.mapPath||"-")+(j.writeMap?"(write)":j.verifyMap?"(verify)":"(lookup)")];
+		"image="+j.imageIndex,"addr=0x"+((j.address||0).toString(16)),"bitfile="+(j.bitfile||"-"),"macro=ProgramROCsSafe"];
 	if(j.finishedAt)fields.push("elapsed="+Math.round((j.finishedAt-j.startedAt)/1000)+"s");
 	if(extra)fields.push(String(extra).replace(/\s+/g," ").slice(0,500));
 	flashHistoryQueue_.push(fields.join("\t"));
@@ -932,21 +934,25 @@ function selectedBitfilePath(){
 	return base+"/"+sel+"/"+(custom||"roc.spi");
 }
 function linkMask(links){var m=0;for(var i=0;i<links.length;++i)m|=(1<<(links[i]*4));return "0x"+m.toString(16);}
+// Target argument of the macro: a value 0-5 is read as a LINK INDEX, a larger one as a mask (4 bits per link).
+// The mask of link 0 alone is 0x1, which the macro takes as link 1: a single link is therefore always sent as
+// its index (bug of 2026-10-15: link 0 selected, link 1 flashed). Two or more links give a mask >= 0x11.
+function targetArg(links){if(links.length>=6)return "0x111111";if(links.length===1)return String(links[0]);return linkMask(links);}
 function jobFor(dtc){return fwJobs_[dtc]&&fwJobs_[dtc].state==="running"?fwJobs_[dtc]:null;}
 
 function flashROC(){
 	var phase=document.getElementById("flashPhase").value;
 	var bitfile=selectedBitfilePath();
-	var imageIndex=parseInt(document.getElementById("rocImageIndex").value)||0;
-	var mapPath=document.getElementById("rocMapPath").value.trim();
-	var mapMode=document.getElementById("rocMapMode").value;
-	var writeMap=(mapMode==="write"), verifyMap=(mapMode!=="lookup");
+	var imageIndex=parseInt(document.getElementById("rocImageIndex").value);
+	var address=IMAGE_ADDR_[imageIndex];
+	var exp=tabFwCfg_.roc.expected||{};
+	var expVersion=(exp.fwVersion!==undefined)?exp.fwVersion:0;
 
 	var nSel=0;for(var k in rocSel_)if(rocSel_[k])nSel++;
 	var problems=[];
 	if(!nSel)problems.push("No ROC selected. Tick the checkbox of the ROCs to flash (or use Select All / Sel Mismatch).");
-	if(!bitfile&&phase!=="program")problems.push("No bitfile chosen. Pick the firmware in the <b>Expected ROC Firmware</b> menu: that file is what gets written.");
-	if(!mapPath)problems.push("Directory map file is empty. The macro needs it to know the SPI address of image index "+imageIndex+".");
+	if(!bitfile)problems.push("No bitfile chosen. Pick the firmware in the <b>Expected ROC Firmware</b> menu: that file is what gets written (or, for program only, what the flash must contain).");
+	if(address===undefined)problems.push("Image index "+esc(String(imageIndex))+" not allowed: use 1 (0x1010000) or 2 (0x5000000). Index 0 is the golden image and is never written from this page.");
 	if(!MACRO_MAKER_APP_ID_)problems.push("MacroMaker supervisor not found: cannot run FE macros.");
 	if(problems.length){showFlashMessage("Cannot flash",problems);return;}
 
@@ -963,25 +969,28 @@ function flashROC(){
 
 	var n=0,lines=[];for(var d=0;d<dtcs.length;++d){n+=byDtc[dtcs[d]].length;
 		lines.push("<b>"+esc(dtcs[d])+"</b> &rarr; link "+byDtc[dtcs[d]].sort().join(", ")+(byDtc[dtcs[d]].length>=6?" (all)":""));}
-	var ctx={dtcs:dtcs,byDtc:byDtc,phase:phase,bitfile:bitfile,imageIndex:imageIndex,mapPath:mapPath,writeMap:writeMap,verifyMap:verifyMap};
+	var ctx={dtcs:dtcs,byDtc:byDtc,phase:phase,bitfile:bitfile,imageIndex:imageIndex,address:address,expVersion:expVersion};
+	var addrHex="0x"+address.toString(16);
 	var body='';
 	if(phase==="program"){
-		body+='<div class="fc-warn">PROGRAM ONLY &mdash; no write. The ROCs below <b>reboot</b> from whatever is already in SPI image '+imageIndex+'. Use this only if that slot was written and verified before (e.g. after a STALE job).</div>';
+		body+='<div class="fc-info">VERIFY + PROGRAM &mdash; nothing is written. The SPI image at '+addrHex+' is read back and compared with the file below; only the ROCs whose flash matches it exactly are programmed.</div>';
 	}else{
-		body+='<div class="fc-info">FLASH &mdash; the bitfile is erased and written in SPI slot '+imageIndex+' (~12 min per DTC, DTCs in parallel). The ROCs keep running meanwhile. Each 128-byte chunk is read back and checked <b>on the ROC</b> as it is written; only if every chunk matches, the FPGA is told to reboot from the new image. If anything fails before that, the ROC keeps its current firmware.</div>';
-		body+='<div class="fc-warn" style="margin-top:8px;">At the end the ROCs below will <b>reboot</b> and go offline for a short while.</div>';
+		body+='<div class="fc-info">'+(phase==="upload"?'WRITE + VERIFY':'WRITE + VERIFY + PROGRAM')+' &mdash; the image is written at '+addrHex+' in 64 kB segments; each segment is read back from the flash and compared with the file (CRC on ROCs with the new MiV), and rewritten up to 5 times if different. '+
+			(phase==="upload"?'Nothing is programmed: the ROCs keep running their current firmware.':'Only the ROCs whose whole image verified are programmed; a ROC that fails keeps its current firmware.')+' The ROCs keep running meanwhile; the slow controls of the DTC are paused and restored at the end.</div>';
 	}
+	if(phase!=="upload")body+='<div class="fc-warn" style="margin-top:8px;">At the end the programmed ROCs <b>reboot</b> and go offline for a short while.</div>';
 	body+='<div class="fc-grid">';
-	body+='<div class="mk">Bitfile</div><div class="mv mono">'+(phase==="program"?'<span class="dim">(not written: using image already in flash)</span>':esc(bitfile))+'</div>';
-	body+='<div class="mk">Image index</div><div class="mv mono">'+imageIndex+(imageIndex===0?' <span class="fc-bad">(0 is the GOLDEN slot!)</span>':'')+'</div>';
-	body+='<div class="mk">Directory map</div><div class="mv mono">'+esc(mapPath)+(writeMap?' <span class="fc-bad">WILL BE REWRITTEN at flash address 0, then verified</span>':verifyMap?' <span class="dim">(verified against flash: fails if the ROC has no directory)</span>':' <span class="dim">(lookup only: image '+imageIndex+' address taken from the file)</span>')+'</div>';
+	body+='<div class="mk">Bitfile</div><div class="mv mono">'+esc(bitfile)+'</div>';
+	body+='<div class="mk">Checksum</div><div class="mv mono">'+esc(bitfile)+'.sha256 <span class="dim">(must exist; the file is refused if it differs)</span></div>';
+	body+='<div class="mk">SPI address</div><div class="mv mono">'+addrHex+' (image index '+imageIndex+'; directory not touched)</div>';
+	body+='<div class="mk">Expected version</div><div class="mv mono">'+(expVersion?'0x'+expVersion.toString(16):'<span class="dim">not checked (version not in the file name)</span>')+'</div>';
 	body+='<div class="mk">Targets</div><div class="mv">'+n+' ROC(s) on '+dtcs.length+' DTC(s)<br>'+lines.join("<br>")+'</div>';
 	body+='</div>';
 	if(notes.length)body+='<div class="fc-note">'+notes.map(esc).join("<br>")+'</div>';
 	body+='<div class="fc-warn" style="margin-top:12px;">Do <b>not</b> Halt, Configure or power-cycle while this runs: an interrupted programming can brick the board.</div>';
-	showFlashConfirm(phase==="program"?"Program "+n+" ROC(s) from flash?":"Flash "+n+" ROC(s)?",body,
-		phase==="program"?"YES, PROGRAM NOW":"YES, FLASH NOW",
-		function(){for(var d=0;d<ctx.dtcs.length;++d)startFlashJob(ctx.dtcs[d],ctx.byDtc[ctx.dtcs[d]],ctx.phase,ctx.bitfile,ctx.imageIndex,ctx.mapPath,ctx.writeMap,ctx.verifyMap);renderROC();});
+	showFlashConfirm(phase==="program"?"Verify + program "+n+" ROC(s)?":phase==="upload"?"Write + verify "+n+" ROC(s)?":"Flash "+n+" ROC(s)?",body,
+		phase==="program"?"YES, VERIFY + PROGRAM":phase==="upload"?"YES, WRITE + VERIFY":"YES, FLASH NOW",
+		function(){for(var d=0;d<ctx.dtcs.length;++d)startFlashJob(ctx.dtcs[d],ctx.byDtc[ctx.dtcs[d]],ctx.phase,ctx.bitfile,ctx.imageIndex,ctx.address,ctx.expVersion);renderROC();});
 }
 function showFlashMessage(title,items){
 	showFlashConfirm(title,'<ul class="fc-list">'+items.map(function(s){return "<li>"+s+"</li>";}).join("")+'</ul>',null,null);
@@ -997,35 +1006,24 @@ function showFlashConfirm(title,bodyHtml,okLabel,onOk){
 }
 function closeFlashConfirm(){document.getElementById("fcBg").style.display="none";}
 
-function startFlashJob(dtc,links,phase,bitfile,imageIndex,mapPath,writeMap,verifyMap){
+function startFlashJob(dtc,links,phase,bitfile,imageIndex,address,expVersion){
 	var info=dtcMap_[dtc];
 	var inputs={};
-	inputs[PROGRAM_ARGS_.target]=links.length>=6?"0x111111":linkMask(links);
-	inputs[PROGRAM_ARGS_.mapPath]=mapPath;
-	inputs[PROGRAM_ARGS_.writeMap]=writeMap?"true":"false";
-	inputs[PROGRAM_ARGS_.verifyMap]=verifyMap?"true":"false";
-	inputs[PROGRAM_ARGS_.imageIndex]=String(imageIndex);
-	inputs[PROGRAM_ARGS_.forceSize]="Default";
-	if(phase==="flash"){
-		// one macro call: erase+write (checked chunk by chunk on the ROC), then program.
-		// No software read-back verify, see the note above flashROC().
-		inputs[PROGRAM_ARGS_.bitfile]=bitfile;
-		inputs[PROGRAM_ARGS_.write]="true";
-		inputs[PROGRAM_ARGS_.verify]="false";
-		inputs[PROGRAM_ARGS_.program]="true";
-	}else{
-		inputs[PROGRAM_ARGS_.bitfile]="Default";
-		inputs[PROGRAM_ARGS_.write]="false";
-		inputs[PROGRAM_ARGS_.verify]="false";
-		inputs[PROGRAM_ARGS_.program]="true";
-	}
+	inputs[PROGRAM_ARGS_.target]=targetArg(links);
+	inputs[PROGRAM_ARGS_.bitfile]=bitfile;
+	inputs[PROGRAM_ARGS_.sha]="Default";
+	inputs[PROGRAM_ARGS_.address]="0x"+address.toString(16);
+	inputs[PROGRAM_ARGS_.write]=(phase==="program")?"false":"true";
+	inputs[PROGRAM_ARGS_.program]=(phase==="upload")?"false":"true";
+	inputs[PROGRAM_ARGS_.version]=expVersion?"0x"+expVersion.toString(16):"0";
+	inputs[PROGRAM_ARGS_.quiet]="Default";
 	var post="inputArgs=";var first=true;
 	for(var name in PROGRAM_ARGS_){var a=PROGRAM_ARGS_[name];
 		post+=(first?"":";")+encodeURIComponent(a)+","+encodeURIComponent(inputs[a]);first=false;}
 	post+="&outputArgs=Result";
 
 	fwJobs_[dtc]={phase:phase,links:links,state:"running",percent:0,msg:"launching",notDoneID:0,
-		startedAt:Date.now(),bitfile:bitfile,imageIndex:imageIndex,mapPath:mapPath,writeMap:writeMap,verifyMap:verifyMap};
+		startedAt:Date.now(),bitfile:bitfile,imageIndex:imageIndex,address:address,expVersion:expVersion};
 	saveFlashState(); renderROC();
 	log(dtc+": "+phase+" started on link "+links.join(",")+" (mask "+inputs[PROGRAM_ARGS_.target]+")");
 	appendFlashHistory("START",dtc,fwJobs_[dtc],"mask="+inputs[PROGRAM_ARGS_.target]);
@@ -1085,16 +1083,16 @@ function handleFlashResponse(dtc,r,errStr){
 	var scope=fe.length?fe:[r.responseXML];
 	for(var f=0;f<scope.length;++f){var n=scope[f].getElementsByTagName("outputArgs_name"),v=scope[f].getElementsByTagName("outputArgs_value");
 		for(var i=0;i<n.length;++i)if(n[i].getAttribute("value")==="Result"){try{result=decodeURIComponent(v[i].getAttribute("value"));}catch(x){result=v[i].getAttribute("value");}}}
-	j.percent=100; j.state="done"; j.msg="programmed";
+	j.percent=100; j.state="done"; j.msg=(j.phase==="upload")?"written + verified":"programmed";
 	j.finishedAt=Date.now(); j.result=result.slice(0,2000);
 	saveFlashState(); renderROC();
-	log(dtc+": "+j.phase+" DONE in "+Math.round((j.finishedAt-j.startedAt)/1000)+"s on link "+j.links.join(",")+" - run Refresh Inventory to confirm the new firmware version.");
+	log(dtc+": "+j.phase+" DONE in "+Math.round((j.finishedAt-j.startedAt)/1000)+"s on link "+j.links.join(",")+(j.phase==="upload"?" (not programmed).":" - run Refresh Inventory to confirm the new firmware version."));
+	if(result)log(dtc+": "+result.replace(/\n/g," | "));
 	appendFlashHistory("DONE",dtc,j,(result||"").replace(/\s+/g," ").slice(0,300));
 }
 function flashStageLabel(j){
-	if(j.phase==="program")return "programming";
-	// macro percent: erase 0-10, write 10-80, then (verify skipped) program at 90
-	var p=j.percent; if(p<10)return "erasing"; if(p<90)return "writing"; return "programming";
+	// Program ROCs Safe percent: segments 0-90 (erase+write+verify, or verify only), then program
+	var p=j.percent; if(p<90)return j.phase==="program"?"verifying":"writing+verifying"; return j.phase==="upload"?"final check":"programming";
 }
 function clearFlashJob(dtc){var j=fwJobs_[dtc];if(!j||j.state==="running")return;delete fwJobs_[dtc];saveFlashState();renderROC();}
 function clearFinishedJobs(){for(var d in fwJobs_)if(fwJobs_[d].state!=="running")delete fwJobs_[d];saveFlashState();renderROC();}
@@ -1106,7 +1104,7 @@ function flashCell(r){
 	var k=rk(r), j=fwJobs_[r.target];
 	if(j&&j.links.indexOf(r.link)>=0){
 		var cls=j.state==="done"?"ok":j.state==="failed"?"bad":j.state==="stale"?"stale":"";
-		var txt=j.state==="running"?(j.msg+" "+j.percent+"%"):j.state==="done"?"programmed":j.state;
+		var txt=j.state==="running"?(j.msg+" "+j.percent+"%"):j.state==="done"?j.msg:j.state;
 		var tip=esc(j.phase+" | "+j.msg+(j.result?" | "+j.result:""));
 		var clr=j.state!=="running"?' <span style="cursor:pointer;color:var(--c-text-dim)" title="dismiss" onclick="event.stopPropagation();clearFlashJob(\''+ea(r.target)+'\')">&#10005;</span>':"";
 		return '<td onclick="event.stopPropagation()" title="'+tip+'"><div class="fwbar '+cls+'"><i style="width:'+j.percent+'%"></i><span>'+esc(txt)+'</span></div>'+clr+'</td>';
@@ -1117,8 +1115,8 @@ function updateFlashBar(){
 	var running=0;for(var d in fwJobs_)if(fwJobs_[d].state==="running")running++;
 	var el=document.getElementById("flashRunning");
 	el.innerHTML=running?'<span class="fwchip locked">'+running+' flash job(s) running</span>':"";
-	var programOnly=document.getElementById("flashPhase").value==="program";
-	document.getElementById("flashBtn").textContent=programOnly?"Program Selected ROCs (no write)":"Flash Selected ROCs";
+	var ph=document.getElementById("flashPhase").value;
+	document.getElementById("flashBtn").textContent=ph==="program"?"Verify + Program Selected ROCs":ph==="upload"?"Write + Verify Selected ROCs":"Flash Selected ROCs";
 	document.getElementById("flashBtn").className="danger";
 }
 
@@ -1376,27 +1374,16 @@ function nc(a,b){return String(a).localeCompare(String(b),undefined,{numeric:tru
 					<label>Bitfile in release</label>
 					<input id="rocBitfileName" type="text" placeholder="roc.spi" title="File name inside the selected release folder (ignored if the selection is itself a .spi/.bit file)" style="height:30px;font-size:13px;" onchange="localStorage.setItem('FWMgr.rocBitfileName',this.value)">
 				</div>
-				<div class="field-group" style="width:260px;">
-					<label>Directory map file (required)</label>
-					<input id="rocMapPath" type="text" placeholder="/home/mu2eshift/ots_calo/Calo_ROC_Firmware/flash_map.txt" title="One 32-bit hex SPI address per line, one line per image index (0x10000 golden, 0x1010000 operational, 0x5000000). Always verified against the ROC flash before anything else." style="height:30px;font-size:13px;" onchange="localStorage.setItem('FWMgr.rocMapPath',this.value)">
-				</div>
-				<div class="field-group" style="width:190px;">
-					<label>Flash directory</label>
-					<select id="rocMapMode" title="lookup: only use the file to find the SPI address of the image index (programming is by address, the on-flash directory is not needed). verify: also require the ROC flash at address 0 to match the file (fails on ROCs whose directory was never written, reads 0xffffffff). write: rewrite the directory at address 0 from the file." style="height:30px;font-size:13px;" onchange="localStorage.setItem('FWMgr.rocMapMode',this.value)">
-						<option value="lookup">lookup only (default)</option>
-						<option value="verify">verify against flash</option>
-						<option value="write">write to flash + verify</option>
-					</select>
-				</div>
 				<div class="field-group" style="width:70px;">
 					<label>Image idx</label>
-					<input id="rocImageIndex" type="number" min="0" max="15" value="1" title="0 = golden (0x10000), 1 = operational (0x1010000), 2 = 0x5000000" style="height:30px;font-size:13px;" onchange="localStorage.setItem('FWMgr.rocImageIndex',this.value)">
+					<input id="rocImageIndex" type="number" min="1" max="2" value="1" title="1 = operational (0x1010000), 2 = 0x5000000. 0 (golden, 0x10000) is never written from this page." style="height:30px;font-size:13px;" onchange="localStorage.setItem('FWMgr.rocImageIndex',this.value)">
 				</div>
 				<div class="field-group" style="width:230px;">
 					<label>Action</label>
-					<select id="flashPhase" onchange="updateFlashBar()" title="flash: write (checked chunk by chunk on the ROC) + reboot in one go. program only: reboot from the image already in flash, nothing written." style="height:30px;font-size:13px;">
-						<option value="flash">Write + program</option>
-						<option value="program">Program only (image already in flash)</option>
+					<select id="flashPhase" onchange="updateFlashBar()" title="Every 64 kB segment is verified against the file. write + verify + program: the usual flash. write + verify: upload only, no reboot. verify + program: nothing written, the flash must already hold exactly this file." style="height:30px;font-size:13px;">
+						<option value="flash">Write + verify + program</option>
+						<option value="upload">Write + verify (no program)</option>
+						<option value="program">Verify flash + program (no write)</option>
 					</select>
 				</div>
 				<button id="flashBtn" class="danger" onclick="flashROC()">Flash Selected ROCs</button>
