@@ -1,0 +1,49 @@
+#include "Offline/fcl/minimalMessageService.fcl"
+#include "Offline/fcl/standardServices.fcl"
+
+process_name: caloverifier
+
+source : {
+  module_type : RootInput
+  fileNames   : @nil
+  maxEvents   : -1
+}
+
+services : {
+  TimeTracker: {}
+}
+
+physics: {
+
+  filters: {
+    caloFilter : {
+      module_type         : CaloFilterDQM
+      verbosity           : 1
+      printDump           : true
+      printHexDump        : true
+      metricsLevel        : 2
+      stopOnFailure       : true
+      maxFailures         : 5
+    }
+
+    caloVerifier : {
+      module_type         : CaloDataVerifier
+      verbosity           : 2
+      dataType            : 0
+      metricsLevel        : 2
+      #subsystemOverride   : tracker
+      stopOnFailure       : true
+      checkEWTs           : false
+    }
+  }
+
+  t1 : [ caloFilter ]
+
+  trigger_paths  : [t1]
+  end_paths      : []
+}
+
+
+services.TFileService.fileName : "CaloVerifier.root"
+services.scheduler.wantSummary: true
+services.ArtdaqSharedMemoryServiceInterface: { service_provider: ArtdaqGlobalsService }
