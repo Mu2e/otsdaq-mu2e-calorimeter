@@ -93,6 +93,7 @@ class CaloDataAnalyzer : public art::EDAnalyzer {
 	int                                 t_boardID[MAXNHITS];
 	int                                 t_linkID[MAXNHITS];
 	int                                 t_chanID[MAXNHITS];
+	int								    t_detID[MAXNHITS];
 	int                                 t_errflag[MAXNHITS];
 	int                                 t_fff[MAXNHITS];
 	int                                 t_time_tot[MAXNHITS];
@@ -116,6 +117,7 @@ class CaloDataAnalyzer : public art::EDAnalyzer {
 	int                                 tBad_boardID[MAXNHITS];
 	int                                 tBad_linkID[MAXNHITS];
 	int                                 tBad_chanID[MAXNHITS];
+	int                                 tBad_detID[MAXNHITS];
 	int                                 tBad_errflag[MAXNHITS];
 	int                                 tBad_fff[MAXNHITS];
 	int                                 tBad_time_tot[MAXNHITS];
@@ -137,6 +139,7 @@ class CaloDataAnalyzer : public art::EDAnalyzer {
 	Long64_t          tH_currentROCEventWindow;
 	int               tH_nhits;
 	int               tH_boardID;
+	int               tH_detID;
 	int               tH_linkID;
 	int               tH_chanID;
 	int               tH_errflag;
@@ -187,6 +190,7 @@ mu2e::CaloDataAnalyzer::CaloDataAnalyzer(const art::EDAnalyzer::Table<Config>& c
 	tree->Branch("boardID", &t_boardID, "boardID[nhits]/I");
 	tree->Branch("linkID", &t_linkID, "linkID[nhits]/I");
 	tree->Branch("chanID", &t_chanID, "chanID[nhits]/I");
+	tree->Branch("detID", &t_detID, "detID[nhits]/I");
 	tree->Branch("errflag", &t_errflag, "errflag[nhits]/I");
 	tree->Branch("fff", &t_fff, "fff[nhits]/I");
 	tree->Branch("timetot", &t_time_tot, "time[nhits]/I");
@@ -211,6 +215,7 @@ mu2e::CaloDataAnalyzer::CaloDataAnalyzer(const art::EDAnalyzer::Table<Config>& c
 	treeBad->Branch("boardID", &tBad_boardID, "boardID[nhits]/I");
 	treeBad->Branch("linkID", &tBad_linkID, "linkID[nhits]/I");
 	treeBad->Branch("chanID", &tBad_chanID, "chanID[nhits]/I");
+	treeBad->Branch("detID", &tBad_detID, "detID[nhits]/I");
 	treeBad->Branch("errflag", &tBad_errflag, "errflag[nhits]/I");
 	treeBad->Branch("fff", &tBad_fff, "fff[nhits]/I");
 	treeBad->Branch("timetot", &tBad_time_tot, "time[nhits]/I");
@@ -235,6 +240,7 @@ mu2e::CaloDataAnalyzer::CaloDataAnalyzer(const art::EDAnalyzer::Table<Config>& c
 	treeHits->Branch("boardID", &tH_boardID, "boardID/I");
 	treeHits->Branch("linkID", &tH_linkID, "linkID/I");
 	treeHits->Branch("chanID", &tH_chanID, "chanID/I");
+	treeHits->Branch("detID", &tH_detID, "detID/I");
 	treeHits->Branch("errflag", &tH_errflag, "errflag/I");
 	treeHits->Branch("fff", &tH_fff, "fff/I");
 	treeHits->Branch("timetot", &tH_time_tot, "time/I");
@@ -343,10 +349,6 @@ void mu2e::CaloDataAnalyzer::processCaloData(mu2e::CalorimeterDataDecoder const&
 			for(uint ihit = 0; ihit < nHits; ihit++) {
 				mu2e::CalorimeterDataDecoder::CalorimeterHitDataPacket hit          = caloHits->at(ihit).first;
 				std::vector<uint16_t>                                  hit_waveform = caloHits->at(ihit).second;
-				if(hit_waveform.size() == 0) {
-					TLOG(TLVL_WARNING) << "[CaloDataAnalyzer::analyzer] found empty waveform! DTC " << dtcID << " ROC " << iroc << " hit " << ihit << " BoardID " << hit.BoardID << " ChannelNumber "
-					                   << hit.ChannelID;
-				}
 				nCaloHits++;
 
 				// Check that the hit is good
@@ -374,6 +376,7 @@ void mu2e::CaloDataAnalyzer::processCaloData(mu2e::CalorimeterDataDecoder const&
 					tBad_boardID[tBad_nhits - 1]  = hit.BoardID;
 					tBad_linkID[tBad_nhits - 1]   = iroc;
 					tBad_chanID[tBad_nhits - 1]   = hit.ChannelID;
+					tBad_detID[tBad_nhits - 1]    = hit.DetectorID;
 					tBad_errflag[tBad_nhits - 1]  = hit.ErrorFlags;
 					tBad_time_tot[tBad_nhits - 1] = hit.Time;
 					tBad_ewhit[tBad_nhits - 1]    = hit.InPayloadEventWindowTag;
@@ -422,6 +425,7 @@ void mu2e::CaloDataAnalyzer::processCaloData(mu2e::CalorimeterDataDecoder const&
 				t_boardID[t_nhits - 1]     = hit.BoardID;
 				t_linkID[t_nhits - 1]      = iroc;
 				t_chanID[t_nhits - 1]      = hit.ChannelID;
+				t_detID[t_nhits - 1]       = hit.DetectorID;
 				t_errflag[t_nhits - 1]     = hit.ErrorFlags;
 				t_time_tot[t_nhits - 1]    = hit.Time;
 				t_ewhit[t_nhits - 1]       = hit.InPayloadEventWindowTag;

@@ -36,6 +36,7 @@ class CaloLaserFilter : public art::EDFilter {
 	// clang-format off
     struct Config {
        fhicl::Atom<unsigned> minimum_hits {fhicl::Name("minimumHits" ) , fhicl::Comment("Minimum number of hits per event to pass"), 1};
+	   fhicl::Atom<bool>     check_disk_pins {fhicl::Name("checkDiskPins"), fhicl::Comment("Use disk pin-diodes too"), false};
 	   fhicl::Atom<unsigned> debug_every  {fhicl::Name("debugEvery"), fhicl::Comment("Print running stats every N events (0 disables periodic prints)"), 1000000};
     };
 	// clang-format on
@@ -50,6 +51,7 @@ class CaloLaserFilter : public art::EDFilter {
 
 	DTCLib::DTC_Subsystem subsystem_;
 	unsigned              minimum_hits_;
+	bool                  check_disk_pins_;
 	unsigned              debugEvery_{};
 	size_t                eventsSeen_{};
 	size_t                eventsPassed_{};
@@ -59,6 +61,7 @@ class CaloLaserFilter : public art::EDFilter {
 
 mu2e::CaloLaserFilter::CaloLaserFilter(const art::EDFilter::Table<Config>& config) : art::EDFilter{config}, caloDAQUtil_("CaloLaserFilter") {
 	minimum_hits_ = config().minimum_hits();
+	check_disk_pins_ = config().check_disk_pins();
 	debugEvery_   = config().debug_every();
 }
 
@@ -73,31 +76,28 @@ bool mu2e::CaloLaserFilter::filter(art::Event& event) {
 		++eventsWithDtcevt_;
 	}
 	uint laser_hits  = 0;
-	bool found_laser = false;
 	for(const auto& frag : fragments) {
 		mu2e::DTCEventFragment eventFragment(frag);
 		const auto&            caloSubEvents = eventFragment.getSubsystemData(DTCLib::DTC_Subsystem::DTC_Subsystem_Calorimeter);
 		// Loop over calo DTCs
 		for(const auto& subevent : caloSubEvents) {
 			mu2e::CalorimeterDataDecoder caloDecoder(subevent);
-
-			// Loop over ROCs to find the laser boeard
+				
+			// Loop over ROCs
 			for(size_t iROC = 0; iROC < caloDecoder.block_count(); iROC++) {
 				auto calHitTestDataVec = caloDecoder.GetCalorimeterHitsForTrigger(iROC);
 
-				if(calHitTestDataVec->size() > 0) {
-					if(calHitTestDataVec->at(0).first.BoardID == mu2e::CaloConst::_laserBoardId) {
-						laser_hits  = calHitTestDataVec->size();
-						found_laser = true;
-						break;
+                for (const auto& hit : *calHitTestDataVec) {
+					if (!check_disk_pins_ && hit.first.BoardID != mu2e::CaloConst::_laserBoardId) {
+						// Skip non-laser boards if check_disk_pins_ is false
+						continue;
 					}
-				}
+                    if (hit.first.DetectorID == mu2e::CaloConst::detType::PINDiode) {
+                        laser_hits++;
+                    }
+                }
 			}
-			if(found_laser)
-				break;
 		}
-		if(found_laser)
-			break;
 	}
 
 	bool pass = false;
