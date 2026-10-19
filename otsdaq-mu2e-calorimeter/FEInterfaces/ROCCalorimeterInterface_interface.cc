@@ -1282,7 +1282,8 @@ void ROCCalorimeterInterface::configure(void) try {
 	writeRegister(ROC_ADDRESS_MASK_A, 1023);
 	writeRegister(ROC_ADDRESS_MASK_B, 1023);
 
-    
+    // Set long waveforms
+	writeRegister(ROC_ADDRESS_HIT_LENGTH, 60);
 
 	// Turn off busy
 	// writeRegister(ROC_ADDRESS_MZB_BUSY, 1);
