@@ -61,9 +61,9 @@ class CaloLaserFilter : public art::EDFilter {
 }  // namespace mu2e
 
 mu2e::CaloLaserFilter::CaloLaserFilter(const art::EDFilter::Table<Config>& config) : art::EDFilter{config}, caloDAQUtil_("CaloLaserFilter") {
-	minimum_hits_ = config().minimum_hits();
+	minimum_hits_    = config().minimum_hits();
 	check_disk_pins_ = config().check_disk_pins();
-	debugEvery_   = config().debug_every();
+	debugEvery_      = config().debug_every();
 }
 
 void mu2e::CaloLaserFilter::beginJob() { TLOG(TLVL_INFO) << "CaloLaserFilter beginJob: debugEvery=" << debugEvery_; }
@@ -84,7 +84,7 @@ bool mu2e::CaloLaserFilter::filter(art::Event& event) {
 		// Loop over calo DTCs
 		for(const auto& subevent : caloSubEvents) {
 			mu2e::CalorimeterDataDecoder caloDecoder(subevent);
-				
+
 			// Loop over ROCs
 			for(size_t iROC = 0; iROC < caloDecoder.block_count(); iROC++) {
 				auto calHitTestDataVec = caloDecoder.GetCalorimeterHitsForTrigger(iROC);

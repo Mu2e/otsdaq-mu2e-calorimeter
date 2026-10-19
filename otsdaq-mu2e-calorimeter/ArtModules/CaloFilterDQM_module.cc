@@ -33,12 +33,12 @@ namespace mu2e {
 class CaloFilterDQM : public art::EDFilter {
   public:
 	struct Config {
-		fhicl::Atom<int> verbosity{fhicl::Name("verbosity"), fhicl::Comment("Verbosity [0-2]"), 0};
-	 	fhicl::Atom<bool> printDump{fhicl::Name("printDump"), fhicl::Comment("Print dump"), false};
-	 	fhicl::Atom<bool> printHexDump{fhicl::Name("printHexDump"), fhicl::Comment("Print hex dump"), false};
-		fhicl::Atom<bool> stop_on_failure{fhicl::Name("stopOnFailure" ) , fhicl::Comment("Throw exception if checks fail [default: false]"), false};
-		fhicl::Atom<int> max_failures{fhicl::Name("maxFailures"), fhicl::Comment("Number of failed events after which to throw when stopOnFailure is true [default: 1]"), 1};
-		fhicl::Atom<int> metrics_level{fhicl::Name("metricsLevel"), fhicl::Comment("Metrics reporting level"), 1};
+		fhicl::Atom<int>  verbosity{fhicl::Name("verbosity"), fhicl::Comment("Verbosity [0-2]"), 0};
+		fhicl::Atom<bool> printDump{fhicl::Name("printDump"), fhicl::Comment("Print dump"), false};
+		fhicl::Atom<bool> printHexDump{fhicl::Name("printHexDump"), fhicl::Comment("Print hex dump"), false};
+		fhicl::Atom<bool> stop_on_failure{fhicl::Name("stopOnFailure"), fhicl::Comment("Throw exception if checks fail [default: false]"), false};
+		fhicl::Atom<int>  max_failures{fhicl::Name("maxFailures"), fhicl::Comment("Number of failed events after which to throw when stopOnFailure is true [default: 1]"), 1};
+		fhicl::Atom<int>  metrics_level{fhicl::Name("metricsLevel"), fhicl::Comment("Metrics reporting level"), 1};
 	};
 
 	explicit CaloFilterDQM(const art::EDFilter::Table<Config>& config);
@@ -50,12 +50,12 @@ class CaloFilterDQM : public art::EDFilter {
 	void processCaloData(mu2e::DTCEventFragment& eventFragment);
 
 	uint32_t extractBits(const uint16_t* words, size_t startBit, size_t bitLength);
-	void printEvent(const DTCLib::DTC_Event& dtcevent);
-	void printSubEvent(const DTCLib::DTC_SubEvent& subevent);
-	void printEventHeader(const DTCLib::DTC_Event& dtcevent);
-	void printDTCHeader(const DTCLib::DTC_SubEvent& subevent);
-	void printROC(const DTCLib::DTC_DataBlock& dataBlock);
-	void printRunSummary();
+	void     printEvent(const DTCLib::DTC_Event& dtcevent);
+	void     printSubEvent(const DTCLib::DTC_SubEvent& subevent);
+	void     printEventHeader(const DTCLib::DTC_Event& dtcevent);
+	void     printDTCHeader(const DTCLib::DTC_SubEvent& subevent);
+	void     printROC(const DTCLib::DTC_DataBlock& dataBlock);
+	void     printRunSummary();
 
   private:
 	int                    verbosity_;
@@ -103,14 +103,14 @@ class CaloFilterDQM : public art::EDFilter {
 
 mu2e::CaloFilterDQM::CaloFilterDQM(const art::EDFilter::Table<Config>& config)
     : art::EDFilter{config}
-	, verbosity_(config().verbosity())
-	, print_dump_(config().printDump())
-	, print_hex_dump_(config().printHexDump())
-	, stopOnFailure_(config().stop_on_failure())
-	, maxFailures_(config().max_failures())
-	, nFailedEvents_(0)
-	, metrics_reporting_level_(config().metrics_level())
-	, caloDAQUtil_("CaloDigiFromFragments") {
+    , verbosity_(config().verbosity())
+    , print_dump_(config().printDump())
+    , print_hex_dump_(config().printHexDump())
+    , stopOnFailure_(config().stop_on_failure())
+    , maxFailures_(config().max_failures())
+    , nFailedEvents_(0)
+    , metrics_reporting_level_(config().metrics_level())
+    , caloDAQUtil_("CaloDigiFromFragments") {
 	nEvents          = 0;
 	nTotalCaloHits   = 0;
 	nTotalGoodHits   = 0;
@@ -123,7 +123,7 @@ mu2e::CaloFilterDQM::CaloFilterDQM(const art::EDFilter::Table<Config>& config)
 
 bool mu2e::CaloFilterDQM::filter(art::Event& event) {
 	art::EventNumber_t eventNumber = event.event();
-	failedEvent = false;
+	failedEvent                    = false;
 
 	nEvents++;
 
@@ -269,7 +269,6 @@ void mu2e::CaloFilterDQM::processCFOData(mu2e::DTCEventFragment& eventFragment) 
 }
 
 void mu2e::CaloFilterDQM::processCaloData(mu2e::DTCEventFragment& eventFragment) {
-
 	auto caloSubEvents = eventFragment.getSubsystemData(DTCLib::DTC_Subsystem::DTC_Subsystem_Calorimeter);
 
 	// Loop over calo DTCs (should be only one per fragment)
@@ -331,7 +330,6 @@ void mu2e::CaloFilterDQM::processCaloData(mu2e::DTCEventFragment& eventFragment)
 		}  // loop over ROCs
 	}      // loop over subevents (DTCs)
 
-
 	if(failedEvent && print_dump_) {
 		std::cout << "======================================================\n";
 		std::cout << "========== THIS FRAGMENT HAS SOME FAILURES ===========\n";
@@ -341,8 +339,6 @@ void mu2e::CaloFilterDQM::processCaloData(mu2e::DTCEventFragment& eventFragment)
 		printEvent(dtcevent);
 	}
 }
-
-
 
 void mu2e::CaloFilterDQM::printEvent(const DTCLib::DTC_Event& dtcevent) {
 	printEventHeader(dtcevent);
@@ -364,7 +360,7 @@ void mu2e::CaloFilterDQM::printSubEvent(const DTCLib::DTC_SubEvent& subevent) {
 
 void mu2e::CaloFilterDQM::printEventHeader(const DTCLib::DTC_Event& dtcevent) {
 	auto headerPtr = reinterpret_cast<uint16_t const*>(dtcevent.GetRawBufferPointer());
-	if (print_hex_dump_) {
+	if(print_hex_dump_) {
 		std::cout << "Event HEX DUMP (24 bytes) ------------------\n";
 		for(size_t word = 0; word < 12; word++) {
 			std::cout << std::hex << std::setw(4) << std::setfill('0') << headerPtr[word] << std::setfill(' ') << std::dec << " ";
@@ -376,7 +372,7 @@ void mu2e::CaloFilterDQM::printEventHeader(const DTCLib::DTC_Event& dtcevent) {
 
 void mu2e::CaloFilterDQM::printDTCHeader(const DTCLib::DTC_SubEvent& subevent) {
 	auto headerPtr = reinterpret_cast<uint16_t const*>(subevent.GetRawBufferPointer());
-	if (print_hex_dump_) {
+	if(print_hex_dump_) {
 		std::cout << "DTC HEX DUMP (48 bytes) ------------------\n";
 		for(size_t word = 0; word < 24; word++) {
 			std::cout << std::hex << std::setw(4) << std::setfill('0') << headerPtr[word] << std::setfill(' ') << std::dec << " ";
@@ -398,11 +394,11 @@ uint32_t mu2e::CaloFilterDQM::extractBits(const uint16_t* words, size_t startBit
 	return result;
 }
 
-//TODO Implement these printing functions inside CalorimeterDataDecoder, so that they use the same decoding logic as the rest of the code
+// TODO Implement these printing functions inside CalorimeterDataDecoder, so that they use the same decoding logic as the rest of the code
 void mu2e::CaloFilterDQM::printROC(const DTCLib::DTC_DataBlock& dataBlock) {
 	auto headerPtr = reinterpret_cast<uint16_t const*>(dataBlock.GetRawBufferPointer());
 	auto dataPtr   = reinterpret_cast<uint16_t const*>(dataBlock.GetData());
-	if (print_hex_dump_){
+	if(print_hex_dump_) {
 		std::cout << "ROC HEX DUMP (" << dataBlock.byteSize << " bytes) ------------------\n";
 		for(size_t word = 0; word < 8; word++) {
 			std::cout << std::hex << std::setw(4) << std::setfill('0') << headerPtr[word] << std::setfill(' ') << std::dec << " ";
