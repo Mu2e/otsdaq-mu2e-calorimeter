@@ -89,6 +89,11 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
         ROC_ADDRESS_CHTYPE_1                 = 161,  //   ch 8-15
         ROC_ADDRESS_CHTYPE_2                 = 162,  //   ch 16-19 (bits 7:0); firmware 1.7 and later
 
+        ROC_ADDRESS_HITRATE_SEQ              = 169,  // hit rate update counter (+1 per second of open event window); firmware 1.9 and later
+        ROC_ADDRESS_HITRATE_BLOCKED_A        = 170,  // bit n = ch n (0-9) writing a hit for > 7/8 of the open window (layout of MASK_A)
+        ROC_ADDRESS_HITRATE_BLOCKED_B        = 171,  // bit n = ch n+10 (layout of MASK_B)
+        ROC_ADDRESS_HITRATE_BASE             = 176,  // 176 + ch (0-19): hits per second of open event window, 0xFFFF = saturated
+
         ROC_ADDRESS_FW_PROJECT_ID            = 240,
         ROC_ADDRESS_FW_GIT_SHA               = 241,
         ROC_ADDRESS_FW_BUILD_DATE_LO         = 242,
@@ -183,6 +188,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 	// void ReadVoltagesFromDB();
 
 	void ReadROCErrorCounter(__ARGS__);
+	void ReadROCHitRates(__ARGS__);
 	void ReadMBRegisters(__ARGS__);
 	void GetMZBStatus(__ARGS__);
 

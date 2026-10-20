@@ -177,6 +177,12 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(const std::string& rocUID, cons
 	                        std::vector<std::string>{"Status"},                          // output parameters
 	                        1);                                                          // requiredUserPermissions
 
+	registerFEMacroFunction("Read ROC Hit Rates",
+	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::ReadROCHitRates),
+	                        std::vector<std::string>{},          // inputs parameters
+	                        std::vector<std::string>{"Status"},  // output parameters
+	                        1);                                  // requiredUserPermissions
+
 	registerFEMacroFunction(
 	    "Setup for ADCs Data Taking",
 	    static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::SetupForADCsDataTaking),
@@ -2527,6 +2533,58 @@ void ROCCalorimeterInterface::ReadROCErrorCounter(__ARGS__) {
 	__SET_ARG_OUT__("Status", os.str());
 
 }  // end ReadROCErrorCounter()
+
+//==================================================================================================
+// Per-channel hit rate (firmware 1.9): hits per second of open event window, refreshed every second of open window.
+// The registers are re-read if the update counter changes while reading, so that all channels come from the same second.
+void ROCCalorimeterInterface::ReadROCHitRates(__ARGS__) {
+	const uint16_t version = readRegister(ROC_ADDRESS_FW_VERSION);
+	std::stringstream os;
+	if(version < 0x0109) {
+		os << "Hit rate registers need ROC firmware 1.9 or later; this board has " << ((version >> 8) & 0xFF) << "." << (version & 0xFF) << "\n";
+		__COUT_INFO__ << os.str() << __E__;
+		__SET_ARG_OUT__("Status", os.str());
+		return;
+	}
+
+	uint16_t seq = 0, blockedA = 0, blockedB = 0;
+	uint16_t rate[20];
+	bool     consistent = false;
+	for(int attempt = 0; attempt < 3 && !consistent; ++attempt) {
+		seq      = readRegister(ROC_ADDRESS_HITRATE_SEQ);
+		blockedA = readRegister(ROC_ADDRESS_HITRATE_BLOCKED_A);
+		blockedB = readRegister(ROC_ADDRESS_HITRATE_BLOCKED_B);
+		for(int ichan = 0; ichan < 20; ++ichan)
+			rate[ichan] = readRegister(ROC_ADDRESS_HITRATE_BASE + ichan);
+		consistent = (readRegister(ROC_ADDRESS_HITRATE_SEQ) == seq);
+	}
+	const uint16_t maskA = readRegister(ROC_ADDRESS_MASK_A);
+	const uint16_t maskB = readRegister(ROC_ADDRESS_MASK_B);
+
+	os << "ROC hit rates (board " << boardConfig_.boardID << "), Hz per second of open event window\n";
+	os << "update counter " << seq;
+	if(seq == 0)
+		os << "  (no update yet: less than 1 s of open event window since reset)";
+	if(!consistent)
+		os << "  WARNING: registers updated while reading, channels may come from different seconds";
+	os << "\n\n";
+	os << "Ch  Rate [Hz]   Blocked  Enabled  SensorType\n";
+	os << "--- ----------  -------  -------  ----------\n";
+	for(int ichan = 0; ichan < 20; ++ichan) {
+		const bool blocked = ((ichan < 10 ? blockedA : blockedB) >> (ichan % 10)) & 1;
+		const bool enabled = ((ichan < 10 ? maskA : maskB) >> (ichan % 10)) & 1;
+		os << std::setw(3) << ichan << " ";
+		if(rate[ichan] == 0xFFFF)
+			os << std::setw(10) << ">= 65535";
+		else
+			os << std::setw(10) << rate[ichan];
+		os << "  " << std::setw(7) << (blocked ? "YES" : "no") << "  " << std::setw(7) << (enabled ? "yes" : "MASKED") << "  " << boardConfig_.channels[ichan].sensorType << "\n";
+	}
+	os << "\nBlocked: the channel was writing a hit for more than 7/8 of the open window (input stuck above threshold).\n";
+
+	__COUT_INFO__ << os.str() << __E__;
+	__SET_ARG_OUT__("Status", os.str());
+}  // end ReadROCHitRates()
 
 //==================================================================================================
 
