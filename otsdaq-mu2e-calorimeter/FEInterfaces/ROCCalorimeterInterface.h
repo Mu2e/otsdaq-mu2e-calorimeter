@@ -85,6 +85,12 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
         ROC_ADDRESS_SIMWF_MULTI_A            = 152,
         ROC_ADDRESS_SIMWF_MULTI_B            = 153,
 
+		ROC_ADDRESS_HIT_LENGTH               = 154,
+
+        ROC_ADDRESS_CHTYPE_0                 = 160,  // channel type -> DET field of the hits, 2 bits/channel: ch 0-7
+        ROC_ADDRESS_CHTYPE_1                 = 161,  //   ch 8-15
+        ROC_ADDRESS_CHTYPE_2                 = 162,  //   ch 16-19 (bits 7:0); firmware 1.7 and later
+
         ROC_ADDRESS_FW_PROJECT_ID            = 240,
         ROC_ADDRESS_FW_GIT_SHA               = 241,
         ROC_ADDRESS_FW_BUILD_DATE_LO         = 242,
@@ -166,6 +172,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 	void ToggleMBBusy(bool busyonoff);
 	void SetADCsThresholds(__ARGS__);
 	void SetADCsThresholds(int offset);
+	void SetChannelTypes();  // sensorType of the 20 channels into the DET field of the hits (registers 160-162)
 
 	void        ReadVoltagesFromDB(__ARGS__);
 	void        ReadChannelStatusFromDB(__ARGS__);

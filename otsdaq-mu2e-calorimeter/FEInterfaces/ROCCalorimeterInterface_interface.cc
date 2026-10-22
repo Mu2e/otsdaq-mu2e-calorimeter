@@ -1122,6 +1122,14 @@ void ROCCalorimeterInterface::updateBoardIdFromSerial_() {
 
 	boardConfig_.serial = readRegister(147);
 
+	if(boardConfig_.serial == 0 || boardConfig_.serial == 0xFFFF) {
+		std::stringstream serialZeroPrint;
+		serialZeroPrint << "ROC on link " << linkID_ << " returned invalid serial number 0x" << std::hex << boardConfig_.serial << std::dec
+		                << " (expected non-zero, non-0xFFFF). Cannot map to BoardId.";
+		__FE_SS__ << serialZeroPrint.str() << __E__;
+		__FE_SS_THROW__;
+	}
+
 	const ots::ConfigurationManager* cfgMgr = getConfigurationManager();
 
 	auto rows = cfgMgr->getNode("SubsystemCalorimeterParametersTable").getChildren();
@@ -1226,20 +1234,26 @@ void ROCCalorimeterInterface::configure(void) try {
 
 	__COUT_INFO__ << "Enter ROC configuration.." << __E__;
 
-	int readVal = 0;
-	int ntries  = 0;
-	while(readVal != 0x1234 || ntries < 3) {
+	const int   maxTries = 10;
+	int         readVal  = 0;
+	int         ntries   = 0;
+	std::string lastError;
+	while((readVal != 0x1234 || ntries < 3) && ntries < maxTries) {
 		try {
 			readVal = readRegister(0);
-		} catch(const std::exception& e) {}
+		} catch(const std::exception& e) { lastError = e.what(); }
 		ntries++;
 		__COUT_INFO__ << "Attempt number " << ntries << __E__;
+		if(readVal != 0x1234)
+			usleep(100000);  // do not hammer an unresponsive link
 	}
 
-	if(readVal == 0x1234)
-		__COUT_INFO__ << "Configuration correct! :)" << __E__;
-	else
-		__COUT_INFO__ << "Configuration failed! :(" << __E__;
+	if(readVal != 0x1234) {
+		__FE_SS__ << "ROC on link " << linkID_ << " is not responding: register 0 read 0x" << std::hex << readVal << std::dec << " (expected 0x1234) after " << ntries
+		          << " attempts. Last error: " << lastError << __E__;
+		__FE_SS_THROW__;
+	}
+	__COUT_INFO__ << "Configuration correct! :)" << __E__;
 
 	updateBoardIdFromSerial_();
 
@@ -1262,6 +1276,8 @@ void ROCCalorimeterInterface::configure(void) try {
 	CalibrateMZB();
 	// Set DIRAC thresholds with offset
 	SetADCsThresholds(0);
+	// Channel type (SensorType of the voltages table) into the DET field of the hits
+	SetChannelTypes();
 	// Set SiPM voltages (four times to be sure)
 	//  TODO to be upgraded with a set-and-verify loop
 	SetBoardVoltages(true);
@@ -1271,6 +1287,9 @@ void ROCCalorimeterInterface::configure(void) try {
 
 	writeRegister(ROC_ADDRESS_MASK_A, 1023);
 	writeRegister(ROC_ADDRESS_MASK_B, 1023);
+
+	// Set long waveforms
+	writeRegister(ROC_ADDRESS_HIT_LENGTH, 60);
 
 	// Turn off busy
 	// writeRegister(ROC_ADDRESS_MZB_BUSY, 1);
@@ -1791,6 +1810,37 @@ void ROCCalorimeterInterface::SetADCsThresholds(int offset) {
 // void ROCCalorimeterInterface::ReadVoltagesFromDB(__ARGS__) {
 //	ReadVoltagesFromDB();
 // }
+
+//==================================================================================================
+
+void ROCCalorimeterInterface::SetChannelTypes() {
+	if(!boardConfig_.voltagesLoaded) {
+		__COUT_ERR__ << "Skipping channel types: sensor types not loaded (loadVoltagesFromDB_)" << __E__;
+		return;
+	}
+
+	uint16_t reg[3] = {0, 0, 0};
+	for(int ichan = 0; ichan < 20; ++ichan) {
+		const std::string& type = boardConfig_.channels[ichan].sensorType;
+		uint16_t           code = 0;
+		if(type == "CAL")
+			code = 0;
+		else if(type == "CAPHRI")
+			code = 1;
+		else if(type == "PIN-DIODE")
+			code = 2;
+		else if(type == "EMPTY")
+			code = 3;
+		else
+			__COUT_ERR__ << "Board " << boardConfig_.boardID << " ch " << ichan << ": unknown sensor type '" << type << "', DET written as CAL (0)" << __E__;
+		reg[ichan / 8] |= static_cast<uint16_t>(code << (2 * (ichan % 8)));
+	}
+
+	writeRegister(ROC_ADDRESS_CHTYPE_0, reg[0]);
+	writeRegister(ROC_ADDRESS_CHTYPE_1, reg[1]);
+	writeRegister(ROC_ADDRESS_CHTYPE_2, reg[2]);
+	__COUT_INFO__ << "Board " << boardConfig_.boardID << " channel types written: 0x" << std::hex << reg[0] << " 0x" << reg[1] << " 0x" << reg[2] << std::dec << __E__;
+}  // end SetChannelTypes()
 
 bool ROCCalorimeterInterface::isPinDiodeChannel_(int ch) const {
 	if(ch < 0 || ch >= 20)
