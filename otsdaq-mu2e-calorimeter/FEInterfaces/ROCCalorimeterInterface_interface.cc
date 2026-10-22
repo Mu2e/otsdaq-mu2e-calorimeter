@@ -1122,10 +1122,10 @@ void ROCCalorimeterInterface::updateBoardIdFromSerial_() {
 
 	boardConfig_.serial = readRegister(147);
 
-	if (boardConfig_.serial == 0 || boardConfig_.serial == 0xFFFF) {
+	if(boardConfig_.serial == 0 || boardConfig_.serial == 0xFFFF) {
 		std::stringstream serialZeroPrint;
 		serialZeroPrint << "ROC on link " << linkID_ << " returned invalid serial number 0x" << std::hex << boardConfig_.serial << std::dec
-		             << " (expected non-zero, non-0xFFFF). Cannot map to BoardId.";
+		                << " (expected non-zero, non-0xFFFF). Cannot map to BoardId.";
 		__FE_SS__ << serialZeroPrint.str() << __E__;
 		__FE_SS_THROW__;
 	}
