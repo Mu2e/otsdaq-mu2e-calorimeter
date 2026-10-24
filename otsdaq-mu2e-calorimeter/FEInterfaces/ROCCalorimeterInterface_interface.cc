@@ -2544,7 +2544,7 @@ void ROCCalorimeterInterface::ReadROCErrorCounter(__ARGS__) {
 // Per-channel hit rate (firmware 1.9): hits per second of open event window, refreshed every second of open window.
 // The registers are re-read if the update counter changes while reading, so that all channels come from the same second.
 void ROCCalorimeterInterface::ReadROCHitRates(__ARGS__) {
-	const uint16_t version = readRegister(ROC_ADDRESS_FW_VERSION);
+	const uint16_t    version = readRegister(ROC_ADDRESS_FW_VERSION);
 	std::stringstream os;
 	if(version < 0x0109) {
 		os << "Hit rate registers need ROC firmware 1.9 or later; this board has " << ((version >> 8) & 0xFF) << "." << (version & 0xFF) << "\n";
