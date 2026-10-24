@@ -72,7 +72,8 @@ bool mu2e::CaloCSIFilter::filter(art::Event& event) {
 	if(!fragments.empty()) {
 		++eventsWithDtcevt_;
 	}
-	uint csi_hits  = 0;
+	uint                              csi_total_hits = 0;
+	std::map<int, std::map<int, int>> csi_hits_per_channel;
 	for(const auto& frag : fragments) {
 		mu2e::DTCEventFragment eventFragment(frag);
 		const auto&            caloSubEvents = eventFragment.getSubsystemData(DTCLib::DTC_Subsystem::DTC_Subsystem_Calorimeter);
@@ -84,19 +85,43 @@ bool mu2e::CaloCSIFilter::filter(art::Event& event) {
 			for(size_t iROC = 0; iROC < caloDecoder.block_count(); iROC++) {
 				auto calHitTestDataVec = caloDecoder.GetCalorimeterHitsForTrigger(iROC);
 
-                for (const auto& hit : *calHitTestDataVec) {
-                    if (hit.first.DetectorID == mu2e::CaloConst::detType::CsI) {
-                        csi_hits++;
-                    }
-                }
+				for(const auto& hit : *calHitTestDataVec) {
+					if(hit.first.DetectorID == mu2e::CaloConst::detType::CsI) {
+						uint boardId   = hit.first.BoardID;
+						uint channelId = hit.first.ChannelID;
+						csi_total_hits++;
+						csi_hits_per_channel[boardId][channelId]++;
+					}
+				}
 			}
 		}
 	}
 
 	bool pass = false;
-	if(csi_hits >= minimum_hits_) {
-		pass = true;
-		++eventsPassed_;
+	if(csi_total_hits >= minimum_hits_) {
+		uint total_lr_hits = 0;
+		// For every even channel with >= 1 hits, check if channel of board+1 has >= 1 hits. If so, add to total_lr_hits
+		// This assumes that the channelId is the same for both boards, which is true for the current Calorimeter readout.
+		for(const auto& [boardId, channels] : csi_hits_per_channel) {
+			if(boardId % 2 == 0) {
+				for(const auto& [channelId, hits] : channels) {
+					if(hits >= 1) {
+						int nextBoardId = boardId + 1;
+						if(csi_hits_per_channel.find(nextBoardId) != csi_hits_per_channel.end()) {
+							if(csi_hits_per_channel[nextBoardId].find(channelId) != csi_hits_per_channel[nextBoardId].end()) {
+								int nextHits = csi_hits_per_channel[nextBoardId][channelId];
+								total_lr_hits += std::min(hits, nextHits);
+							}
+						}
+					}
+				}
+			}
+			if(total_lr_hits >= minimum_hits_) {
+				pass = true;
+				++eventsPassed_;
+				break;  // No need to check further if we've already passed
+			}
+		}
 	}
 
 	if(debugEvery_ != 0 && (eventsSeen_ % debugEvery_) == 0) {

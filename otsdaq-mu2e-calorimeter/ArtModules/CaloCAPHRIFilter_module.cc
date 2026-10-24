@@ -27,6 +27,7 @@
 #include "cetlib_except/exception.h"
 
 #include <iomanip>
+#include <map>
 #include <sstream>
 #include <vector>
 
@@ -72,7 +73,8 @@ bool mu2e::CaloCAPHRIFilter::filter(art::Event& event) {
 	if(!fragments.empty()) {
 		++eventsWithDtcevt_;
 	}
-	uint caphri_hits  = 0;
+	uint                              caphri_total_hits = 0;
+	std::map<int, std::map<int, int>> caphri_hits_per_channel;
 	for(const auto& frag : fragments) {
 		mu2e::DTCEventFragment eventFragment(frag);
 		const auto&            caloSubEvents = eventFragment.getSubsystemData(DTCLib::DTC_Subsystem::DTC_Subsystem_Calorimeter);
@@ -84,19 +86,43 @@ bool mu2e::CaloCAPHRIFilter::filter(art::Event& event) {
 			for(size_t iROC = 0; iROC < caloDecoder.block_count(); iROC++) {
 				auto calHitTestDataVec = caloDecoder.GetCalorimeterHitsForTrigger(iROC);
 
-                for (const auto& hit : *calHitTestDataVec) {
-                    if (hit.first.DetectorID == mu2e::CaloConst::detType::CAPHRI) {
-                        caphri_hits++;
-                    }
-                }
+				for(const auto& hit : *calHitTestDataVec) {
+					if(hit.first.DetectorID == mu2e::CaloConst::detType::CAPHRI) {
+						uint boardId   = hit.first.BoardID;
+						uint channelId = hit.first.ChannelID;
+						caphri_total_hits++;
+						caphri_hits_per_channel[boardId][channelId]++;
+					}
+				}
 			}
 		}
 	}
 
 	bool pass = false;
-	if(caphri_hits >= minimum_hits_) {
-		pass = true;
-		++eventsPassed_;
+	if(caphri_total_hits >= minimum_hits_) {
+		uint total_lr_hits = 0;
+		// For every even board with >= 1 hits on a channel, check if the same channel of board+1 has >= 1 hits. If so, add to total_lr_hits
+		// This assumes that the channelId is the same for both boards, which is true for the current Calorimeter readout.
+		for(const auto& [boardId, channels] : caphri_hits_per_channel) {
+			if(boardId % 2 == 0) {
+				for(const auto& [channelId, hits] : channels) {
+					if(hits >= 1) {
+						int nextBoardId = boardId + 1;
+						if(caphri_hits_per_channel.find(nextBoardId) != caphri_hits_per_channel.end()) {
+							if(caphri_hits_per_channel[nextBoardId].find(channelId) != caphri_hits_per_channel[nextBoardId].end()) {
+								int nextHits = caphri_hits_per_channel[nextBoardId][channelId];
+								total_lr_hits += std::min(hits, nextHits);
+							}
+						}
+					}
+				}
+			}
+			if(total_lr_hits >= minimum_hits_) {
+				pass = true;
+				++eventsPassed_;
+				break;  // No need to check further if we've already passed
+			}
+		}
 	}
 
 	if(debugEvery_ != 0 && (eventsSeen_ % debugEvery_) == 0) {

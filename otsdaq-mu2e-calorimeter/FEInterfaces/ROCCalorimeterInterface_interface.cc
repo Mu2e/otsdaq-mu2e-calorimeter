@@ -1128,6 +1128,14 @@ void ROCCalorimeterInterface::updateBoardIdFromSerial_() {
 
 	boardConfig_.serial = readRegister(147);
 
+	if(boardConfig_.serial == 0 || boardConfig_.serial == 0xFFFF) {
+		std::stringstream serialZeroPrint;
+		serialZeroPrint << "ROC on link " << linkID_ << " returned invalid serial number 0x" << std::hex << boardConfig_.serial << std::dec
+		                << " (expected non-zero, non-0xFFFF). Cannot map to BoardId.";
+		__FE_SS__ << serialZeroPrint.str() << __E__;
+		__FE_SS_THROW__;
+	}
+
 	const ots::ConfigurationManager* cfgMgr = getConfigurationManager();
 
 	auto rows = cfgMgr->getNode("SubsystemCalorimeterParametersTable").getChildren();
@@ -1239,24 +1247,22 @@ void ROCCalorimeterInterface::configure(void) try {
 	while((readVal != 0x1234 || ntries < 3) && ntries < maxTries) {
 		try {
 			readVal = readRegister(0);
-		} catch(const std::exception& e) {
-			lastError = e.what();
-		}
+		} catch(const std::exception& e) { lastError = e.what(); }
 		ntries++;
 		__COUT_INFO__ << "Attempt number " << ntries << __E__;
-		if(readVal != 0x1234) usleep(100000);  // do not hammer an unresponsive link
+		if(readVal != 0x1234)
+			usleep(100000);  // do not hammer an unresponsive link
 	}
 
 	if(readVal != 0x1234) {
-		__FE_SS__ << "ROC on link " << linkID_ << " is not responding: register 0 read 0x" << std::hex << readVal << std::dec << " (expected 0x1234) after "
-		          << ntries << " attempts. Last error: " << lastError << __E__;
+		__FE_SS__ << "ROC on link " << linkID_ << " is not responding: register 0 read 0x" << std::hex << readVal << std::dec << " (expected 0x1234) after " << ntries
+		          << " attempts. Last error: " << lastError << __E__;
 		__FE_SS_THROW__;
 	}
 	__COUT_INFO__ << "Configuration correct! :)" << __E__;
 
 	updateBoardIdFromSerial_();
-    
-	
+
 	std::stringstream dbLoadStatus;
 	if(!loadVoltagesFromDB_(dbLoadStatus)) {
 		__FE_SS__ << dbLoadStatus.str() << __E__;
@@ -1288,7 +1294,8 @@ void ROCCalorimeterInterface::configure(void) try {
 	writeRegister(ROC_ADDRESS_MASK_A, 1023);
 	writeRegister(ROC_ADDRESS_MASK_B, 1023);
 
-    
+	// Set long waveforms
+	writeRegister(ROC_ADDRESS_HIT_LENGTH, 60);
 
 	// Turn off busy
 	// writeRegister(ROC_ADDRESS_MZB_BUSY, 1);
@@ -1838,8 +1845,7 @@ void ROCCalorimeterInterface::SetChannelTypes() {
 	writeRegister(ROC_ADDRESS_CHTYPE_0, reg[0]);
 	writeRegister(ROC_ADDRESS_CHTYPE_1, reg[1]);
 	writeRegister(ROC_ADDRESS_CHTYPE_2, reg[2]);
-	__COUT_INFO__ << "Board " << boardConfig_.boardID << " channel types written: 0x" << std::hex << reg[0] << " 0x" << reg[1] << " 0x" << reg[2]
-	              << std::dec << __E__;
+	__COUT_INFO__ << "Board " << boardConfig_.boardID << " channel types written: 0x" << std::hex << reg[0] << " 0x" << reg[1] << " 0x" << reg[2] << std::dec << __E__;
 }  // end SetChannelTypes()
 
 bool ROCCalorimeterInterface::isPinDiodeChannel_(int ch) const {

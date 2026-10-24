@@ -93,7 +93,7 @@ class CaloDataAnalyzer : public art::EDAnalyzer {
 	int                                 t_boardID[MAXNHITS];
 	int                                 t_linkID[MAXNHITS];
 	int                                 t_chanID[MAXNHITS];
-	int								    t_detID[MAXNHITS];
+	int                                 t_detID[MAXNHITS];
 	int                                 t_errflag[MAXNHITS];
 	int                                 t_fff[MAXNHITS];
 	int                                 t_time_tot[MAXNHITS];
