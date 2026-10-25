@@ -90,6 +90,9 @@ bool mu2e::CaloLaserFilter::filter(art::Event& event) {
 				auto calHitTestDataVec = caloDecoder.GetCalorimeterHitsForTrigger(iROC);
 
 				for(const auto& hit : *calHitTestDataVec) {
+					if (caloDAQUtil_.isHitGood(hit) != mu2e::CaloDAQUtilities::CaloHitError::Good) {
+						continue;  // Skip bad hits	
+					}
 					if(!check_disk_pins_ && hit.first.BoardID != mu2e::CaloConst::_laserBoardId) {
 						// Skip non-laser boards if check_disk_pins_ is false
 						continue;

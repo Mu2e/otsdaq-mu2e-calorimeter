@@ -86,6 +86,9 @@ bool mu2e::CaloCSIFilter::filter(art::Event& event) {
 				auto calHitTestDataVec = caloDecoder.GetCalorimeterHitsForTrigger(iROC);
 
 				for(const auto& hit : *calHitTestDataVec) {
+					if (caloDAQUtil_.isHitGood(hit) != mu2e::CaloDAQUtilities::CaloHitError::Good) {
+						continue;  // Skip bad hits	
+					}
 					if(hit.first.DetectorID == mu2e::CaloConst::detType::CsI) {
 						uint boardId   = hit.first.BoardID;
 						uint channelId = hit.first.ChannelID;
