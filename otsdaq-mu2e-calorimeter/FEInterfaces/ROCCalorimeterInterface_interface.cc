@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <fstream>
 #include <initializer_list>
+#include <algorithm>
 #include <iomanip>
 #include <vector>
 
@@ -180,6 +181,21 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(const std::string& rocUID, cons
 	registerFEMacroFunction("Read ROC Hit Rates",
 	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::ReadROCHitRates),
 	                        std::vector<std::string>{},          // inputs parameters
+	                        std::vector<std::string>{"Status"},  // output parameters
+	                        1);                                  // requiredUserPermissions
+
+	registerFEMacroFunction("Setup for Mu- Lifetime Run",
+	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::SetupForMuLifetimeRun),
+	                        std::vector<std::string>{"CAL (CsI) minimum hit length [samples, Default := 200]",
+	                                                 "CAL (CsI) maximum hit length [samples, Default := 200]",
+	                                                 "CAPHRI (LYSO) minimum hit length [samples, Default := 0]",
+	                                                 "CAPHRI (LYSO) maximum hit length [samples, Default := 100]",
+	                                                 "PIN-DIODE minimum hit length [samples, Default := 0]",
+	                                                 "PIN-DIODE maximum hit length [samples, Default := 100]",
+	                                                 "EMPTY minimum hit length [samples, Default := 0]",
+	                                                 "EMPTY maximum hit length [samples, Default := 100]",
+	                                                 "NLOW samples below threshold that close a hit [1-63, Default := 4]",
+	                                                 "Restore standard hit (all types 0/100, NLOW 60)? [bool, Default := 0]"},  // inputs parameters
 	                        std::vector<std::string>{"Status"},  // output parameters
 	                        1);                                  // requiredUserPermissions
 
@@ -2591,6 +2607,100 @@ void ROCCalorimeterInterface::ReadROCHitRates(__ARGS__) {
 	__COUT_INFO__ << os.str() << __E__;
 	__SET_ARG_OUT__("Status", os.str());
 }  // end ReadROCHitRates()
+
+//==================================================================================================
+
+// Run for the lifetime of the muonic atom (mu- stopped in CsI): fixed long hit window on the CsI (CAL) channels, so that
+// the second pulse of the capture is seen with the same observation window on every stop, independent of the signal.
+// Every length is an input; the defaults are those of the mu- run: CAL 200/200 (fixed window of 1 us), LYSO (CAPHRI),
+// PIN diodes and empty channels 0/100 (the standard hit), NLOW 4 (short tail for LYSO and PIN; the CsI hits have a
+// fixed window and do not use NLOW). With "Restore standard hit"
+// the inputs are ignored and all types go back to 0/100, NLOW 60 (as written by Configure). Needs ROC firmware 1.11
+// or later.
+void ROCCalorimeterInterface::SetupForMuLifetimeRun(__ARGS__) {
+	static const char* const minName[4] = {"CAL (CsI) minimum hit length [samples, Default := 200]",
+	                                       "CAPHRI (LYSO) minimum hit length [samples, Default := 0]",
+	                                       "PIN-DIODE minimum hit length [samples, Default := 0]",
+	                                       "EMPTY minimum hit length [samples, Default := 0]"};
+	static const char* const maxName[4] = {"CAL (CsI) maximum hit length [samples, Default := 200]",
+	                                       "CAPHRI (LYSO) maximum hit length [samples, Default := 100]",
+	                                       "PIN-DIODE maximum hit length [samples, Default := 100]",
+	                                       "EMPTY maximum hit length [samples, Default := 100]"};
+	static const uint32_t    minDefault[4] = {200, 0, 0, 0};
+	static const uint32_t    maxDefault[4] = {200, 100, 100, 100};
+
+	const bool        restore = __GET_ARG_IN__("Restore standard hit (all types 0/100, NLOW 60)? [bool, Default := 0]", bool, 0);
+	uint32_t          nlow    = __GET_ARG_IN__("NLOW samples below threshold that close a hit [1-63, Default := 4]", uint32_t, 4);
+	std::stringstream os;
+
+	// order of the types: CAL, CAPHRI, PIN-DIODE, EMPTY
+	uint16_t minLength[4] = {0, 0, 0, 0};
+	uint16_t maxLength[4] = {100, 100, 100, 100};
+	if(restore) {
+		nlow = 60;
+	} else {
+		for(int t = 0; t < 4; ++t) {
+			const uint32_t minValue = __GET_ARG_IN__(minName[t], uint32_t, minDefault[t]);
+			const uint32_t maxValue = __GET_ARG_IN__(maxName[t], uint32_t, maxDefault[t]);
+			minLength[t]            = static_cast<uint16_t>(std::min<uint32_t>(minValue, 0xFFFF));  // range checked in SetHitLengths
+			maxLength[t]            = static_cast<uint16_t>(std::min<uint32_t>(maxValue, 0xFFFF));
+		}
+	}
+	os << (restore ? "Restoring the standard hit on board " : "Mu- lifetime run setup on board ") << boardConfig_.boardID << "\n";
+
+	if(nlow < 1 || nlow > 63) {
+		os << "NLOW must be 1-63 (6-bit register, 0 is taken as 4): nothing written\n";
+	} else if(SetHitLengths(minLength, maxLength, os)) {
+		writeRegister(ROC_ADDRESS_HIT_LENGTH, nlow);
+		const uint16_t nlowRead = readRegister(ROC_ADDRESS_HIT_LENGTH) & 0x3F;
+		os << "NLOW      " << std::setw(5) << nlow << "         (" << nlowRead << ")" << (nlowRead == nlow ? "" : "  MISMATCH") << "\n";
+	}
+
+	__COUT_INFO__ << os.str() << __E__;
+	__SET_ARG_OUT__("Status", os.str());
+}  // end SetupForMuLifetimeRun()
+
+//==================================================================================================
+
+// Writes and reads back the hit length of the four channel types (registers 158-159, 163-168). Lengths are 10-bit
+// (the hit header NSAMPLES field); MAX 0 is taken as 100 by the firmware. Returns false without writing if the
+// firmware is older than 1.11 or a value is out of range; returns false after writing if a read-back differs.
+bool ROCCalorimeterInterface::SetHitLengths(const uint16_t minLength[4], const uint16_t maxLength[4], std::ostream& os) {
+	static const char* const typeName[4]   = {"CAL", "CAPHRI", "PIN-DIODE", "EMPTY"};
+	static const uint16_t    minAddress[4] = {ROC_ADDRESS_HITLEN_MIN_CAL, ROC_ADDRESS_HITLEN_MIN_CAPHRI, ROC_ADDRESS_HITLEN_MIN_PIN, ROC_ADDRESS_HITLEN_MIN_EMPTY};
+	static const uint16_t    maxAddress[4] = {ROC_ADDRESS_HITLEN_MAX_CAL, ROC_ADDRESS_HITLEN_MAX_CAPHRI, ROC_ADDRESS_HITLEN_MAX_PIN, ROC_ADDRESS_HITLEN_MAX_EMPTY};
+
+	const uint16_t version = readRegister(ROC_ADDRESS_FW_VERSION);
+	if(version < 0x010B) {
+		os << "Hit length registers need ROC firmware 1.11 or later; this board has " << ((version >> 8) & 0xFF) << "." << (version & 0xFF) << ": nothing written\n";
+		return false;
+	}
+	for(int t = 0; t < 4; ++t) {
+		if(minLength[t] > 1023 || maxLength[t] > 1023) {
+			os << typeName[t] << ": lengths must be <= 1023 samples (hit header field): nothing written\n";
+			return false;
+		}
+		if(maxLength[t] != 0 && minLength[t] > maxLength[t]) {
+			os << "WARNING " << typeName[t] << ": MIN " << minLength[t] << " > MAX " << maxLength[t] << ", the hits are closed at MAX\n";
+		}
+	}
+
+	bool ok = true;
+	os << "Type        MIN   MAX   (read back)\n";
+	for(int t = 0; t < 4; ++t) {
+		writeRegister(minAddress[t], minLength[t]);
+		writeRegister(maxAddress[t], maxLength[t]);
+		const uint16_t minRead = readRegister(minAddress[t]) & 0x3FF;
+		const uint16_t maxRead = readRegister(maxAddress[t]) & 0x3FF;
+		const bool     same    = (minRead == minLength[t] && maxRead == maxLength[t]);
+		ok                     = ok && same;
+		os << std::left << std::setw(10) << typeName[t] << std::right << std::setw(5) << minLength[t] << " " << std::setw(5) << maxLength[t] << "   (" << minRead << ", " << maxRead << ")"
+		   << (same ? "" : "  MISMATCH") << "\n";
+	}
+	if(!ok)
+		os << "ERROR: read-back differs from the written values\n";
+	return ok;
+}  // end SetHitLengths()
 
 //==================================================================================================
 
