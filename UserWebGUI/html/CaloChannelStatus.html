@@ -1,0 +1,1730 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+	<meta charset="utf-8">
+	<title>Calorimeter Channel Status</title>
+
+	<link href='/WebPath/css/fonts.css?family=Inconsolata:400' rel='stylesheet' type='text/css'>
+
+	<link rel="stylesheet" type="text/css" href="/WebPath/css/ConfigurationGUI.css">
+	<link rel="stylesheet" type="text/css" href="/WebPath/UserWebPath/WebGUI_calo/css/CaloChannelStatus.css">
+
+	<script type="text/JavaScript" src="/WebPath/js/Globals.js"></script>
+	<script type="text/JavaScript" src="/WebPath/js/Debug.js"></script>
+	<script type="text/JavaScript" src="/WebPath/js/DesktopContent.js"></script>
+	<script type="text/JavaScript" src="/WebPath/js/js_lib/SimpleContextMenu.js"></script>
+	<script type="text/JavaScript" src="/WebPath/js/js_lib/ConfigurationAPI.js"></script>
+
+	<script>
+
+		///////////////////////////////////////////////////////////////////////////////
+		// Calorimeter Channel Status GUI
+		//
+		// Shifter-friendly editor for the per-channel quality flags stored in
+		// SubsystemCalorimeterStatusTable (one record per BoardID, with a
+		// 1x20 "Status" BitMap of strings: good / dead / hot / undefined).
+		//
+		// Geometry (disk, crystal position, sensor, type) comes from
+		// SubsystemCalorimeterMapTable (one record per FEEchan, where
+		// FEEchan = BoardIdx*20 + BoardChan). The disk picture uses the
+		// physical crystal centre (xcry, ycry in mm); the "x"/"y" columns are
+		// per-row indices and do NOT describe the disk shape.
+		//
+		// Workflow:
+		//   1. pick a brush (good / dead / hot)
+		//   2. click channels in either the Boards tab or the Disk tab
+		//   3. review the pending list, then "Save & Activate"
+		//
+		// Nothing is written to the database until "Save & Activate" is
+		// confirmed. Saving uses the same mechanism as FEStructure_calo:
+		//   ConfigurationAPI.setFieldValuesForRecords  (temporary table version)
+		//   ConfigurationAPI.saveModifiedTables        (persist + bump/activate groups)
+		///////////////////////////////////////////////////////////////////////////////
+
+		var STATUS_TABLE_PATH_  = "/SubsystemCalorimeterStatusTable";
+		var MAP_TABLE_PATH_     = "/SubsystemCalorimeterMapTable";
+		var STATUS_FIELD_       = "Status";
+		var N_CH_PER_BOARD_     = 20;
+		var N_BOARDS_PER_DISK_  = 80;   //boards 0..79 -> disk 0, 80..159 -> disk 1
+		var LASER_BOARD_        = 160;
+		var TRAD_BOARDS_        = [31, 71, 111, 151];
+
+		var STATUS_VALUES_      = ["good", "dead", "hot", "undefined"];
+		var BRUSH_VALUES_       = ["good", "dead", "hot"];
+
+		var MAP_FIELDS_ = ["disk", "x", "y", "xcry", "ycry", "phi", "crate", "BoardIdx", "BoardChan",
+			"cryID", "rouID", "offID", "type", "sensor"];
+		var CRYSTAL_PITCH_MM_ = 34.3;  //crystal pitch; xcry/ycry are in mm
+		var INVALID_COORD_MM_ = -900;  //xcry/ycry <= this means "no physical position"
+
+		var _CHECK_ACTIVE_GROUPS_PERIOD = 5000; //ms
+
+		//---------------------------------------------------------------------
+		// Data model
+		//---------------------------------------------------------------------
+		// _boards[uid] = { uid:"023", id:23, orig:[20 strings], cur:[20 strings], isDefault:bool }
+		var _boards        = {};
+		var _boardUidsSorted = [];      //uids sorted by numeric id
+		var _boardUidById  = {};        //numeric id -> uid
+
+		// _mapByFee[feechan] = { fee, disk, x, y, phi, crate, boardIdx, boardChan, cryID, rouID, offID, type, sensor }
+		var _mapByFee      = {};
+		var _mapLoaded     = false;
+		var _mapError      = "";
+		var _diskGeom      = {};        //disk -> {maxX, maxY, cells:[...] }
+
+		var _brush         = "good";    //default brush
+		var _activeTab     = "boards";
+		var _onlyNonGood   = false;
+		var _searchText    = "";
+
+		var _busy          = false;
+		var _checkActiveGroupsTimer = 0;
+		var _lastActiveGroups = [];
+		var _configChangedBanner = false;
+
+		// CSV export of saved versions (same folder CaloConfiguration uploads from).
+		// Path is relative to $OTS_SOURCE, as the CodeEditor supervisor expects.
+		var CSV_EXPORT_DIR_   = "/otsdaq-mu2e-calorimeter/boardConfig/configurations/channelstatus";
+		var _codeEditorAppId  = 0;   //resolved at init(); 0 = export unavailable
+
+
+		///////////////////////////////////////////////////////////////////////////
+		function init()
+		{
+			Debug.log("CaloChannelStatus init");
+			DesktopContent.tooltip("Calo Channel Status",
+				"Pick a brush (good / dead / hot), click channels in the Boards or Disk tab, " +
+				"then press 'Save & Activate'. Nothing is written until you confirm.");
+			DesktopContent.setWindowTooltip(
+				"Enable/disable individual calorimeter channels (SubsystemCalorimeterStatusTable).");
+
+			paintBrushBar();
+			selectTab(_activeTab);
+			loadAll();
+			resolveCodeEditorAppId();
+		}
+
+		//resolve the CodeEditorSupervisor app id (needed to write CSV files)
+		function resolveCodeEditorAppId()
+		{
+			DesktopContent.XMLHttpRequest(
+				"Request?RequestType=getAppId&classNeedle=ots::CodeEditorSupervisor", "",
+				function(req)
+				{
+					_codeEditorAppId = DesktopContent.getXMLValue(req, "id") | 0;
+					Debug.log("CodeEditorSupervisor app id: " + _codeEditorAppId);
+					if (!_codeEditorAppId)
+						Debug.log("No CodeEditorSupervisor in the active context; " +
+							"CSV export after save will not be offered.", Debug.WARN_PRIORITY);
+				},
+				0, 0, true, true /*doNotShowLoadingOverlay*/, true /*targetGatewaySupervisor*/);
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		// Loading
+		///////////////////////////////////////////////////////////////////////////
+		function loadAll()
+		{
+			if (_checkActiveGroupsTimer)
+			{
+				window.clearTimeout(_checkActiveGroupsTimer);
+				_checkActiveGroupsTimer = 0;
+			}
+			hideConfigChangedBanner();
+
+			_boards = {}; _boardUidsSorted = []; _boardUidById = {};
+			_mapByFee = {}; _mapLoaded = false; _mapLoading = false; _mapError = ""; _diskGeom = {};
+
+			setBusy(true);
+			setStatus("Loading " + STATUS_TABLE_PATH_ + " ...", "info");
+
+			loadStatusTable(function(err)
+			{
+				if (err)
+				{
+					setBusy(false);
+					setStatus("Failed to load " + STATUS_TABLE_PATH_ + ": " + err, "error");
+					document.getElementById("boards-view").innerHTML =
+						'<div class="empty-msg">Could not read the channel status table.</div>';
+					document.getElementById("disk-view").innerHTML =
+						'<div class="empty-msg">Could not read the channel status table.</div>';
+					return;
+				}
+
+				paintBoards();
+				updateSummary();
+				setBusy(false);
+				setStatus("Loaded " + _boardUidsSorted.length + " boards.", "success");
+				checkForActiveGroupChange(true /*init*/);
+
+				//Geometry is loaded lazily: only when the Disk tab is first opened
+				//(or right away if the user is already on it after a reload).
+				document.getElementById("disk-view").innerHTML =
+					'<div class="empty-msg">Geometry loads when this tab is opened.</div>';
+				if (_activeTab == "disk") ensureGeometryLoaded();
+			});
+		}
+
+		//-------------------------------------------------------------------------
+		// Lazy geometry load. The map table has ~3200 records and takes a few
+		// seconds to fetch, so it is only requested when the Disk tab is shown.
+		var _mapLoading = false;
+		function ensureGeometryLoaded()
+		{
+			if (_mapLoaded || _mapLoading) return;
+			if (!_boardUidsSorted.length) return; //status not loaded yet; loadAll() will call again
+			_mapLoading = true;
+			_mapError = "";
+
+			document.getElementById("disk-view").innerHTML =
+				'<div class="empty-msg">Loading geometry from ' + escapeHtml(MAP_TABLE_PATH_) +
+				' ...<br><span class="loading-hint">(a few seconds)</span></div>';
+			setStatus("Loading geometry from " + MAP_TABLE_PATH_ + " ...", "info");
+
+			loadMapTable(function(mapErr)
+			{
+				_mapLoading = false;
+				if (mapErr)
+				{
+					_mapError = mapErr;
+					setStatus("Geometry unavailable: " + mapErr, "warn");
+				}
+				else
+				{
+					setStatus("Geometry loaded: " + Object.keys(_mapByFee).length +
+						" mapped channels.", "success");
+				}
+				paintBoards();    //repaint with disk/phi/crate chips and geometry tooltips
+				paintDisks();
+				updateSummary();
+			});
+		}
+
+		//-------------------------------------------------------------------------
+		// Silent variant used by the save flow: make sure the map is in memory
+		// (for EMPTY-channel detection) without touching the Disk tab UI.
+		// Always calls cb(), even if the map cannot be loaded.
+		function loadMapIfNeeded(cb)
+		{
+			if (_mapLoaded) { cb(); return; }
+			if (_mapLoading)
+			{
+				//Disk tab fetch already in flight: wait for it
+				var t = window.setInterval(function()
+				{
+					if (!_mapLoading) { window.clearInterval(t); cb(); }
+				}, 200);
+				return;
+			}
+			_mapLoading = true;
+			setStatus("Loading channel map (to exclude EMPTY channels from the counts) ...", "info");
+			loadMapTable(function(mapErr)
+			{
+				_mapLoading = false;
+				if (mapErr)
+				{
+					_mapError = mapErr;
+					Debug.log("Map unavailable; EMPTY channels will be counted as-is: " + mapErr,
+						Debug.WARN_PRIORITY);
+				}
+				else
+					paintBoards(); //pick up geometry chips/tooltips while we are at it
+				cb();
+			});
+		}
+
+		//-------------------------------------------------------------------------
+		function loadStatusTable(cb)
+		{
+			ConfigurationAPI.getSubsetRecords(STATUS_TABLE_PATH_.replace(/^\/+/, ""), "",
+				function(records)
+				{
+					if (!records || !records.length)
+					{ cb("no records found (table missing from active group?)"); return; }
+
+					ConfigurationAPI.getFieldValuesForRecords(
+						STATUS_TABLE_PATH_.replace(/^\/+/, ""),
+						records, [STATUS_FIELD_],
+						function(fieldValues, err)
+						{
+							if (err) { cb(err); return; }
+							if (!fieldValues || !fieldValues.length)
+							{ cb("no Status values returned"); return; }
+
+							for (var i = 0; i < fieldValues.length; ++i)
+							{
+								var uid = fieldValues[i].fieldUID;
+								var parsed = parseBitMap(fieldValues[i].fieldValue);
+								var id = parseInt(uid, 10);
+								_boards[uid] = {
+									uid: uid,
+									id: isNaN(id) ? -1 : id,
+									orig: parsed.arr.slice(),
+									cur:  parsed.arr.slice(),
+									isDefault: parsed.isDefault
+								};
+								if (!isNaN(id)) _boardUidById[id] = uid;
+							}
+							_boardUidsSorted = Object.keys(_boards).sort(function(a, b)
+							{
+								return _boards[a].id - _boards[b].id;
+							});
+							cb(null);
+						},
+						undefined /*modifiedTables*/, true /*silenceErrors*/);
+				});
+		}
+
+		//-------------------------------------------------------------------------
+		function loadMapTable(cb)
+		{
+			ConfigurationAPI.getSubsetRecords(MAP_TABLE_PATH_.replace(/^\/+/, ""), "",
+				function(records)
+				{
+					if (!records || !records.length)
+					{ cb("no records found (table missing from active group?)"); return; }
+
+					ConfigurationAPI.getFieldValuesForRecords(
+						MAP_TABLE_PATH_.replace(/^\/+/, ""),
+						records, MAP_FIELDS_,
+						function(fieldValues, err)
+						{
+							if (err) { cb(err); return; }
+							if (!fieldValues || !fieldValues.length)
+							{ cb("no map values returned"); return; }
+
+							//fieldValues is flat: one entry per (record, field)
+							var tmp = {};
+							for (var i = 0; i < fieldValues.length; ++i)
+							{
+								var fee = fieldValues[i].fieldUID;
+								if (!tmp[fee]) tmp[fee] = {};
+								//fieldPath may be "x" or carry a leading path; take last segment
+								var p = fieldValues[i].fieldPath || "";
+								p = p.split("/").pop();
+								tmp[fee][p] = fieldValues[i].fieldValue;
+							}
+
+							for (var feeStr in tmp)
+							{
+								var f = tmp[feeStr];
+								var entry = {
+									fee:       parseInt(feeStr, 10),
+									disk:      toInt(f["disk"]),
+									x:         toInt(f["x"]),
+									y:         toInt(f["y"]),
+									xcry:      toFloat(f["xcry"]),
+									ycry:      toFloat(f["ycry"]),
+									phi:       toInt(f["phi"]),
+									crate:     toInt(f["crate"]),
+									boardIdx:  toInt(f["BoardIdx"]),
+									boardChan: toInt(f["BoardChan"]),
+									cryID:     toInt(f["cryID"]),
+									rouID:     toInt(f["rouID"]),
+									offID:     toInt(f["offID"]),
+									sensor:    toInt(f["sensor"]),
+									type:      (f["type"] || "").toUpperCase()
+								};
+								if (isNaN(entry.fee)) continue;
+								_mapByFee[entry.fee] = entry;
+							}
+
+							buildDiskGeometry();
+							_mapLoaded = true;
+							cb(null);
+						},
+						undefined /*modifiedTables*/, true /*silenceErrors*/);
+				});
+		}
+
+		function toFloat(v)
+		{
+			if (v === undefined || v === null) return NaN;
+			var n = parseFloat(String(v).trim());
+			return isNaN(n) ? NaN : n;
+		}
+
+		function toInt(v)
+		{
+			if (v === undefined || v === null) return NaN;
+			var n = parseFloat(String(v).trim());
+			return isNaN(n) ? NaN : Math.round(n);
+		}
+
+		//-------------------------------------------------------------------------
+		// Each map entry gets gx/gy = physical crystal centre in units of the
+		// crystal pitch (rows are staggered by half a pitch, so these are
+		// continuous, not integer). The SVG is drawn in these units.
+		function buildDiskGeometry()
+		{
+			_diskGeom = {};
+			var nSkipped = 0;
+			for (var fee in _mapByFee)
+			{
+				var m = _mapByFee[fee];
+				if (isNaN(m.disk) || m.disk < 0) { ++nSkipped; continue; }
+				if (isNaN(m.xcry) || isNaN(m.ycry) ||
+					m.xcry <= INVALID_COORD_MM_ || m.ycry <= INVALID_COORD_MM_) { ++nSkipped; continue; }
+				m.gx = m.xcry / CRYSTAL_PITCH_MM_;
+				m.gy = m.ycry / CRYSTAL_PITCH_MM_;
+				if (!_diskGeom[m.disk]) _diskGeom[m.disk] =
+					{ minX: m.gx, maxX: m.gx, minY: m.gy, maxY: m.gy, cells: [], slots: {} };
+				var g = _diskGeom[m.disk];
+				if (m.gx > g.maxX) g.maxX = m.gx;
+				if (m.gy > g.maxY) g.maxY = m.gy;
+				if (m.gx < g.minX) g.minX = m.gx;
+				if (m.gy < g.minY) g.minY = m.gy;
+				g.cells.push(m);
+				//one "slot" per crystal (both SiPMs share xcry/ycry)
+				var slotKey = m.xcry.toFixed(1) + "," + m.ycry.toFixed(1);
+				var slot = g.slots[slotKey];
+				if (!slot)
+				{
+					slot = g.slots[slotKey] = { gx: m.gx, gy: m.gy, type: m.type, cryID: m.cryID,
+						boards: [], pairId: -1 };
+				}
+				if (slot.boards.indexOf(m.boardIdx) < 0) slot.boards.push(m.boardIdx);
+				//board pair = (even board, odd board) = (SiPM 0, SiPM 1) of the same crystals
+				if (!isNaN(m.boardIdx) && m.boardIdx >= 0 && slot.pairId < 0)
+					slot.pairId = Math.floor(m.boardIdx / 2);
+				if (slot.type != "CAPHRI" && m.type == "CAPHRI") slot.type = "CAPHRI";
+			}
+			for (var d in _diskGeom)
+			{
+				var gg = _diskGeom[d];
+				gg.nSlots = Object.keys(gg.slots).length;
+				//group crystals by board pair for the optional pair outlines
+				gg.pairs = {};
+				for (var k in gg.slots)
+				{
+					var sl = gg.slots[k];
+					if (sl.pairId < 0) continue;
+					if (!gg.pairs[sl.pairId]) gg.pairs[sl.pairId] = [];
+					gg.pairs[sl.pairId].push(sl);
+				}
+				Debug.log("Disk " + d + " geometry: " + gg.cells.length + " sensors in " +
+					gg.nSlots + " crystal slots; x " + gg.minX.toFixed(2) + ".." + gg.maxX.toFixed(2) +
+					", y " + gg.minY.toFixed(2) + ".." + gg.maxY.toFixed(2) + " (pitch units)");
+			}
+			if (nSkipped) Debug.log("Disk geometry: skipped " + nSkipped +
+				" map rows without a valid disk / xcry / ycry.");
+		}
+
+		//-------------------------------------------------------------------------
+		// Map geometry lookup: FEEchan -> map entry (or undefined)
+		function mapForBoardChan(boardId, ch)
+		{
+			if (boardId < 0) return undefined;
+			return _mapByFee[boardId * N_CH_PER_BOARD_ + ch];
+		}
+
+		//-------------------------------------------------------------------------
+		// BitMap string <-> array of 20 strings
+		//
+		// Stored format (as written by the Table Editor and by the CSV upload
+		// in CaloConfiguration):  [["good","good",...,"hot"]]
+		// The string "DEFAULT" (or empty) means every channel is unset.
+		//-------------------------------------------------------------------------
+		function parseBitMap(str)
+		{
+			var out = { arr: [], isDefault: false };
+			var s = (str || "").trim();
+
+			if (!s.length || s.toLowerCase() == "default")
+			{
+				out.isDefault = true;
+				for (var i = 0; i < N_CH_PER_BOARD_; ++i) out.arr.push("undefined");
+				return out;
+			}
+
+			var row = null;
+			try
+			{
+				var j = JSON.parse(s);
+				if (Array.isArray(j))
+					row = (j.length && Array.isArray(j[0])) ? j[0] : j;
+			}
+			catch (e) { row = null; }
+
+			if (!row)
+			{
+				//tolerant fallback: take the first [...] group and pull out words
+				var inner = s;
+				var open = s.indexOf("[");
+				if (open >= 0)
+				{
+					inner = s.substring(open + 1);
+					var innerOpen = inner.indexOf("[");
+					if (innerOpen >= 0 && innerOpen < 2) inner = inner.substring(innerOpen + 1);
+					var close = inner.indexOf("]");
+					if (close >= 0) inner = inner.substring(0, close);
+				}
+				row = inner.match(/[A-Za-z_]+/g) || [];
+			}
+
+			for (var i = 0; i < N_CH_PER_BOARD_; ++i)
+			{
+				var v = (i < row.length) ? String(row[i]).trim().toLowerCase() : "";
+				if (!v.length) v = "undefined";
+				if (STATUS_VALUES_.indexOf(v) < 0) v = "undefined";
+				out.arr.push(v);
+			}
+			return out;
+		}
+
+		function encodeBitMap(arr)
+		{
+			var parts = [];
+			for (var i = 0; i < N_CH_PER_BOARD_; ++i)
+				parts.push('"' + (arr[i] || "undefined") + '"');
+			return "[[" + parts.join(",") + "]]";
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		// Pending-change bookkeeping
+		///////////////////////////////////////////////////////////////////////////
+		function isChanged(uid, ch)
+		{
+			var b = _boards[uid];
+			return b && b.cur[ch] !== b.orig[ch];
+		}
+
+		function collectChanges()
+		{
+			//returns [{uid, id, arr:[20], cells:[{ch, from, to}]}]
+			var out = [];
+			for (var i = 0; i < _boardUidsSorted.length; ++i)
+			{
+				var uid = _boardUidsSorted[i];
+				var b = _boards[uid];
+				var cells = [];
+				for (var ch = 0; ch < N_CH_PER_BOARD_; ++ch)
+					if (b.cur[ch] !== b.orig[ch])
+						cells.push({ ch: ch, from: b.orig[ch], to: b.cur[ch] });
+				if (cells.length)
+					out.push({ uid: uid, id: b.id, arr: b.cur.slice(), cells: cells });
+			}
+			return out;
+		}
+
+		function countPending()
+		{
+			var n = 0;
+			var changes = collectChanges();
+			for (var i = 0; i < changes.length; ++i) n += changes[i].cells.length;
+			return n;
+		}
+
+		//-------------------------------------------------------------------------
+		// Set a channel to a value (in the local model) and refresh its cells.
+		function setChannel(uid, ch, value, skipSummary)
+		{
+			var b = _boards[uid];
+			if (!b || ch < 0 || ch >= N_CH_PER_BOARD_) return;
+			if (STATUS_VALUES_.indexOf(value) < 0) return;
+			if (b.cur[ch] === value) return;
+			b.cur[ch] = value;
+			refreshChannelCells(uid, ch);
+			if (!skipSummary) updateSummary();
+		}
+
+		function revertChannel(uid, ch)
+		{
+			var b = _boards[uid];
+			if (!b) return;
+			b.cur[ch] = b.orig[ch];
+			refreshChannelCells(uid, ch);
+			updateSummary();
+		}
+
+		function setWholeBoard(uid, value)
+		{
+			var b = _boards[uid];
+			if (!b) return;
+			for (var ch = 0; ch < N_CH_PER_BOARD_; ++ch)
+				setChannel(uid, ch, value, true);
+			updateSummary();
+		}
+
+		function revertBoard(uid)
+		{
+			var b = _boards[uid];
+			if (!b) return;
+			for (var ch = 0; ch < N_CH_PER_BOARD_; ++ch)
+			{
+				b.cur[ch] = b.orig[ch];
+				refreshChannelCells(uid, ch);
+			}
+			updateSummary();
+		}
+
+		function discardAll()
+		{
+			if (!countPending()) return;
+			DesktopContent.popUpVerification(
+				"Discard all <b>" + countPending() + "</b> pending channel change(s)?",
+				function()
+				{
+					for (var uid in _boards)
+						_boards[uid].cur = _boards[uid].orig.slice();
+					paintBoards();
+					paintDisks();
+					updateSummary();
+					setStatus("Pending changes discarded.", "info");
+				});
+		}
+
+		//-------------------------------------------------------------------------
+		// Repaint the DOM cells that represent (uid, ch) in both tabs.
+		function refreshChannelCells(uid, ch)
+		{
+			var b = _boards[uid];
+			var v = b.cur[ch];
+			var changed = isChanged(uid, ch);
+
+			//Boards tab cell and (for the laser board) the Disk tab strip cell
+			var cellIds = ["cs-bc-" + uid + "-" + ch, "cs-lz-" + uid + "-" + ch];
+			for (var ci = 0; ci < cellIds.length; ++ci)
+			{
+				var cell = document.getElementById(cellIds[ci]);
+				if (!cell) continue;
+				cell.className = "chan-cell st-" + v + (changed ? " is-changed" : "");
+				cell.title = channelTooltip(uid, ch);
+			}
+
+			var card = document.getElementById("board-card-" + uid);
+			if (card)
+			{
+				var anyChanged = false, anyBad = false;
+				for (var c = 0; c < N_CH_PER_BOARD_; ++c)
+				{
+					if (b.cur[c] !== b.orig[c]) anyChanged = true;
+					if (b.cur[c] !== "good") anyBad = true;
+				}
+				card.classList.toggle("has-changes", anyChanged);
+				card.classList.toggle("has-bad", anyBad);
+				var badge = document.getElementById("board-badge-" + uid);
+				if (badge) badge.textContent = boardBadgeText(b);
+			}
+
+			var fee = b.id * N_CH_PER_BOARD_ + ch;
+			var rect = document.getElementById("cs-dk-" + fee);
+			if (rect)
+			{
+				rect.setAttribute("class", "sensor st-" + v + (changed ? " is-changed" : "") +
+					typeClass(_mapByFee[fee]));
+				var t = rect.querySelector("title");
+				if (t) t.textContent = channelTooltip(uid, ch);
+			}
+		}
+
+		function typeClass(m)
+		{
+			if (!m) return "";
+			if (m.type == "CAL") return "";
+			if (m.type == "CAPHRI") return ""; //CAPHRI is marked by the crystal outline instead
+			if (m.type == "PIN-DIODE") return " type-pin";
+			if (m.type == "EMPTY") return " type-empty";
+			return " type-other";
+		}
+
+		function boardBadgeText(b)
+		{
+			var nDead = 0, nHot = 0, nUndef = 0;
+			for (var c = 0; c < N_CH_PER_BOARD_; ++c)
+			{
+				if (b.cur[c] == "dead") ++nDead;
+				else if (b.cur[c] == "hot") ++nHot;
+				else if (b.cur[c] == "undefined") ++nUndef;
+			}
+			var parts = [];
+			if (nDead)  parts.push(nDead + " dead");
+			if (nHot)   parts.push(nHot + " hot");
+			if (nUndef) parts.push(nUndef + " undef");
+			return parts.length ? parts.join(", ") : "all good";
+		}
+
+		function channelTooltip(uid, ch)
+		{
+			var b = _boards[uid];
+			var fee = b.id * N_CH_PER_BOARD_ + ch;
+			var s = "Board " + b.id + "  ch " + ch + "  (FEEchan " + fee + ")\n" +
+				"status: " + b.cur[ch];
+			if (isChanged(uid, ch)) s += "   (pending, was " + b.orig[ch] + ")";
+			var m = _mapByFee[fee];
+			if (m)
+			{
+				s += "\ntype: " + m.type;
+				if (!isNaN(m.disk) && m.disk >= 0)
+				{
+					s += "   disk " + m.disk;
+					if (!isNaN(m.xcry) && m.xcry > INVALID_COORD_MM_)
+						s += "  (x " + m.xcry.toFixed(0) + " mm, y " + m.ycry.toFixed(0) + " mm)";
+				}
+				if (!isNaN(m.cryID)) s += "\ncrystal " + m.cryID + "  SiPM " + m.rouID +
+					"  (offline " + m.offID + ")";
+				if (!isNaN(m.crate)) s += "   crate " + m.crate;
+			}
+			s += "\nclick: set to '" + _brush + "'";
+			return s;
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		// Tabs / brush / filters
+		///////////////////////////////////////////////////////////////////////////
+		function selectTab(name)
+		{
+			_activeTab = name;
+			var tabs = document.querySelectorAll(".tab-btn");
+			for (var i = 0; i < tabs.length; ++i)
+				tabs[i].classList.toggle("is-active", tabs[i].getAttribute("data-tab") == name);
+			document.getElementById("boards-view").style.display = (name == "boards") ? "" : "none";
+			document.getElementById("disk-view").style.display   = (name == "disk")   ? "" : "none";
+			document.getElementById("boards-filters").style.display = (name == "boards") ? "" : "none";
+			if (name == "disk") ensureGeometryLoaded();
+		}
+
+		function paintBrushBar()
+		{
+			var el = document.getElementById("brush-bar");
+			var str = '<span class="brush-label">Click sets channel to:</span>';
+			for (var i = 0; i < BRUSH_VALUES_.length; ++i)
+			{
+				var v = BRUSH_VALUES_[i];
+				str += '<button class="brush-btn st-' + v + (v == _brush ? ' is-active' : '') +
+					'" id="brush-' + v + '" onclick="setBrush(\'' + v + '\')" title="' +
+					brushHelp(v) + '">' + v + '</button>';
+			}
+			el.innerHTML = str;
+		}
+
+		function brushHelp(v)
+		{
+			if (v == "good") return "Re-enable a channel.";
+			if (v == "dead") return "Mark a channel as dead (no signal).";
+			if (v == "hot")  return "Mark a channel as hot / noisy (disable it).";
+			return "";
+		}
+
+		function setBrush(v)
+		{
+			if (BRUSH_VALUES_.indexOf(v) < 0) return;
+			_brush = v;
+			var btns = document.querySelectorAll(".brush-btn");
+			for (var i = 0; i < btns.length; ++i)
+				btns[i].classList.toggle("is-active", btns[i].id == "brush-" + v);
+		}
+
+		function onFilterChanged()
+		{
+			_onlyNonGood = document.getElementById("filter-nongood").checked;
+			_searchText  = (document.getElementById("filter-search").value || "").trim();
+			applyBoardFilter();
+		}
+
+		function applyBoardFilter()
+		{
+			var searchId = -1, searchFee = -1;
+			var s = _searchText;
+			if (s.length)
+			{
+				var m = s.match(/^\s*(?:b(?:oard)?\s*)?(\d+)\s*$/i);
+				if (m) searchId = parseInt(m[1], 10);
+				var mf = s.match(/^\s*fee\s*(\d+)\s*$/i);
+				if (mf)
+				{
+					searchFee = parseInt(mf[1], 10);
+					searchId = Math.floor(searchFee / N_CH_PER_BOARD_);
+				}
+			}
+
+			var shown = 0;
+			for (var i = 0; i < _boardUidsSorted.length; ++i)
+			{
+				var uid = _boardUidsSorted[i];
+				var b = _boards[uid];
+				var card = document.getElementById("board-card-" + uid);
+				if (!card) continue;
+				var visible = true;
+				if (_onlyNonGood)
+				{
+					var anyBad = false;
+					for (var c = 0; c < N_CH_PER_BOARD_; ++c)
+						if (b.cur[c] !== "good") { anyBad = true; break; }
+					if (!anyBad) visible = false;
+				}
+				if (s.length)
+				{
+					if (searchId >= 0) visible = visible && (b.id == searchId);
+					else visible = visible && (uid.indexOf(s) >= 0);
+				}
+				card.style.display = visible ? "" : "none";
+				if (visible) ++shown;
+			}
+			var cnt = document.getElementById("boards-shown");
+			if (cnt) cnt.textContent = shown + " / " + _boardUidsSorted.length + " boards shown";
+		}
+
+		//-------------------------------------------------------------------------
+		// Quick-set: Board/Ch and FEEchan are kept in sync in both directions
+		// (FEEchan = Board*20 + Ch).
+		function quickSyncFromBoardChan()
+		{
+			var boardId = parseInt(document.getElementById("quick-board").value, 10);
+			var ch      = parseInt(document.getElementById("quick-chan").value, 10);
+			var fEl     = document.getElementById("quick-fee");
+			if (isNaN(boardId) || isNaN(ch)) { fEl.value = ""; return; }
+			if (ch < 0 || ch >= N_CH_PER_BOARD_) { fEl.value = ""; return; }
+			fEl.value = boardId * N_CH_PER_BOARD_ + ch;
+		}
+
+		function quickSyncFromFee()
+		{
+			var fee = parseInt(document.getElementById("quick-fee").value, 10);
+			var bEl = document.getElementById("quick-board");
+			var cEl = document.getElementById("quick-chan");
+			if (isNaN(fee) || fee < 0) { bEl.value = ""; cEl.value = ""; return; }
+			bEl.value = Math.floor(fee / N_CH_PER_BOARD_);
+			cEl.value = fee % N_CH_PER_BOARD_;
+		}
+
+		// Apply the brush to the channel described in the quick-set row.
+		function quickSet()
+		{
+			var bEl = document.getElementById("quick-board");
+			var cEl = document.getElementById("quick-chan");
+			var fEl = document.getElementById("quick-fee");
+			var boardId = parseInt(bEl.value, 10);
+			var ch      = parseInt(cEl.value, 10);
+			var fee     = parseInt(fEl.value, 10);
+
+			//fields are kept in sync, but fall back to FEEchan if Board/Ch are blank
+			if ((isNaN(boardId) || isNaN(ch)) && !isNaN(fee))
+			{
+				boardId = Math.floor(fee / N_CH_PER_BOARD_);
+				ch      = fee % N_CH_PER_BOARD_;
+			}
+			if (isNaN(boardId) || isNaN(ch))
+			{ setStatus("Quick-set: enter Board + Channel, or a FEEchan.", "warn"); return; }
+			if (ch < 0 || ch >= N_CH_PER_BOARD_)
+			{ setStatus("Quick-set: channel must be 0.." + (N_CH_PER_BOARD_ - 1) + ".", "warn"); return; }
+
+			var uid = _boardUidById[boardId];
+			if (!uid)
+			{ setStatus("Quick-set: board " + boardId + " not found in " + STATUS_TABLE_PATH_ + ".", "warn"); return; }
+
+			setChannel(uid, ch, _brush);
+			setStatus("Board " + boardId + " ch " + ch + " set to '" + _brush + "' (pending).", "info");
+
+			//scroll the board into view in the boards tab
+			var card = document.getElementById("board-card-" + uid);
+			if (card && _activeTab == "boards")
+			{
+				card.style.display = "";
+				card.scrollIntoView({ block: "nearest" });
+			}
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		// Boards tab
+		///////////////////////////////////////////////////////////////////////////
+		function paintBoards()
+		{
+			var el = document.getElementById("boards-view");
+			if (!_boardUidsSorted.length)
+			{
+				el.innerHTML = '<div class="empty-msg">No boards found.</div>';
+				return;
+			}
+
+			var groups = [];   //[{title, uids:[]}]
+			var byGroup = {};
+			for (var i = 0; i < _boardUidsSorted.length; ++i)
+			{
+				var uid = _boardUidsSorted[i];
+				var b = _boards[uid];
+				var key = boardGroupKey(b.id);
+				if (!byGroup[key]) { byGroup[key] = { title: key, uids: [] }; groups.push(byGroup[key]); }
+				byGroup[key].uids.push(uid);
+			}
+
+			var str = "";
+			for (var g = 0; g < groups.length; ++g)
+			{
+				str += '<div class="board-group">';
+				str += '<div class="board-group-title">' + escapeHtml(groups[g].title) + '</div>';
+				str += '<div class="board-grid">';
+				for (var k = 0; k < groups[g].uids.length; ++k)
+					str += boardCardHtml(groups[g].uids[k]);
+				str += '</div></div>';
+			}
+			el.innerHTML = str;
+			applyBoardFilter();
+		}
+
+		function boardGroupKey(id)
+		{
+			if (id < 0) return "Unknown boards";
+			if (id == LASER_BOARD_) return "Laser board";
+			var disk = Math.floor(id / N_BOARDS_PER_DISK_);
+			if (disk > 1) return "Other boards";
+			return "Disk " + disk + "  (boards " + (disk * N_BOARDS_PER_DISK_) + " - " +
+				((disk + 1) * N_BOARDS_PER_DISK_ - 1) + ")";
+		}
+
+		function boardCardHtml(uid)
+		{
+			var b = _boards[uid];
+			var anyChanged = false, anyBad = false;
+			for (var c = 0; c < N_CH_PER_BOARD_; ++c)
+			{
+				if (b.cur[c] !== b.orig[c]) anyChanged = true;
+				if (b.cur[c] !== "good") anyBad = true;
+			}
+
+			//geometry chips: disk / phi / crate taken from the first mapped channel
+			var chips = [];
+			var m0 = null;
+			for (var c0 = 0; c0 < N_CH_PER_BOARD_ && !m0; ++c0)
+			{
+				var mm = mapForBoardChan(b.id, c0);
+				if (mm && !isNaN(mm.disk) && mm.disk >= 0) m0 = mm;
+			}
+			if (m0)
+			{
+				chips.push('<span class="geo-chip geo-disk">disk ' + m0.disk + '</span>');
+				if (!isNaN(m0.phi) && m0.phi >= 0)
+					chips.push('<span class="geo-chip geo-phi">&phi; ' + m0.phi + '</span>');
+				if (!isNaN(m0.crate) && m0.crate >= 0)
+					chips.push('<span class="geo-chip geo-crate">crate ' + m0.crate + '</span>');
+			}
+			if (TRAD_BOARDS_.indexOf(b.id) >= 0) chips.push('<span class="geo-chip geo-special">TRAD</span>');
+			if (b.id == LASER_BOARD_)             chips.push('<span class="geo-chip geo-special">laser</span>');
+			var sub = chips.join("");
+
+			var str = '<div class="board-card' + (anyChanged ? ' has-changes' : '') +
+				(anyBad ? ' has-bad' : '') + '" id="board-card-' + uid + '">';
+			str += '<div class="board-head">';
+			str +=   '<span class="board-name" title="BoardID record ' + uid + '">Board ' + b.id + '</span>';
+			str +=   '<span class="board-sub">' + sub + '</span>';
+			str +=   '<span class="board-badge" id="board-badge-' + uid + '">' + boardBadgeText(b) + '</span>';
+			str +=   '<span class="board-actions">';
+			str +=     '<button class="mini-btn" onclick="setWholeBoard(\'' + uid + '\',\'good\')" title="Set all 20 channels of this board to good">all good</button>';
+			str +=     '<button class="mini-btn" onclick="setWholeBoard(\'' + uid + '\',\'' + "dead" + '\')" title="Set all 20 channels of this board to dead">all dead</button>';
+			str +=     '<button class="mini-btn mini-revert" onclick="revertBoard(\'' + uid + '\')" title="Undo pending changes on this board">undo</button>';
+			str +=   '</span>';
+			str += '</div>';
+
+			str += '<div class="chan-grid">';
+			for (var ch = 0; ch < N_CH_PER_BOARD_; ++ch)
+			{
+				var v = b.cur[ch];
+				str += '<div class="chan-cell st-' + v + (b.cur[ch] !== b.orig[ch] ? ' is-changed' : '') +
+					'" id="cs-bc-' + uid + '-' + ch + '"' +
+					' onclick="onChannelClick(\'' + uid + '\',' + ch + ')"' +
+					' title="' + escapeHtml(channelTooltip(uid, ch)) + '">' + ch + '</div>';
+			}
+			str += '</div>';
+			str += '</div>';
+			return str;
+		}
+
+		function onChannelClick(uid, ch)
+		{
+			if (_busy) return;
+			setChannel(uid, ch, _brush);
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		// Disk tab (SVG)
+		///////////////////////////////////////////////////////////////////////////
+		function paintDisks()
+		{
+			var el = document.getElementById("disk-view");
+			if (_mapLoading) return; //loading placeholder already shown
+			if (!_mapLoaded)
+			{
+				el.innerHTML = '<div class="empty-msg">Geometry not available' +
+					(_mapError ? ': ' + escapeHtml(_mapError) : '') +
+					'.<br>Use the Boards tab to edit channels. ' +
+					'<button class="mini-btn" onclick="ensureGeometryLoaded()">Retry</button></div>';
+				return;
+			}
+
+			var disks = Object.keys(_diskGeom).map(function(d) { return parseInt(d, 10); })
+				.sort(function(a, b) { return a - b; });
+			if (!disks.length)
+			{
+				el.innerHTML = '<div class="empty-msg">No disk geometry found in ' +
+					escapeHtml(MAP_TABLE_PATH_) + '.</div>';
+				return;
+			}
+
+			var str = '<div class="disk-toolbar">';
+			str += '<button class="toggle-btn' + (_showBoardBorders ? ' is-on' : '') +
+				'" id="btn-board-borders" onclick="toggleBoardBorders()" ' +
+				'title="Outline the crystals read out by each board pair (even board = SiPM 0, odd board = SiPM 1).">' +
+				'Board borders: <b>' + (_showBoardBorders ? 'on' : 'off') + '</b></button>';
+			str += '<span class="disk-toolbar-hint">Each crystal shows its two SiPMs (left = SiPM 0 / even board, ' +
+				'right = SiPM 1 / odd board). Orange outline = CAPHRI crystal, dotted = pin-diode, faded = empty slot. ' +
+				'Hover for details; click to apply the brush.</span>';
+			str += '</div>';
+
+			str += '<div class="disk-row">';
+			for (var i = 0; i < disks.length; ++i)
+				str += diskSvgHtml(disks[i]);
+			str += '</div>';
+			str += laserCardHtml();
+			el.innerHTML = str;
+		}
+
+		//-------------------------------------------------------------------------
+		// Laser board: its channels (pin-diodes) have no position on either
+		// disk, so they are shown as one row of cells below the disks, using
+		// the same HTML cell style as the Boards tab. Cells use the
+		// "cs-lz-<uid>-<ch>" ids so refreshChannelCells() updates them too.
+		function laserCardHtml()
+		{
+			var uid = _boardUidById[LASER_BOARD_];
+			if (!uid) return ""; //no laser record in the status table
+
+			var b = _boards[uid];
+			var nGood = 0, nDead = 0, nHot = 0, nUndef = 0;
+			var str = '<div class="laser-card" id="laser-card">';
+			str += '<div class="disk-title">Laser board <span class="geo-chip geo-special">Board ' +
+				LASER_BOARD_ + '</span> <span class="disk-counts" id="laser-counts"></span></div>';
+			str += '<div class="chan-grid laser-grid">';
+			for (var ch = 0; ch < N_CH_PER_BOARD_; ++ch)
+			{
+				var v = b.cur[ch];
+				if (v == "good") ++nGood; else if (v == "dead") ++nDead;
+				else if (v == "hot") ++nHot; else ++nUndef;
+
+				str += '<div class="chan-cell st-' + v + (isChanged(uid, ch) ? ' is-changed' : '') +
+					'" id="cs-lz-' + uid + '-' + ch + '"' +
+					' onclick="onChannelClick(\'' + uid + '\',' + ch + ')"' +
+					' title="' + escapeHtml(channelTooltip(uid, ch)) + '">' + ch + '</div>';
+			}
+			str += '</div>';
+			str += '</div>';
+
+			str = str.replace('id="laser-counts"></span>',
+				'id="laser-counts">' + diskCountsText(nGood, nDead, nHot, nUndef) + '</span>');
+			return str;
+		}
+
+		function updateLaserCounts()
+		{
+			var el = document.getElementById("laser-counts");
+			var uid = _boardUidById[LASER_BOARD_];
+			if (!el || !uid) return;
+			var b = _boards[uid];
+			var nGood = 0, nDead = 0, nHot = 0, nUndef = 0;
+			for (var ch = 0; ch < N_CH_PER_BOARD_; ++ch)
+			{
+				var v = b.cur[ch];
+				if (v == "good") ++nGood; else if (v == "dead") ++nDead;
+				else if (v == "hot") ++nHot; else ++nUndef;
+			}
+			el.innerHTML = diskCountsText(nGood, nDead, nHot, nUndef);
+		}
+
+		//-------------------------------------------------------------------------
+		// Board-pair outlines (toggle). The outline of a pair is the set of
+		// crystal edges that are NOT shared with another crystal of the same
+		// pair. Rows are staggered by half a pitch, so every edge is split in
+		// two half-pitch segments and each segment is tested for coverage by a
+		// neighbouring crystal of the same pair.
+		var _showBoardBorders = true;
+		var PAIR_COLORS_ = ["#1565c0", "#e65100", "#6a1b9a", "#00838f", "#c62828", "#2e7d32",
+			"#4527a0", "#ef6c00", "#00695c", "#ad1457", "#283593", "#827717"];
+
+		function toggleBoardBorders()
+		{
+			_showBoardBorders = !_showBoardBorders;
+			var btn = document.getElementById("btn-board-borders");
+			if (btn)
+			{
+				btn.classList.toggle("is-on", _showBoardBorders);
+				btn.innerHTML = 'Board borders: <b>' + (_showBoardBorders ? 'on' : 'off') + '</b>';
+			}
+			var layers = document.querySelectorAll(".pair-layer");
+			for (var i = 0; i < layers.length; ++i)
+				layers[i].style.display = _showBoardBorders ? "" : "none";
+		}
+
+		function pairOutlineSvg(g, pad, pairId, slots)
+		{
+			var EPS = 0.01;
+			var d = "";
+			var sumX = 0, sumY = 0;
+			for (var i = 0; i < slots.length; ++i)
+			{
+				var s = slots[i];
+				sumX += s.gx; sumY += s.gy;
+				var x0 = s.gx - 0.5, x1 = s.gx + 0.5, xm = s.gx;
+				var y0 = s.gy - 0.5, y1 = s.gy + 0.5, ym = s.gy;
+
+				//horizontal edges (bottom y0, top y1), two half segments each
+				var hSegs = [[y0, x0, xm], [y0, xm, x1], [y1, x0, xm], [y1, xm, x1]];
+				for (var k = 0; k < hSegs.length; ++k)
+				{
+					var ey = hSegs[k][0], a = hSegs[k][1], b = hSegs[k][2];
+					//a neighbour covering this segment must be the crystal on the other side,
+					//i.e. not this one: exclude self by requiring a different gy
+					var cov = false;
+					for (var j = 0; j < slots.length && !cov; ++j)
+					{
+						var n = slots[j];
+						if (n === s) continue;
+						if (Math.abs(n.gy - 0.5 - ey) > EPS && Math.abs(n.gy + 0.5 - ey) > EPS) continue;
+						if (Math.abs(n.gy - s.gy) < EPS) continue;
+						if (n.gx - 0.5 <= a + EPS && n.gx + 0.5 >= b - EPS) cov = true;
+					}
+					if (!cov) d += segPath(a, ey, b, ey);
+				}
+				//vertical edges (left x0, right x1), two half segments each
+				var vSegs = [[x0, y0, ym], [x0, ym, y1], [x1, y0, ym], [x1, ym, y1]];
+				for (var k = 0; k < vSegs.length; ++k)
+				{
+					var ex = vSegs[k][0], a2 = vSegs[k][1], b2 = vSegs[k][2];
+					var cov2 = false;
+					for (var j = 0; j < slots.length && !cov2; ++j)
+					{
+						var n2 = slots[j];
+						if (n2 === s) continue;
+						if (Math.abs(n2.gx - 0.5 - ex) > EPS && Math.abs(n2.gx + 0.5 - ex) > EPS) continue;
+						if (Math.abs(n2.gx - s.gx) < EPS) continue;
+						if (n2.gy - 0.5 <= a2 + EPS && n2.gy + 0.5 >= b2 - EPS) cov2 = true;
+					}
+					if (!cov2) d += segPath(ex, a2, ex, b2);
+				}
+			}
+
+			//grid -> SVG: crystal centre (gx,gy) sits at (pad + gx - minX + 0.5, pad + maxY - gy + 0.5)
+			function segPath(xa, ya, xb, yb)
+			{
+				return "M" + (pad + (xa - g.minX) + 0.5).toFixed(2) + " " + (pad + (g.maxY - ya) + 0.5).toFixed(2) +
+					"L" + (pad + (xb - g.minX) + 0.5).toFixed(2) + " " + (pad + (g.maxY - yb) + 0.5).toFixed(2);
+			}
+
+			var color = PAIR_COLORS_[pairId % PAIR_COLORS_.length];
+			var boards = (2 * pairId) + "/" + (2 * pairId + 1);
+			var cx = pad + (sumX / slots.length - g.minX) + 0.5;
+			var cy = pad + (g.maxY - sumY / slots.length) + 0.5;
+			var out = '<path class="pair-outline" stroke="' + color + '" d="' + d + '"/>';
+			out += '<text class="pair-label" fill="' + color + '" x="' + cx.toFixed(2) + '" y="' +
+				(cy + 0.15).toFixed(2) + '" text-anchor="middle">' + boards + '</text>';
+			return out;
+		}
+
+		function diskSvgHtml(disk)
+		{
+			var g = _diskGeom[disk];
+			//cells are centred on (gx, gy); each is 1 pitch wide, so extent = range + 1
+			var pad = 0.6;
+			var vbW = (g.maxX - g.minX + 1) + 2 * pad;
+			var vbH = (g.maxY - g.minY + 1) + 2 * pad;
+
+			var nGood = 0, nDead = 0, nHot = 0, nUndef = 0;
+
+			var str = '<div class="disk-card" id="disk-card-' + disk + '">';
+			str += '<div class="disk-title">Disk ' + disk +
+				' <span class="disk-counts" id="disk-counts-' + disk + '"></span></div>';
+			//explicit aspect ratio: an inline <svg> with only a viewBox can
+			//collapse to a default/zero height in some layouts.
+			str += '<div class="disk-svg-wrap" style="aspect-ratio: ' + vbW.toFixed(3) + ' / ' +
+				vbH.toFixed(3) + ';">';
+			str += '<svg class="disk-svg" viewBox="0 0 ' + vbW.toFixed(3) + ' ' + vbH.toFixed(3) + '" ' +
+				'width="100%" height="100%" preserveAspectRatio="xMidYMid meet" ' +
+				'xmlns="http://www.w3.org/2000/svg">';
+
+			//axis hints
+			str += '<text class="axis-lbl" x="' + (vbW / 2).toFixed(2) + '" y="' + (vbH - 0.1).toFixed(2) +
+				'" text-anchor="middle">x &rarr;</text>';
+			str += '<text class="axis-lbl" x="0.15" y="' + (vbH / 2).toFixed(2) + '" text-anchor="middle" ' +
+				'transform="rotate(-90 0.15 ' + (vbH / 2).toFixed(2) + ')">y &uarr;</text>';
+
+			var halfW = 0.46, cellH = 0.92, gap = 0.04;
+			for (var i = 0; i < g.cells.length; ++i)
+			{
+				var m = g.cells[i];
+				var uid = _boardUidById[m.boardIdx];
+				var hasStatus = !!uid && m.boardChan >= 0 && m.boardChan < N_CH_PER_BOARD_;
+				var v = hasStatus ? _boards[uid].cur[m.boardChan] : "nostatus";
+				if (hasStatus)
+				{
+					if (v == "good") ++nGood; else if (v == "dead") ++nDead;
+					else if (v == "hot") ++nHot; else ++nUndef;
+				}
+
+				var side = (m.rouID == 1 || m.sensor == 1) ? 1 : 0;
+				//top-left of the crystal cell: centre minus half a pitch; y axis flipped (SVG y grows downward)
+				var px = pad + (m.gx - g.minX) + gap + side * (halfW + gap);
+				var py = pad + (g.maxY - m.gy) + gap;
+
+				var changed = hasStatus && isChanged(uid, m.boardChan);
+				var cls = "sensor st-" + v + (changed ? " is-changed" : "") + typeClass(m);
+				var tip = hasStatus ? channelTooltip(uid, m.boardChan) :
+					("FEEchan " + m.fee + " (board " + m.boardIdx + " ch " + m.boardChan +
+					 ")\nno status record for this board");
+
+				str += '<rect class="' + cls + '" id="cs-dk-' + m.fee + '" x="' + px.toFixed(2) +
+					'" y="' + py.toFixed(2) + '" width="' + halfW + '" height="' + cellH + '"' +
+					(hasStatus ? ' onclick="onChannelClick(\'' + uid + '\',' + m.boardChan + ')"' : '') +
+					'><title>' + escapeHtml(tip) + '</title></rect>';
+			}
+
+			//crystal contours: one light outline around each left+right SiPM pair
+			str += '<g class="crystal-layer">';
+			for (var k in g.slots)
+			{
+				var sl = g.slots[k];
+				var cx0 = pad + (sl.gx - g.minX);
+				var cy0 = pad + (g.maxY - sl.gy);
+				str += '<rect class="crystal-outline' + (sl.type == "CAPHRI" ? ' type-caphri' : '') +
+					'" x="' + cx0.toFixed(2) + '" y="' + cy0.toFixed(2) + '" width="1" height="1"/>';
+			}
+			str += '</g>';
+
+			//board-pair outlines (hidden unless toggled on)
+			str += '<g class="pair-layer" id="pair-layer-' + disk + '"' +
+				(_showBoardBorders ? '' : ' style="display:none"') + '>';
+			for (var pid in g.pairs)
+				str += pairOutlineSvg(g, pad, parseInt(pid, 10), g.pairs[pid]);
+			str += '</g>';
+
+			str += '</svg>';
+			str += '</div>'; //disk-svg-wrap
+			str += '<div class="disk-diag">' + g.cells.length + ' sensors in ' + g.nSlots +
+				' crystal slots; x ' + (g.minX * CRYSTAL_PITCH_MM_).toFixed(0) + '..' +
+				(g.maxX * CRYSTAL_PITCH_MM_).toFixed(0) + ' mm, y ' +
+				(g.minY * CRYSTAL_PITCH_MM_).toFixed(0) + '..' +
+				(g.maxY * CRYSTAL_PITCH_MM_).toFixed(0) + ' mm</div>';
+			str += '</div>';
+
+			//fill counts after the string is built (cheap to do inline)
+			str = str.replace('id="disk-counts-' + disk + '"></span>',
+				'id="disk-counts-' + disk + '">' + diskCountsText(nGood, nDead, nHot, nUndef) + '</span>');
+			return str;
+		}
+
+		function diskCountsText(nGood, nDead, nHot, nUndef)
+		{
+			return '<span class="cnt st-good">' + nGood + ' good</span> ' +
+				'<span class="cnt st-dead">' + nDead + ' dead</span> ' +
+				'<span class="cnt st-hot">' + nHot + ' hot</span>' +
+				(nUndef ? ' <span class="cnt st-undefined">' + nUndef + ' undef</span>' : '');
+		}
+
+		function updateDiskCounts()
+		{
+			for (var d in _diskGeom)
+			{
+				var g = _diskGeom[d];
+				var nGood = 0, nDead = 0, nHot = 0, nUndef = 0;
+				for (var i = 0; i < g.cells.length; ++i)
+				{
+					var m = g.cells[i];
+					var uid = _boardUidById[m.boardIdx];
+					if (!uid || m.boardChan < 0 || m.boardChan >= N_CH_PER_BOARD_) continue;
+					var v = _boards[uid].cur[m.boardChan];
+					if (v == "good") ++nGood; else if (v == "dead") ++nDead;
+					else if (v == "hot") ++nHot; else ++nUndef;
+				}
+				var el = document.getElementById("disk-counts-" + d);
+				if (el) el.innerHTML = diskCountsText(nGood, nDead, nHot, nUndef);
+			}
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		// Summary / pending list / status line
+		///////////////////////////////////////////////////////////////////////////
+		function updateSummary()
+		{
+			var nGood = 0, nDead = 0, nHot = 0, nUndef = 0;
+			for (var uid in _boards)
+			{
+				var b = _boards[uid];
+				for (var c = 0; c < N_CH_PER_BOARD_; ++c)
+				{
+					var v = b.cur[c];
+					if (v == "good") ++nGood; else if (v == "dead") ++nDead;
+					else if (v == "hot") ++nHot; else ++nUndef;
+				}
+			}
+			var el = document.getElementById("summary-counts");
+			if (el)
+				el.innerHTML =
+					'<span class="cnt st-good">' + nGood + ' good</span>' +
+					'<span class="cnt st-dead">' + nDead + ' dead</span>' +
+					'<span class="cnt st-hot">' + nHot + ' hot</span>' +
+					'<span class="cnt st-undefined">' + nUndef + ' undefined</span>';
+
+			var changes = collectChanges();
+			var nPending = 0;
+			for (var i = 0; i < changes.length; ++i) nPending += changes[i].cells.length;
+
+			var saveBtn = document.getElementById("btn-save");
+			var discBtn = document.getElementById("btn-discard");
+			saveBtn.disabled = _busy || !nPending;
+			discBtn.disabled = _busy || !nPending;
+			saveBtn.textContent = nPending ? ("Save & Activate (" + nPending + ")") : "Save & Activate";
+
+			var pend = document.getElementById("pending-panel");
+			var list = document.getElementById("pending-list");
+			if (!nPending)
+			{
+				pend.style.display = "none";
+				list.innerHTML = "";
+			}
+			else
+			{
+				pend.style.display = "";
+				var str = "";
+				for (var i = 0; i < changes.length; ++i)
+				{
+					var ch = changes[i];
+					for (var k = 0; k < ch.cells.length; ++k)
+					{
+						var cc = ch.cells[k];
+						str += '<div class="pending-item">' +
+							'<span class="pending-where">Board ' + ch.id + ' ch ' + cc.ch + '</span>' +
+							'<span class="pending-from st-' + cc.from + '">' + cc.from + '</span>' +
+							'<span class="pending-arrow">&rarr;</span>' +
+							'<span class="pending-to st-' + cc.to + '">' + cc.to + '</span>' +
+							'<button class="mini-btn mini-revert" title="Undo this change" ' +
+							'onclick="revertChannel(\'' + ch.uid + '\',' + cc.ch + ')">&times;</button>' +
+							'</div>';
+					}
+				}
+				list.innerHTML = str;
+			}
+
+			updateDiskCounts();
+			updateLaserCounts();
+		}
+
+		function setStatus(msg, cls)
+		{
+			var el = document.getElementById("status-line");
+			el.className = "status-msg " + (cls || "");
+			el.innerHTML = '<span class="dot dot-' + (cls == "success" ? "ok" : (cls || "idle")) +
+				'"></span>' + escapeHtml(msg);
+		}
+
+		function setBusy(busy)
+		{
+			_busy = !!busy;
+			document.body.classList.toggle("is-busy", _busy);
+			document.getElementById("btn-reload").disabled = _busy;
+			var saveBtn = document.getElementById("btn-save");
+			var discBtn = document.getElementById("btn-discard");
+			if (_busy) { saveBtn.disabled = true; discBtn.disabled = true; }
+			else updateSummary();
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		// Save & Activate
+		///////////////////////////////////////////////////////////////////////////
+		function saveChanges()
+		{
+			if (_busy) return;
+			var changes = collectChanges();
+			if (!changes.length) { setStatus("Nothing to save.", "info"); return; }
+
+			var nCells = 0;
+			for (var i = 0; i < changes.length; ++i) nCells += changes[i].cells.length;
+
+			var preview = "";
+			var shown = 0;
+			for (var i = 0; i < changes.length && shown < 12; ++i)
+				for (var k = 0; k < changes[i].cells.length && shown < 12; ++k, ++shown)
+				{
+					var cc = changes[i].cells[k];
+					preview += "<br>&nbsp;&nbsp;Board " + changes[i].id + " ch " + cc.ch + ": " +
+						cc.from + " &rarr; <b>" + cc.to + "</b>";
+				}
+			if (shown < nCells) preview += "<br>&nbsp;&nbsp;... and " + (nCells - shown) + " more";
+
+			DesktopContent.popUpVerification(
+				"Write <b>" + nCells + "</b> channel change(s) on <b>" + changes.length +
+				"</b> board(s) to <b>" + STATUS_TABLE_PATH_ + "</b>, then save and activate " +
+				"the affected configuration group(s)?" + preview +
+				"<br><br>The new table version takes effect at the next Configure.",
+				function() { doSave(changes); },
+				0, 0, 0, 0, 0, 640,
+				function() { Debug.log("Save canceled."); });
+		}
+
+		function doSave(changes)
+		{
+			setBusy(true);
+			var modifiedTables = undefined;
+			var idx = 0;
+			var tablePath = STATUS_TABLE_PATH_.replace(/^\/+/, "");
+
+			setStatus("Writing board 1 of " + changes.length + " ...", "info");
+			writeNext();
+
+			//===========
+			function writeNext()
+			{
+				if (idx >= changes.length) { persist(); return; }
+				var c = changes[idx];
+				setStatus("Writing board " + (idx + 1) + " of " + changes.length +
+					" (Board " + c.id + ") ...", "info");
+
+				ConfigurationAPI.setFieldValuesForRecords(
+					tablePath,
+					[c.uid],                  //recordArr
+					[STATUS_FIELD_],          //fieldArr
+					[encodeBitMap(c.arr)],    //valueArr (encodeURIComponent'd by the API)
+					function(mt, err)
+					{
+						if (err || !mt || !mt.length)
+						{
+							fail("Failed writing board " + c.uid + ": " +
+								(err || "no temporary table version returned"));
+							return;
+						}
+						modifiedTables = mt;
+						++idx;
+						writeNext();
+					},
+					modifiedTables, true /*silenceErrors*/);
+			}
+
+			//===========
+			function persist()
+			{
+				//Offer the CSV export BEFORE persisting/activating. The final
+				//version number is not known yet (only a temporary version
+				//exists), so the file name carries date+time and counts instead.
+				//The dead/hot counts in the name exclude EMPTY channels, which
+				//requires the (lazily loaded) map table -- fetch it first if
+				//the user never opened the Disk tab.
+				loadMapIfNeeded(function()
+				{
+				var snapshot = buildCsvSnapshot();
+				offerCsvExport(snapshot, function(csvResult)
+				{
+					setStatus("Saving table version and activating group(s) ...", "info");
+					ConfigurationAPI.saveModifiedTables(modifiedTables,
+						function(savedTables, savedGroups, savedAliases)
+						{
+							if (!savedTables || !savedTables.length)
+							{
+								fail("Temporary version was written but could not be persisted/activated." +
+									(csvResult ? " (CSV " + csvResult + " was already written.)" : ""));
+								return;
+							}
+							var ver = savedTables[0].tableVersion;
+							var grp = (savedGroups && savedGroups.length) ?
+								(" Group " + savedGroups[0].groupName + " (" + savedGroups[0].groupKey + ") activated.") : "";
+							setBusy(false);
+							setStatus("Saved " + STATUS_TABLE_PATH_ + " v" + ver + "." + grp +
+								(csvResult ? " CSV: " + csvResult + "." : "") + " Reloading ...", "success");
+							//reload from the (new) active configuration
+							window.setTimeout(loadAll, 300);
+						});
+				});
+				}); //end loadMapIfNeeded
+			}
+
+			//===========
+			function fail(msg)
+			{
+				setBusy(false);
+				Debug.log(msg, Debug.HIGH_PRIORITY);
+				setStatus(msg + "  Your pending changes are still shown; fix the problem and retry.", "error");
+			}
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		// CSV export of a saved version
+		//
+		// File format matches the files CaloConfiguration uploads from
+		// boardConfig/configurations/channelstatus/ (one row per BoardID):
+		//   "023","[[""good"",...,""hot""]]","<comment>","<author>","<timestamp>"
+		//
+		// File name: <YYYYMMDD>_<HHMM>_<nDead>dead_<nHot>hot.csv
+		// (the export is offered before the table is persisted, so the final
+		//  version number is not known yet and is not part of the name)
+		///////////////////////////////////////////////////////////////////////////
+		function buildCsvSnapshot()
+		{
+			var now = new Date();
+			var author = (DesktopContent.getUsername && DesktopContent.getUsername()) || "CaloChannelStatus";
+			var stamp = now.toString().replace(/ GMT[^ ]*/, ""); //e.g. "Thu Oct 29 2026 14:03:11 (CDT)"
+			stamp = stamp.replace(/\s*\(([^)]+)\)\s*$/, " $1");
+			var comment = "CaloChannelStatus GUI export";
+
+			//Counts for the file name exclude channels the map marks as EMPTY
+			//(e.g. 16 unused channels on the laser board). The CSV content
+			//itself still contains every channel of every board.
+			//If the map has not been loaded yet (lazy), nothing is excluded.
+			var nDead = 0, nHot = 0, lines = [];
+			for (var i = 0; i < _boardUidsSorted.length; ++i)
+			{
+				var b = _boards[_boardUidsSorted[i]];
+				for (var c = 0; c < N_CH_PER_BOARD_; ++c)
+				{
+					var m = _mapByFee[b.id * N_CH_PER_BOARD_ + c];
+					if (m && m.type == "EMPTY") continue;
+					if (b.cur[c] == "dead") ++nDead;
+					else if (b.cur[c] == "hot") ++nHot;
+				}
+				//BitMap cell with CSV-escaped inner quotes
+				var bitmap = encodeBitMap(b.cur).replace(/"/g, '""');
+				lines.push('"' + b.uid + '","' + bitmap + '","' + comment + '","' +
+					author.replace(/"/g, '""') + '","' + stamp + '"');
+			}
+
+			var ymd = now.getFullYear() +
+				("0" + (now.getMonth() + 1)).slice(-2) +
+				("0" + now.getDate()).slice(-2);
+			var hm = ("0" + now.getHours()).slice(-2) + ("0" + now.getMinutes()).slice(-2);
+			var fileName = ymd + "_" + hm + "_" + nDead + "dead_" + nHot + "hot";
+
+			return {
+				nDead:    nDead,
+				nHot:     nHot,
+				nBoards:  lines.length,
+				fileName: fileName,            //without extension
+				ext:      "csv",
+				text:     lines.join("\n") + "\n"
+			};
+		}
+
+		// done(csvResult): csvResult = written file name, or "" if skipped/failed
+		function offerCsvExport(snap, done)
+		{
+			if (!_codeEditorAppId || !snap.nBoards)
+			{
+				if (!_codeEditorAppId)
+					Debug.log("CSV export unavailable (no CodeEditorSupervisor in this context).",
+						Debug.WARN_PRIORITY);
+				done("");
+				return;
+			}
+
+			DesktopContent.popUpVerification(
+				"<div style='text-align:left; line-height:1.5'>" +
+				"<b>Write a CSV copy of this configuration before activating it?</b><br><br>" +
+				"Folder: <span style='font-family:monospace; font-size:13px'>" +
+				escapeHtml(CSV_EXPORT_DIR_) + "/</span><br>" +
+				"Content: " + snap.nBoards + " boards, <b>" + snap.nDead + " dead</b>, <b>" +
+				snap.nHot + " hot</b><br><br>" +
+				"File name (editable, <span style='font-family:monospace'>.csv</span> is added):" +
+				"</div>",
+				function(userFileName) /*yes*/
+				{
+					var name = (userFileName || snap.fileName).trim();
+					name = name.replace(/\.csv$/i, "");
+					name = name.replace(/[^A-Za-z0-9_\-]/g, "_"); //keep it CodeEditor-safe
+					if (!name.length) name = snap.fileName;
+					writeCsvFile(name, snap, done);
+				},
+				0, 0, 0, 0,
+				true /*getUserInput*/, 640 /*dialogWidth*/,
+				function() /*cancel*/ { Debug.log("CSV export skipped."); done(""); },
+				"Write CSV and activate", 0 /*noAutoComplete*/,
+				snap.fileName /*defaultUserInputValue*/,
+				"Skip CSV, just activate" /*cancelButtonText*/);
+		}
+
+		function writeCsvFile(name, snap, done)
+		{
+			setStatus("Writing " + name + ".csv ...", "info");
+
+			//route the request to the CodeEditorSupervisor (same trick as CaloConfiguration)
+			var savedUrn = DesktopContent._localUrnLid;
+			DesktopContent._localUrnLid = _codeEditorAppId;
+			DesktopContent.XMLHttpRequest(
+				"Request?RequestType=codeEditor" +
+				"&option=saveFileContent" +
+				"&path=" + encodeURIComponent(CSV_EXPORT_DIR_ + "/" + name) +
+				"&ext=" + snap.ext,
+				"content=" + encodeURIComponent(snap.text),
+				function(req, reqParam, errStr)
+				{
+					var err = errStr || (req ? DesktopContent.getXMLValue(req, "Error") : "no response");
+					if (err)
+					{
+						Debug.log("CSV export failed: " + err + " -- continuing with activation.",
+							Debug.HIGH_PRIORITY);
+						setStatus("CSV export failed: " + err + " -- continuing with activation.", "warn");
+						done("");
+						return;
+					}
+					Debug.log("Wrote " + CSV_EXPORT_DIR_ + "/" + name + "." + snap.ext);
+					done(name + "." + snap.ext);
+				},
+				0, 0, true /*callHandlerOnErr*/);
+			DesktopContent._localUrnLid = savedUrn;
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		// Active group change detection (same approach as FEStructure_calo)
+		///////////////////////////////////////////////////////////////////////////
+		function checkForActiveGroupChange(doInit)
+		{
+			if (_checkActiveGroupsTimer)
+			{
+				window.clearTimeout(_checkActiveGroupsTimer);
+				_checkActiveGroupsTimer = 0;
+			}
+
+			DesktopContent.XMLHttpRequest(
+				"Request?RequestType=getActiveTableGroups", "",
+				function(req)
+				{
+					if (_checkActiveGroupsTimer) window.clearTimeout(_checkActiveGroupsTimer);
+					_checkActiveGroupsTimer = window.setTimeout(checkForActiveGroupChange, _CHECK_ACTIVE_GROUPS_PERIOD);
+
+					if (!req) return;
+
+					var active = [
+						DesktopContent.getXMLValue(req, "Context-ActiveGroupName"),
+						DesktopContent.getXMLValue(req, "Context-ActiveGroupKey"),
+						DesktopContent.getXMLValue(req, "Configuration-ActiveGroupName"),
+						DesktopContent.getXMLValue(req, "Configuration-ActiveGroupKey")];
+
+					if (doInit || !_lastActiveGroups.length)
+					{
+						_lastActiveGroups = active;
+						return;
+					}
+					for (var i = 0; i < active.length; ++i)
+						if (_lastActiveGroups[i] != active[i])
+						{
+							_lastActiveGroups = active;
+							showConfigChangedBanner();
+							return;
+						}
+				},
+				0, 0, true, true /*doNotShowLoadingOverlay*/);
+		}
+
+		function showConfigChangedBanner()
+		{
+			if (_busy) return;
+			_configChangedBanner = true;
+			document.getElementById("config-changed-banner").style.display = "";
+		}
+		function hideConfigChangedBanner()
+		{
+			_configChangedBanner = false;
+			document.getElementById("config-changed-banner").style.display = "none";
+		}
+
+		function reloadClicked()
+		{
+			if (_busy) return;
+			var n = countPending();
+			if (n)
+			{
+				DesktopContent.popUpVerification(
+					"Reload from the active configuration? Your <b>" + n +
+					"</b> pending change(s) will be lost.",
+					loadAll);
+			}
+			else loadAll();
+		}
+
+
+		///////////////////////////////////////////////////////////////////////////
+		function escapeHtml(s)
+		{
+			if (s === undefined || s === null) return "";
+			return String(s).replace(/&/g, "&amp;").replace(/</g, "&lt;")
+				.replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+		}
+
+	</script>
+
+</head>
+
+<body onload='//init() called by DesktopContent.js'>
+
+	<div class="header-bar">
+		<h1>Calorimeter Channel Status</h1>
+		<div class="summary" id="summary-counts"></div>
+		<div class="header-actions">
+			<button class="btn-save" id="btn-save" onclick="saveChanges()" disabled
+				title="Write pending changes to SubsystemCalorimeterStatusTable and activate the affected configuration group(s).">
+				Save &amp; Activate</button>
+			<button class="btn-discard" id="btn-discard" onclick="discardAll()" disabled
+				title="Throw away all pending (unsaved) changes.">Discard</button>
+			<button class="btn-refresh" id="btn-reload" onclick="reloadClicked()"
+				title="Reload both tables from the active configuration.">Reload</button>
+		</div>
+	</div>
+
+	<div class="banner-warn" id="config-changed-banner" style="display:none;">
+		The active configuration group changed since this page was loaded.
+		<button class="mini-btn" onclick="reloadClicked()">Reload now</button>
+	</div>
+
+	<div class="toolbar">
+		<div class="brush-bar" id="brush-bar"></div>
+
+		<div class="quick-set" title="Type a board and channel (or a FEEchan) and apply the selected brush.">
+			<span class="quick-label">Quick set:</span>
+			<label>Board <input type="number" id="quick-board" min="0" max="160" placeholder="23"
+				oninput="quickSyncFromBoardChan()" onkeydown="if(event.key=='Enter')quickSet()"></label>
+			<label>Ch <input type="number" id="quick-chan" min="0" max="19" placeholder="7"
+				oninput="quickSyncFromBoardChan()" onkeydown="if(event.key=='Enter')quickSet()"></label>
+			<span class="quick-or">=</span>
+			<label>FEEchan <input type="number" id="quick-fee" min="0" max="3219" placeholder="467"
+				oninput="quickSyncFromFee()" onkeydown="if(event.key=='Enter')quickSet()"></label>
+			<button class="mini-btn mini-apply" onclick="quickSet()">Apply brush</button>
+		</div>
+	</div>
+
+	<div class="status-msg" id="status-line"></div>
+
+	<div class="pending-panel" id="pending-panel" style="display:none;">
+		<div class="pending-title">Pending changes (not yet saved)</div>
+		<div class="pending-list" id="pending-list"></div>
+	</div>
+
+	<div class="tabs">
+		<button class="tab-btn is-active" data-tab="boards" onclick="selectTab('boards')">Boards / Channels</button>
+		<button class="tab-btn" data-tab="disk" onclick="selectTab('disk')">Calo Disk View</button>
+
+		<div class="legend">
+			<span class="legend-item"><span class="swatch st-good"></span>good</span>
+			<span class="legend-item"><span class="swatch st-dead"></span>dead</span>
+			<span class="legend-item"><span class="swatch st-hot"></span>hot</span>
+			<span class="legend-item"><span class="swatch st-undefined"></span>undefined</span>
+			<span class="legend-item"><span class="swatch st-good is-changed"></span>pending change</span>
+			<span class="legend-item"><span class="swatch swatch-caphri"></span>CAPHRI</span>
+		</div>
+	</div>
+
+	<div class="filters" id="boards-filters">
+		<label><input type="checkbox" id="filter-nongood" onchange="onFilterChanged()">
+			Only boards with non-good channels</label>
+		<input type="text" id="filter-search" class="search-input" placeholder="find board (e.g. 23) or 'fee 467'"
+			oninput="onFilterChanged()">
+		<span class="boards-shown" id="boards-shown"></span>
+	</div>
+
+	<div class="view" id="boards-view"></div>
+	<div class="view" id="disk-view" style="display:none;"></div>
+
+</body>
+
+</html>

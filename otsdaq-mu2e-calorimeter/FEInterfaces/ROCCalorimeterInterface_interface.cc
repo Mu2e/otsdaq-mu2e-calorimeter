@@ -14,6 +14,7 @@
 #include <filesystem>
 #include <fstream>
 #include <initializer_list>
+#include <algorithm>
 #include <iomanip>
 #include <vector>
 
@@ -176,6 +177,27 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(const std::string& rocUID, cons
 	                        std::vector<std::string>{"Address to read, Default := 0]"},  // inputs parameters
 	                        std::vector<std::string>{"Status"},                          // output parameters
 	                        1);                                                          // requiredUserPermissions
+
+	registerFEMacroFunction("Read ROC Hit Rates",
+	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::ReadROCHitRates),
+	                        std::vector<std::string>{},          // inputs parameters
+	                        std::vector<std::string>{"Status"},  // output parameters
+	                        1);                                  // requiredUserPermissions
+
+	registerFEMacroFunction("Setup for Mu- Lifetime Run",
+	                        static_cast<FEVInterface::frontEndMacroFunction_t>(&ROCCalorimeterInterface::SetupForMuLifetimeRun),
+	                        std::vector<std::string>{"CAL (CsI) minimum hit length [samples, Default := 200]",
+	                                                 "CAL (CsI) maximum hit length [samples, Default := 200]",
+	                                                 "CAPHRI (LYSO) minimum hit length [samples, Default := 0]",
+	                                                 "CAPHRI (LYSO) maximum hit length [samples, Default := 100]",
+	                                                 "PIN-DIODE minimum hit length [samples, Default := 0]",
+	                                                 "PIN-DIODE maximum hit length [samples, Default := 100]",
+	                                                 "EMPTY minimum hit length [samples, Default := 0]",
+	                                                 "EMPTY maximum hit length [samples, Default := 100]",
+	                                                 "NLOW samples below threshold that close a hit [1-63, Default := 4]",
+	                                                 "Restore standard hit (all types 0/100, NLOW 60)? [bool, Default := 0]"},  // inputs parameters
+	                        std::vector<std::string>{"Status"},  // output parameters
+	                        1);                                  // requiredUserPermissions
 
 	registerFEMacroFunction(
 	    "Setup for ADCs Data Taking",
@@ -1122,6 +1144,14 @@ void ROCCalorimeterInterface::updateBoardIdFromSerial_() {
 
 	boardConfig_.serial = readRegister(147);
 
+	if(boardConfig_.serial == 0 || boardConfig_.serial == 0xFFFF) {
+		std::stringstream serialZeroPrint;
+		serialZeroPrint << "ROC on link " << linkID_ << " returned invalid serial number 0x" << std::hex << boardConfig_.serial << std::dec
+		                << " (expected non-zero, non-0xFFFF). Cannot map to BoardId.";
+		__FE_SS__ << serialZeroPrint.str() << __E__;
+		__FE_SS_THROW__;
+	}
+
 	const ots::ConfigurationManager* cfgMgr = getConfigurationManager();
 
 	auto rows = cfgMgr->getNode("SubsystemCalorimeterParametersTable").getChildren();
@@ -1226,20 +1256,26 @@ void ROCCalorimeterInterface::configure(void) try {
 
 	__COUT_INFO__ << "Enter ROC configuration.." << __E__;
 
-	int readVal = 0;
-	int ntries  = 0;
-	while(readVal != 0x1234 || ntries < 3) {
+	const int   maxTries = 10;
+	int         readVal  = 0;
+	int         ntries   = 0;
+	std::string lastError;
+	while((readVal != 0x1234 || ntries < 3) && ntries < maxTries) {
 		try {
 			readVal = readRegister(0);
-		} catch(const std::exception& e) {}
+		} catch(const std::exception& e) { lastError = e.what(); }
 		ntries++;
 		__COUT_INFO__ << "Attempt number " << ntries << __E__;
+		if(readVal != 0x1234)
+			usleep(100000);  // do not hammer an unresponsive link
 	}
 
-	if(readVal == 0x1234)
-		__COUT_INFO__ << "Configuration correct! :)" << __E__;
-	else
-		__COUT_INFO__ << "Configuration failed! :(" << __E__;
+	if(readVal != 0x1234) {
+		__FE_SS__ << "ROC on link " << linkID_ << " is not responding: register 0 read 0x" << std::hex << readVal << std::dec << " (expected 0x1234) after " << ntries
+		          << " attempts. Last error: " << lastError << __E__;
+		__FE_SS_THROW__;
+	}
+	__COUT_INFO__ << "Configuration correct! :)" << __E__;
 
 	updateBoardIdFromSerial_();
 
@@ -1262,6 +1298,8 @@ void ROCCalorimeterInterface::configure(void) try {
 	CalibrateMZB();
 	// Set DIRAC thresholds with offset
 	SetADCsThresholds(0);
+	// Channel type (SensorType of the voltages table) into the DET field of the hits
+	SetChannelTypes();
 	// Set SiPM voltages (four times to be sure)
 	//  TODO to be upgraded with a set-and-verify loop
 	SetBoardVoltages(true);
@@ -1271,6 +1309,9 @@ void ROCCalorimeterInterface::configure(void) try {
 
 	writeRegister(ROC_ADDRESS_MASK_A, 1023);
 	writeRegister(ROC_ADDRESS_MASK_B, 1023);
+
+	// Set long waveforms
+	writeRegister(ROC_ADDRESS_HIT_LENGTH, 60);
 
 	// Turn off busy
 	// writeRegister(ROC_ADDRESS_MZB_BUSY, 1);
@@ -1791,6 +1832,37 @@ void ROCCalorimeterInterface::SetADCsThresholds(int offset) {
 // void ROCCalorimeterInterface::ReadVoltagesFromDB(__ARGS__) {
 //	ReadVoltagesFromDB();
 // }
+
+//==================================================================================================
+
+void ROCCalorimeterInterface::SetChannelTypes() {
+	if(!boardConfig_.voltagesLoaded) {
+		__COUT_ERR__ << "Skipping channel types: sensor types not loaded (loadVoltagesFromDB_)" << __E__;
+		return;
+	}
+
+	uint16_t reg[3] = {0, 0, 0};
+	for(int ichan = 0; ichan < 20; ++ichan) {
+		const std::string& type = boardConfig_.channels[ichan].sensorType;
+		uint16_t           code = 0;
+		if(type == "CAL")
+			code = 0;
+		else if(type == "CAPHRI")
+			code = 1;
+		else if(type == "PIN-DIODE")
+			code = 2;
+		else if(type == "EMPTY")
+			code = 3;
+		else
+			__COUT_ERR__ << "Board " << boardConfig_.boardID << " ch " << ichan << ": unknown sensor type '" << type << "', DET written as CAL (0)" << __E__;
+		reg[ichan / 8] |= static_cast<uint16_t>(code << (2 * (ichan % 8)));
+	}
+
+	writeRegister(ROC_ADDRESS_CHTYPE_0, reg[0]);
+	writeRegister(ROC_ADDRESS_CHTYPE_1, reg[1]);
+	writeRegister(ROC_ADDRESS_CHTYPE_2, reg[2]);
+	__COUT_INFO__ << "Board " << boardConfig_.boardID << " channel types written: 0x" << std::hex << reg[0] << " 0x" << reg[1] << " 0x" << reg[2] << std::dec << __E__;
+}  // end SetChannelTypes()
 
 bool ROCCalorimeterInterface::isPinDiodeChannel_(int ch) const {
 	if(ch < 0 || ch >= 20)
@@ -2483,6 +2555,152 @@ void ROCCalorimeterInterface::ReadROCErrorCounter(__ARGS__) {
 	__SET_ARG_OUT__("Status", os.str());
 
 }  // end ReadROCErrorCounter()
+
+//==================================================================================================
+// Per-channel hit rate (firmware 1.9): hits per second of open event window, refreshed every second of open window.
+// The registers are re-read if the update counter changes while reading, so that all channels come from the same second.
+void ROCCalorimeterInterface::ReadROCHitRates(__ARGS__) {
+	const uint16_t    version = readRegister(ROC_ADDRESS_FW_VERSION);
+	std::stringstream os;
+	if(version < 0x0109) {
+		os << "Hit rate registers need ROC firmware 1.9 or later; this board has " << ((version >> 8) & 0xFF) << "." << (version & 0xFF) << "\n";
+		__COUT_INFO__ << os.str() << __E__;
+		__SET_ARG_OUT__("Status", os.str());
+		return;
+	}
+
+	uint16_t seq = 0, blockedA = 0, blockedB = 0;
+	uint16_t rate[20];
+	bool     consistent = false;
+	for(int attempt = 0; attempt < 3 && !consistent; ++attempt) {
+		seq      = readRegister(ROC_ADDRESS_HITRATE_SEQ);
+		blockedA = readRegister(ROC_ADDRESS_HITRATE_BLOCKED_A);
+		blockedB = readRegister(ROC_ADDRESS_HITRATE_BLOCKED_B);
+		for(int ichan = 0; ichan < 20; ++ichan)
+			rate[ichan] = readRegister(ROC_ADDRESS_HITRATE_BASE + ichan);
+		consistent = (readRegister(ROC_ADDRESS_HITRATE_SEQ) == seq);
+	}
+	const uint16_t maskA = readRegister(ROC_ADDRESS_MASK_A);
+	const uint16_t maskB = readRegister(ROC_ADDRESS_MASK_B);
+
+	os << "ROC hit rates (board " << boardConfig_.boardID << "), Hz per second of open event window\n";
+	os << "update counter " << seq;
+	if(seq == 0)
+		os << "  (no update yet: less than 1 s of open event window since reset)";
+	if(!consistent)
+		os << "  WARNING: registers updated while reading, channels may come from different seconds";
+	os << "\n\n";
+	os << "Ch  Rate [Hz]   Blocked  Enabled  SensorType\n";
+	os << "--- ----------  -------  -------  ----------\n";
+	for(int ichan = 0; ichan < 20; ++ichan) {
+		const bool blocked = ((ichan < 10 ? blockedA : blockedB) >> (ichan % 10)) & 1;
+		const bool enabled = ((ichan < 10 ? maskA : maskB) >> (ichan % 10)) & 1;
+		os << std::setw(3) << ichan << " ";
+		if(rate[ichan] == 0xFFFF)
+			os << std::setw(10) << ">= 65535";
+		else
+			os << std::setw(10) << rate[ichan];
+		os << "  " << std::setw(7) << (blocked ? "YES" : "no") << "  " << std::setw(7) << (enabled ? "yes" : "MASKED") << "  " << boardConfig_.channels[ichan].sensorType << "\n";
+	}
+	os << "\nBlocked: the channel was writing a hit for more than 7/8 of the open window (input stuck above threshold).\n";
+
+	__COUT_INFO__ << os.str() << __E__;
+	__SET_ARG_OUT__("Status", os.str());
+}  // end ReadROCHitRates()
+
+//==================================================================================================
+
+// Run for the lifetime of the muonic atom (mu- stopped in CsI): fixed long hit window on the CsI (CAL) channels, so that
+// the second pulse of the capture is seen with the same observation window on every stop, independent of the signal.
+// Every length is an input; the defaults are those of the mu- run: CAL 200/200 (fixed window of 1 us), LYSO (CAPHRI),
+// PIN diodes and empty channels 0/100 (the standard hit), NLOW 4 (short tail for LYSO and PIN; the CsI hits have a
+// fixed window and do not use NLOW). With "Restore standard hit"
+// the inputs are ignored and all types go back to 0/100, NLOW 60 (as written by Configure). Needs ROC firmware 1.11
+// or later.
+void ROCCalorimeterInterface::SetupForMuLifetimeRun(__ARGS__) {
+	static const char* const minName[4] = {"CAL (CsI) minimum hit length [samples, Default := 200]",
+	                                       "CAPHRI (LYSO) minimum hit length [samples, Default := 0]",
+	                                       "PIN-DIODE minimum hit length [samples, Default := 0]",
+	                                       "EMPTY minimum hit length [samples, Default := 0]"};
+	static const char* const maxName[4] = {"CAL (CsI) maximum hit length [samples, Default := 200]",
+	                                       "CAPHRI (LYSO) maximum hit length [samples, Default := 100]",
+	                                       "PIN-DIODE maximum hit length [samples, Default := 100]",
+	                                       "EMPTY maximum hit length [samples, Default := 100]"};
+	static const uint32_t    minDefault[4] = {200, 0, 0, 0};
+	static const uint32_t    maxDefault[4] = {200, 100, 100, 100};
+
+	const bool        restore = __GET_ARG_IN__("Restore standard hit (all types 0/100, NLOW 60)? [bool, Default := 0]", bool, 0);
+	uint32_t          nlow    = __GET_ARG_IN__("NLOW samples below threshold that close a hit [1-63, Default := 4]", uint32_t, 4);
+	std::stringstream os;
+
+	// order of the types: CAL, CAPHRI, PIN-DIODE, EMPTY
+	uint16_t minLength[4] = {0, 0, 0, 0};
+	uint16_t maxLength[4] = {100, 100, 100, 100};
+	if(restore) {
+		nlow = 60;
+	} else {
+		for(int t = 0; t < 4; ++t) {
+			const uint32_t minValue = __GET_ARG_IN__(minName[t], uint32_t, minDefault[t]);
+			const uint32_t maxValue = __GET_ARG_IN__(maxName[t], uint32_t, maxDefault[t]);
+			minLength[t]            = static_cast<uint16_t>(std::min<uint32_t>(minValue, 0xFFFF));  // range checked in SetHitLengths
+			maxLength[t]            = static_cast<uint16_t>(std::min<uint32_t>(maxValue, 0xFFFF));
+		}
+	}
+	os << (restore ? "Restoring the standard hit on board " : "Mu- lifetime run setup on board ") << boardConfig_.boardID << "\n";
+
+	if(nlow < 1 || nlow > 63) {
+		os << "NLOW must be 1-63 (6-bit register, 0 is taken as 4): nothing written\n";
+	} else if(SetHitLengths(minLength, maxLength, os)) {
+		writeRegister(ROC_ADDRESS_HIT_LENGTH, nlow);
+		const uint16_t nlowRead = readRegister(ROC_ADDRESS_HIT_LENGTH) & 0x3F;
+		os << "NLOW      " << std::setw(5) << nlow << "         (" << nlowRead << ")" << (nlowRead == nlow ? "" : "  MISMATCH") << "\n";
+	}
+
+	__COUT_INFO__ << os.str() << __E__;
+	__SET_ARG_OUT__("Status", os.str());
+}  // end SetupForMuLifetimeRun()
+
+//==================================================================================================
+
+// Writes and reads back the hit length of the four channel types (registers 158-159, 163-168). Lengths are 10-bit
+// (the hit header NSAMPLES field); MAX 0 is taken as 100 by the firmware. Returns false without writing if the
+// firmware is older than 1.11 or a value is out of range; returns false after writing if a read-back differs.
+bool ROCCalorimeterInterface::SetHitLengths(const uint16_t minLength[4], const uint16_t maxLength[4], std::ostream& os) {
+	static const char* const typeName[4]   = {"CAL", "CAPHRI", "PIN-DIODE", "EMPTY"};
+	static const uint16_t    minAddress[4] = {ROC_ADDRESS_HITLEN_MIN_CAL, ROC_ADDRESS_HITLEN_MIN_CAPHRI, ROC_ADDRESS_HITLEN_MIN_PIN, ROC_ADDRESS_HITLEN_MIN_EMPTY};
+	static const uint16_t    maxAddress[4] = {ROC_ADDRESS_HITLEN_MAX_CAL, ROC_ADDRESS_HITLEN_MAX_CAPHRI, ROC_ADDRESS_HITLEN_MAX_PIN, ROC_ADDRESS_HITLEN_MAX_EMPTY};
+
+	const uint16_t version = readRegister(ROC_ADDRESS_FW_VERSION);
+	if(version < 0x010B) {
+		os << "Hit length registers need ROC firmware 1.11 or later; this board has " << ((version >> 8) & 0xFF) << "." << (version & 0xFF) << ": nothing written\n";
+		return false;
+	}
+	for(int t = 0; t < 4; ++t) {
+		if(minLength[t] > 1023 || maxLength[t] > 1023) {
+			os << typeName[t] << ": lengths must be <= 1023 samples (hit header field): nothing written\n";
+			return false;
+		}
+		if(maxLength[t] != 0 && minLength[t] > maxLength[t]) {
+			os << "WARNING " << typeName[t] << ": MIN " << minLength[t] << " > MAX " << maxLength[t] << ", the hits are closed at MAX\n";
+		}
+	}
+
+	bool ok = true;
+	os << "Type        MIN   MAX   (read back)\n";
+	for(int t = 0; t < 4; ++t) {
+		writeRegister(minAddress[t], minLength[t]);
+		writeRegister(maxAddress[t], maxLength[t]);
+		const uint16_t minRead = readRegister(minAddress[t]) & 0x3FF;
+		const uint16_t maxRead = readRegister(maxAddress[t]) & 0x3FF;
+		const bool     same    = (minRead == minLength[t] && maxRead == maxLength[t]);
+		ok                     = ok && same;
+		os << std::left << std::setw(10) << typeName[t] << std::right << std::setw(5) << minLength[t] << " " << std::setw(5) << maxLength[t] << "   (" << minRead << ", " << maxRead << ")"
+		   << (same ? "" : "  MISMATCH") << "\n";
+	}
+	if(!ok)
+		os << "ERROR: read-back differs from the written values\n";
+	return ok;
+}  // end SetHitLengths()
 
 //==================================================================================================
 
