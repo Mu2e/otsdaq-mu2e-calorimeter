@@ -91,6 +91,13 @@
 				description:    "Channel dead/hot quality map.",
 				boardConfigDir: "channelstatus",
 				mongoTable:     "/SubsystemCalorimeterStatusTable",
+				//optional companion GUI: per-channel editor for this table
+				linkGui: {
+					label:   "Edit channels with GUI",
+					title:   "Open the Calo Channel Status GUI to enable/disable individual channels.",
+					name:    "Calo Channel Status",
+					path:    "/WebPath/UserWebPath/WebGUI_calo/html/CaloChannelStatus.html"
+				},
 			},
 		];
 
@@ -503,6 +510,10 @@
 			str +=   '<button class="btn-configure" id="btn-' + sec.id +
 				'" onclick="onConfigure(\'' + sec.id +
 				'\')" disabled>Upload</button>';
+			if (sec.linkGui)
+				str += '<button class="btn-link-gui" onclick="openLinkedGui(\'' + sec.id + '\')"' +
+					' title="' + escapeHtml(sec.linkGui.title) + '">' +
+					escapeHtml(sec.linkGui.label) + ' &#8599;</button>';
 				str += '</div>';
 
 				str += '<div class="status-msg" id="status-' + sec.id + '"></div>';
@@ -1712,6 +1723,23 @@
 			for (var i = 0; i < CONFIG_SECTIONS_.length; ++i)
 				if (CONFIG_SECTIONS_[i].id === id) return CONFIG_SECTIONS_[i];
 			return null;
+		}
+
+		///////////////////////////////////////////////////////////////////////////
+		// Open a companion GUI (sec.linkGui) in a new ots Desktop window.
+		// The path is relative to the local gateway; DesktopContent.openNewWindow
+		// takes care of remote-gateway redirection. Appending urn= makes the
+		// new window's ConfigurationAPI calls target the same supervisor as
+		// this page.
+		///////////////////////////////////////////////////////////////////////////
+		function openLinkedGui(sectionId)
+		{
+			var sec = getSectionById(sectionId);
+			if (!sec || !sec.linkGui) return;
+			var path = sec.linkGui.path;
+			if (DesktopContent._localUrnLid)
+				path += (path.indexOf("?") >= 0 ? "&" : "?") + "urn=" + DesktopContent._localUrnLid;
+			DesktopContent.openNewWindow(sec.linkGui.name, "" /*subname*/, path, false /*unique*/);
 		}
 
 		var _dayArr   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];
