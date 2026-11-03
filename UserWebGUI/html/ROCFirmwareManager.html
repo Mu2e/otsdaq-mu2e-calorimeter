@@ -1,0 +1,1445 @@
+<!DOCTYPE HTML>
+<html lang="en">
+<head>
+	<title>Firmware Manager</title>
+	<link href="/WebPath/css/fonts.css?family=Inconsolata:400" rel="stylesheet" type="text/css">
+	<script type="text/JavaScript" src="/WebPath/js/Globals.js"></script>
+	<script type="text/JavaScript" src="/WebPath/js/Debug.js"></script>
+	<script type="text/JavaScript" src="/WebPath/js/DesktopContent.js"></script>
+
+<style>
+/* ═══════════════════════════════════════════════════════════════════
+   DESIGN SYSTEM — Mu2e Firmware Manager
+   Optimized for control-room displays (large fonts, high contrast)
+   ═══════════════════════════════════════════════════════════════════ */
+:root {
+	--c-bg:       #2b3444;
+	--c-surface:  #323d4f;
+	--c-panel:    #3a475b;
+	--c-panel-hi: #435270;
+	--c-border:   #4e5f78;
+	--c-border-hi:#6880a0;
+	--c-text:     #e4e8ef;
+	--c-text-dim: #94a3b8;
+	--c-text-inv: #2b3444;
+	--c-accent:   #60a5fa;
+	--c-accent-bg:#2b3d5c;
+	--c-ok:       #4ade80;
+	--c-ok-bg:    #1e3a2c;
+	--c-warn:     #fbbf24;
+	--c-warn-bg:  #3d361e;
+	--c-bad:      #f87171;
+	--c-bad-bg:   #4a2020;
+	--c-timeout:  #fb923c;
+	--c-timeout-bg:#3d2e1e;
+	--c-idle-bg:  #323d4f;
+	--radius:     6px;
+	--shadow:     0 2px 6px rgba(0,0,0,0.2);
+	--transition: 0.15s ease;
+}
+
+* { box-sizing: border-box; }
+body { margin: 0; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif; color: var(--c-text); background: var(--c-bg); }
+.mono { font-family: "Inconsolata", "Fira Code", "Courier New", monospace; }
+
+/* ── App Shell ─────────────────────────── */
+#app { display: flex; flex-direction: column; height: 100vh; padding: 12px; gap: 8px; overflow: hidden; }
+
+/* ── Header Bar ────────────────────────── */
+.header-bar {
+	display: flex; align-items: center; gap: 16px; padding: 10px 16px;
+	background: var(--c-panel); border: 1px solid var(--c-border); border-radius: var(--radius);
+	flex-shrink: 0;
+}
+.header-bar h1 { margin: 0; font-size: 20px; font-weight: 700; color: var(--c-accent); white-space: nowrap; letter-spacing: 0.5px; }
+.header-bar .spacer { flex: 1; }
+.header-bar .status-pill {
+	display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px;
+	border-radius: 20px; font-size: 13px; font-weight: 600;
+	background: var(--c-accent-bg); color: var(--c-accent); border: 1px solid var(--c-accent);
+}
+.header-bar .status-pill .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--c-accent); }
+
+/* ── Controls Row ──────────────────────── */
+.controls-row {
+	display: grid; grid-template-columns: 1.3fr 1fr auto auto auto; gap: 10px; align-items: end;
+	padding: 10px 14px; background: var(--c-panel); border: 1px solid var(--c-border);
+	border-radius: var(--radius); flex-shrink: 0;
+}
+.field-group label {
+	display: block; font-size: 11px; font-weight: 700; color: var(--c-text-dim);
+	text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 4px;
+}
+input, select {
+	width: 100%; height: 36px; font-size: 14px; padding: 0 10px;
+	background: var(--c-surface); color: var(--c-text); border: 1px solid var(--c-border);
+	border-radius: 4px; outline: none; transition: border-color var(--transition);
+}
+input:focus, select:focus { border-color: var(--c-accent); box-shadow: 0 0 0 2px rgba(77,166,255,0.2); }
+select { cursor: pointer; }
+
+/* ── Buttons ───────────────────────────── */
+button, .btn {
+	display: inline-flex; align-items: center; justify-content: center; gap: 6px;
+	height: 36px; padding: 0 16px; font-size: 13px; font-weight: 600;
+	border: 1px solid var(--c-border); border-radius: 4px; cursor: pointer;
+	background: var(--c-panel-hi); color: var(--c-text); white-space: nowrap;
+	transition: all var(--transition); width: auto;
+}
+button:hover { background: var(--c-border); border-color: var(--c-border-hi); }
+button:active { transform: scale(0.97); }
+button:disabled { opacity: 0.4; cursor: default; pointer-events: none; }
+button.primary { background: var(--c-accent); color: white; border-color: var(--c-accent); font-weight: 700; }
+button.primary:hover { background: #1d4ed8; }
+button.danger { background: var(--c-bad); color: white; border-color: var(--c-bad); }
+button.danger:hover { background: #b91c1c; }
+
+/* ── Tab Navigation ────────────────────── */
+.tab-nav {
+	display: flex; gap: 2px; flex-shrink: 0;
+	background: var(--c-panel); border: 1px solid var(--c-border); border-bottom: none;
+	border-radius: var(--radius) var(--radius) 0 0; padding: 6px 10px 0 10px;
+}
+.tab-nav button {
+	padding: 10px 28px; font-size: 15px; font-weight: 700;
+	border: 1px solid transparent; border-bottom: 3px solid transparent;
+	border-radius: var(--radius) var(--radius) 0 0;
+	background: transparent; color: var(--c-text-dim); position: relative;
+}
+.tab-nav button:hover { color: var(--c-text); background: var(--c-panel-hi); }
+.tab-nav button.active {
+	color: var(--c-accent); background: var(--c-surface);
+	border-color: var(--c-border); border-bottom: 3px solid var(--c-accent);
+}
+.tab-nav .tab-badge {
+	display: inline-flex; align-items: center; justify-content: center;
+	min-width: 22px; height: 20px; padding: 0 6px; margin-left: 8px;
+	font-size: 11px; font-weight: 700; border-radius: 10px;
+	background: var(--c-accent-bg); color: var(--c-accent);
+}
+
+/* ── Panel Container ───────────────────── */
+.panel-container {
+	flex: 1; overflow: hidden; display: flex; flex-direction: column;
+	background: var(--c-surface); border: 1px solid var(--c-border); border-top: none;
+	border-radius: 0 0 var(--radius) var(--radius);
+}
+.tab-panel { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+.tab-panel.active { display: flex; }
+
+/* ── Action Bar (per panel) ────────────── */
+.action-bar {
+	display: flex; align-items: center; gap: 8px; padding: 8px 14px; flex-shrink: 0;
+	border-bottom: 1px solid var(--c-border); background: var(--c-panel);
+}
+.action-bar .sep { width: 1px; height: 24px; background: var(--c-border); margin: 0 4px; }
+.action-bar .info {
+	margin-left: auto; font-size: 13px; color: var(--c-text-dim);
+}
+.action-bar .info b { color: var(--c-text); font-weight: 700; }
+
+/* ── Summary Chips ─────────────────────── */
+.summary-bar {
+	display: flex; align-items: center; gap: 8px; padding: 6px 14px; flex-shrink: 0;
+	border-bottom: 1px solid var(--c-border); background: var(--c-panel); flex-wrap: wrap;
+}
+.chip {
+	display: inline-flex; align-items: center; gap: 5px; padding: 3px 10px;
+	border-radius: 14px; font-size: 13px; font-weight: 600;
+}
+.chip-ok      { background: var(--c-ok-bg);      color: var(--c-ok); }
+.chip-bad     { background: var(--c-bad-bg);      color: var(--c-bad); }
+.chip-warn    { background: var(--c-warn-bg);     color: var(--c-warn); }
+.chip-timeout { background: var(--c-timeout-bg);  color: var(--c-timeout); }
+.chip-neutral { background: var(--c-panel-hi);    color: var(--c-text-dim); }
+
+/* ── Data Table ────────────────────────── */
+.table-scroll { flex: 1; overflow: auto; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; }
+th, td { padding: 8px 12px; text-align: left; white-space: nowrap; border-bottom: 1px solid var(--c-border); }
+th {
+	position: sticky; top: 0; z-index: 2;
+	font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.6px;
+	color: var(--c-text-dim); background: var(--c-panel); border-bottom: 2px solid var(--c-border-hi);
+}
+th.sortable { cursor: pointer; user-select: none; }
+th.sortable:hover { color: var(--c-accent); }
+th.sort-asc::after  { content: " ▲"; font-size: 9px; }
+th.sort-desc::after { content: " ▼"; font-size: 9px; }
+td { transition: background var(--transition); }
+tr { cursor: pointer; transition: background var(--transition); }
+tr:hover td { background: var(--c-panel-hi); }
+td input[type="checkbox"] { width: 16px; height: 16px; cursor: pointer; accent-color: var(--c-accent); }
+th:first-child, td:first-child { width: 36px; text-align: center; }
+
+/* Row status colors */
+tr.st-ok td        { border-left: 3px solid var(--c-ok);      background: var(--c-ok-bg); }
+tr.st-ok td:not(:first-child) { border-left: none; }
+tr.st-mismatch td  { border-left: 3px solid var(--c-bad);     background: var(--c-bad-bg); }
+tr.st-mismatch td:not(:first-child) { border-left: none; }
+tr.st-timeout td   { border-left: 3px solid var(--c-timeout);  background: var(--c-timeout-bg); }
+tr.st-timeout td:not(:first-child) { border-left: none; }
+tr.st-warn td      { border-left: 3px solid var(--c-warn);    background: var(--c-warn-bg); }
+tr.st-warn td:not(:first-child) { border-left: none; }
+
+td.cell-bad { color: var(--c-bad); font-weight: 700; }
+
+/* Status badge in cell */
+.status-badge {
+	display: inline-block; padding: 2px 8px; border-radius: 3px;
+	font-size: 12px; font-weight: 700; text-transform: uppercase;
+}
+.status-badge.sb-ok      { background: var(--c-ok);      color: white; }
+.status-badge.sb-mismatch{ background: var(--c-bad);      color: white; }
+.status-badge.sb-timeout  { background: var(--c-timeout);  color: white; }
+.status-badge.sb-error    { background: var(--c-bad);      color: white; }
+.status-badge.sb-warn     { background: var(--c-warn);     color: white; }
+.status-badge.sb-read     { background: var(--c-accent-bg);color: var(--c-accent); }
+.status-badge.sb-idle     { background: var(--c-panel-hi); color: var(--c-text-dim); }
+
+/* ── Flash progress bar (per ROC) ──────── */
+.fwbar {
+	position: relative; display: inline-block; vertical-align: middle;
+	width: 140px; height: 16px; border-radius: 3px; overflow: hidden;
+	background: var(--c-surface); border: 1px solid var(--c-border);
+}
+.fwbar > i { position: absolute; left: 0; top: 0; bottom: 0; background: var(--c-accent); transition: width 0.4s ease; }
+.fwbar > span { position: absolute; inset: 0; font-size: 10px; line-height: 16px; text-align: center; font-weight: 700; color: var(--c-text); }
+.fwbar.ok  > i { background: var(--c-ok); }
+.fwbar.bad > i { background: var(--c-bad); }
+.fwbar.stale > i { background: var(--c-warn); }
+.fwchip { font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 3px; }
+.fwchip.ready { background: var(--c-ok-bg); color: var(--c-ok); }
+.fwchip.locked { background: var(--c-warn-bg); color: var(--c-warn); }
+.flash-bar label.cb { display: inline-flex; align-items: center; gap: 6px; font-size: 13px; color: var(--c-text); text-transform: none; letter-spacing: 0; margin: 0; }
+.flash-bar label.cb input { width: 16px; height: 16px; accent-color: var(--c-accent); }
+button.warn { background: var(--c-warn); color: var(--c-text-inv); border-color: var(--c-warn); font-weight: 700; }
+button.warn:hover { background: #d9a520; }
+
+/* ── Flash confirm dialog ───────────────── */
+#fcBg { z-index: 200; }
+#fcBg .modal { width: min(760px, calc(100vw - 40px)); top: 10vh; }
+.fc-info { padding: 10px 12px; border-radius: 4px; background: var(--c-accent-bg); border: 1px solid var(--c-accent); color: var(--c-text); font-size: 14px; line-height: 1.4; }
+.fc-warn { padding: 10px 12px; border-radius: 4px; background: var(--c-bad-bg); border: 1px solid var(--c-bad); color: var(--c-text); font-size: 14px; line-height: 1.4; }
+.fc-note { margin-top: 10px; padding: 8px 12px; border-radius: 4px; background: var(--c-warn-bg); border: 1px solid var(--c-warn); color: var(--c-warn); font-size: 13px; }
+.fc-bad { color: var(--c-bad); font-weight: 700; }
+.fc-grid { display: grid; grid-template-columns: 130px 1fr; gap: 8px 16px; margin-top: 14px; font-size: 15px; }
+.fc-grid .mk { font-size: 12px; font-weight: 700; color: var(--c-text-dim); text-transform: uppercase; letter-spacing: 0.5px; align-self: start; padding-top: 2px; }
+.fc-grid .mv { color: var(--c-text); word-break: break-all; }
+.fc-grid .dim { color: var(--c-text-dim); font-weight: 400; }
+.fc-list { margin: 0; padding-left: 20px; font-size: 15px; line-height: 1.6; }
+
+/* ── Log ───────────────────────────────── */
+.log-panel {
+	flex-shrink: 0; max-height: 100px; overflow: auto;
+	padding: 6px 12px; font-family: "Inconsolata", monospace; font-size: 12px;
+	color: var(--c-text-dim); background: var(--c-surface);
+	border: 1px solid var(--c-border); border-radius: var(--radius);
+}
+
+/* ── Modal ─────────────────────────────── */
+.modal-backdrop {
+	display: none; position: fixed; inset: 0; z-index: 100;
+	background: rgba(0,0,0,0.35); backdrop-filter: blur(2px);
+}
+.modal {
+	position: absolute; top: 5vh; left: 50%; transform: translateX(-50%);
+	width: min(980px, calc(100vw - 40px)); max-height: 90vh; overflow: auto;
+	background: var(--c-panel); border: 1px solid var(--c-border-hi);
+	border-radius: 8px; box-shadow: 0 20px 60px rgba(0,0,0,0.15); padding: 0;
+}
+.modal-header {
+	display: flex; align-items: center; gap: 12px; padding: 16px 24px;
+	border-bottom: 1px solid var(--c-border); background: var(--c-panel-hi);
+	border-radius: 8px 8px 0 0;
+}
+.modal-header h3 { margin: 0; font-size: 20px; font-weight: 700; color: var(--c-accent); flex: 1; }
+.modal-header .close-x {
+	width: 32px; height: 32px; display: flex; align-items: center; justify-content: center;
+	font-size: 20px; color: var(--c-text-dim); cursor: pointer; border-radius: 4px;
+	border: none; background: transparent;
+}
+.modal-header .close-x:hover { background: var(--c-border); color: var(--c-text); }
+.modal-body { padding: 20px 24px; }
+.modal-grid {
+	display: grid; grid-template-columns: 180px 1fr; gap: 8px 20px; font-size: 16px;
+}
+.modal-grid .mk { font-size: 13px; font-weight: 700; color: var(--c-text-dim); text-transform: uppercase; letter-spacing: 0.5px; align-self: center; }
+.modal-grid .mv { font-size: 17px; color: var(--c-text); align-self: center; }
+.modal-section {
+	grid-column: span 2; padding: 10px 0 4px 0; margin-top: 8px;
+	font-size: 14px; font-weight: 700; color: var(--c-accent);
+	border-bottom: 2px solid var(--c-accent); text-transform: uppercase; letter-spacing: 1px;
+}
+.modal-footer {
+	display: flex; gap: 8px; padding: 16px 24px;
+	border-top: 1px solid var(--c-border); background: var(--c-panel-hi);
+	border-radius: 0 0 8px 8px;
+}
+.modal-footer .spacer { flex: 1; }
+</style>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════
+ *  Firmware Manager — DTC + ROC
+ *  Professional tab-based GUI for Mu2e Calo integration
+ * ═══════════════════════════════════════════════════════════════════ */
+
+var CODE_EDITOR_APP_ID_ = 0, MACRO_MAKER_APP_ID_ = 0;
+var TIMEOUT_WORD_ = 0xEFFE;
+
+// Per-tab firmware directory config
+var tabFwCfg_ = {
+	dtc: { dirKey: "FWMgr.dtcDir", selKey: "FWMgr.dtcSel", defaultDir: "/DTC_Firmware",
+	       dirFilter: /^DTC/i, dirId: "dtcFwDir", selId: "dtcFwSel", expId: "dtcExpLine", expected: {} },
+	roc: { dirKey: "FWMgr.rocDir", selKey: "FWMgr.rocSel", defaultDir: "/home/mu2eshift/ots_calo/Calo_ROC_Firmware",
+	       dirFilter: /^(CaloROC_|ROC)/i, dirId: "rocFwDir", selId: "rocFwSel", expId: "rocExpLine", expected: {} }
+};
+
+var rocRows_=[], dtcInfoMap_={}, dtcMap_={};
+var rocSel_={}, dtcSel_={};
+var activeTab_="dtc", modalCtx_=null;
+var rocSortCol_="default", rocSortAsc_=true;
+
+// Flash jobs: one per DTC, persisted so a page reload resumes polling
+var FW_JOBS_KEY_="FWMgr.flashJobs";
+var FW_POLL_MS_=3000;
+var fwJobs_={};      // dtcUID -> {phase,links,state,percent,msg,notDoneID,startedAt,bitfile,imageIndex}
+// "Program ROCs Safe" (otsdaq-mu2e DTCFrontEndInterface, 2026-10-15): segmented upload, every segment
+// verified against the file and retried, IAP only of a fully verified image, directory never touched,
+// slow controls of the DTC paused while it runs. Works with the older MiV (read-back) and the
+// solid-programming MiV (CRC, completion tags, authentication before the IAP).
+var PROGRAM_MACRO_="Program ROCs Safe";
+var PROGRAM_ARGS_={
+	target:"Target ROC or Mask (Default = -1 := all ROCs, or 0x111111 := all)",
+	bitfile:"Path to SPI image file (.spi)",
+	sha:"Expected SHA-256 of the SPI image (Default := read the .sha256 file next to the image)",
+	address:"SPI flash start address (Default := 0x1010000)",
+	write:"Write the image to the SPI flash (Default := true; false = only verify the flash against the file)",
+	program:"Program the FPGA after a verified upload (Default := false)",
+	version:"Expected firmware version after programming, e.g. 0x0108 (Default := 0, do not check)",
+	quiet:"Seconds to wait after pausing slow controls (Default := 5)"
+};
+// image index -> SPI address (flash_map.txt); index 0 is the golden image and is never written from here
+var IMAGE_ADDR_={1:0x1010000,2:0x5000000};
+var fwItemsCache_ = { dtc: [], roc: [] };  // cached full list of firmware entries per tab
+
+// ── Init ────────────────────────────────────────────────
+function init() {
+	DesktopContent.tooltip("Firmware Manager","DTC and ROC firmware inventory, comparison, and flash control.");
+	DesktopContent.setWindowTooltip("Mu2e Firmware Manager");
+	// Init per-tab firmware directory inputs
+	for(var tab in tabFwCfg_) {
+		var cfg = tabFwCfg_[tab];
+		var savedDir = localStorage.getItem(cfg.dirKey);
+		// drop the old root-level defaults ("/Calo_ROC_Firmware") that browsers remembered
+		if(savedDir && /^\/(Calo_ROC_Firmware|DTC_Firmware)\/?$/.test(savedDir)) savedDir = "";
+		document.getElementById(cfg.dirId).value = savedDir || cfg.defaultDir;
+	}
+	document.getElementById("rocBitfileName").value=localStorage.getItem("FWMgr.rocBitfileName")||"";
+	var savedIdx=localStorage.getItem("FWMgr.rocImageIndex");
+	document.getElementById("rocImageIndex").value=(savedIdx==="1"||savedIdx==="2")?savedIdx:"1";  // never 0 (golden)
+	loadFlashState();
+	switchTab("dtc");
+	resolveCodeEditor();
+	resolveMacroMaker();
+}
+
+function switchTab(t) {
+	activeTab_=t;
+	document.querySelectorAll(".tab-nav button").forEach(function(b){b.className=b.getAttribute("data-tab")===t?"active":"";});
+	document.querySelectorAll(".tab-panel").forEach(function(p){p.className="tab-panel"+(p.id==="p-"+t?" active":"");});
+}
+
+// ── Supervisor resolution ───────────────────────────────
+function resolveCodeEditor() {
+	DesktopContent.XMLHttpRequest("Request?RequestType=getAppId&classNeedle=ots::CodeEditorSupervisor","",
+	function(r){CODE_EDITOR_APP_ID_=DesktopContent.getXMLValue(r,"id")|0;
+	if(!CODE_EDITOR_APP_ID_) log("CodeEditor not found (manifest reading will be unavailable).");},0,0,true,false,true);
+}
+function resolveMacroMaker() {
+	DesktopContent.XMLHttpRequest("Request?RequestType=getAppId&classNeedle=ots::MacroMakerSupervisor","",
+	function(r){MACRO_MAKER_APP_ID_=DesktopContent.getXMLValue(r,"id")|0;if(MACRO_MAKER_APP_ID_){log("MacroMaker LID="+MACRO_MAKER_APP_ID_);loadDTCMacros();}else log("MacroMaker not found.");},0,0,true,false,true);
+}
+
+// ── Discover DTCs ───────────────────────────────────────
+function loadDTCMacros() {
+	if(!MACRO_MAKER_APP_ID_)return;
+	var s=DesktopContent._localUrnLid; DesktopContent._localUrnLid=MACRO_MAKER_APP_ID_;
+	DesktopContent.XMLHttpRequest("Request?RequestType=getFEMacroList","",function(r){
+		dtcMap_={};
+		var fm=r.responseXML.getElementsByTagName("FEMacros");
+		for(var i=0;i<fm.length;++i){var p=fm[i].getAttribute("value").split(";");if(p.length<4)continue;
+		var fc=p[2],fu=p[3],c=4;while(c<p.length){var mn=p[c];c+=3;var ni=p[c]|0;c+=1+ni;var no=p[c]|0;c+=1+no;
+		if(mn==="ROC Firmware Inventory")dtcMap_[fu]={feClass:fc};}}
+		updateTabBadges(); paintDTCFilter();
+		log("Found "+Object.keys(dtcMap_).length+" DTC target(s).");
+		// Now that we have DTC targets, load firmware directory listings
+		if(Object.keys(dtcMap_).length > 0) { loadFwList("dtc"); loadFwList("roc"); }
+	}); DesktopContent._localUrnLid=s;
+}
+
+// ── Firmware directory (via List Firmware Directory macro) ─────────────
+function loadFwList(tab) {
+	var cfg=tabFwCfg_[tab]; if(!cfg) return;
+	var dir=document.getElementById(cfg.dirId).value; localStorage.setItem(cfg.dirKey,dir);
+	var sel=document.getElementById(cfg.selId); sel.innerHTML='<option value="">-- loading --</option>';
+
+	// Pick any DTC target to run the ListFirmwareDirectory macro
+	var dtcUIDs = Object.keys(dtcMap_);
+	if(!dtcUIDs.length || !MACRO_MAKER_APP_ID_) {
+		sel.innerHTML='<option value="">-- no DTC target --</option>';
+		log(tab.toUpperCase()+" FW: cannot list, no DTC target available.");
+		return;
+	}
+	var dtcUID = dtcUIDs[0];
+	var info = dtcMap_[dtcUID];
+
+	var post = "inputArgs=DirectoryPath," + encodeURIComponent(dir) +
+	           "&outputArgs=DirectoryJSON";
+	var s = DesktopContent._localUrnLid;
+	DesktopContent._localUrnLid = MACRO_MAKER_APP_ID_;
+	DesktopContent.XMLHttpRequest(
+		"Request?RequestType=runFEMacro&feClassSelected="+encodeURIComponent(info.feClass)+
+		"&feUIDSelected="+encodeURIComponent(dtcUID)+"&macroType=fe&macroName="+
+		encodeURIComponent("List Firmware Directory")+"&saveOutputs=0", post,
+		function(r,rp,errStr) {
+			if(errStr){sel.innerHTML='<option value="">-- error --</option>';
+			log(tab.toUpperCase()+" FW dir error: "+errStr);return;}
+			// Extract DirectoryJSON from response
+			var jsonStr="";
+			var feExecs=r.responseXML.getElementsByTagName("feMacroExec");
+			if(feExecs.length>0){for(var f=0;f<feExecs.length;++f){var n=feExecs[f].getElementsByTagName("outputArgs_name"),v=feExecs[f].getElementsByTagName("outputArgs_value");
+			for(var i=0;i<n.length;++i)if(n[i].getAttribute("value")==="DirectoryJSON")jsonStr=decodeURIComponent(v[i].getAttribute("value"));}}
+			else{var n=r.responseXML.getElementsByTagName("outputArgs_name"),v=r.responseXML.getElementsByTagName("outputArgs_value");
+			for(var i=0;i<n.length;++i)if(n[i].getAttribute("value")==="DirectoryJSON")jsonStr=decodeURIComponent(v[i].getAttribute("value"));}
+
+			if(!jsonStr){sel.innerHTML='<option value="">-- empty response --</option>';
+			log(tab.toUpperCase()+" FW: empty DirectoryJSON");return;}
+
+			try {
+				var parsed = JSON.parse(jsonStr);
+				if(parsed.error){sel.innerHTML='<option value="">-- '+esc(parsed.error)+' --</option>';
+				log(tab.toUpperCase()+" FW dir error: "+parsed.error);return;}
+
+				var entries = parsed.entries || [];
+				var items=[], allNames=[];
+				for(var i=0;i<entries.length;++i) {
+					var name=entries[i].name, type=entries[i].type;
+					allNames.push(name);
+					if(type==="dir" && cfg.dirFilter.test(name)) items.push(name);
+					else if(type==="file" && /\.(json|manifest|spi|bit)$/i.test(name)) items.push(name);
+				}
+				items.sort(); items.reverse();
+				fwItemsCache_[tab] = items;
+				buildFwYearMonthFilters(tab, items);
+				filterFwDropdown(tab);
+				log(tab.toUpperCase()+" FW: "+items.length+" releases, "+allNames.length+" total entries in "+dir);
+			} catch(e) {
+				sel.innerHTML='<option value="">-- parse error --</option>';
+				log(tab.toUpperCase()+" FW JSON error: "+e.message);
+			}
+		},0,0,true);
+	DesktopContent._localUrnLid = s;
+}
+function loadSelFw(tab){
+	var cfg=tabFwCfg_[tab]; if(!cfg) return;
+	var v=document.getElementById(cfg.selId).value; localStorage.setItem(cfg.selKey,v);
+	if(!v){cfg.expected={};renderExpected();if(tab==="roc")renderROC();if(tab==="dtc")renderDTC();return;}
+
+	if(tab==="dtc") {
+		// DTC: parse version info from folder name, no manifest file
+		cfg.expected = parseDTCDirName(v);
+		renderExpected(); renderDTC();
+		log("DTC expected FW set from folder name: " + v);
+		return;
+	}
+
+	// ROC bitfile named ROC-YYYYMMDD-MAJ-MIN.spi: date and version come from the name
+	var fromName=parseROCFileName(v);
+	if(fromName){
+		cfg.expected=fromName; renderExpected(); renderROC();
+		log("ROC expected FW from file name: build "+fromName.label);
+		return;
+	}
+
+	// ROC release folder: read manifest.json from inside it
+	var base=document.getElementById(cfg.dirId).value.replace(/\/+$/,"");
+	var path=/\.(json|manifest)$/i.test(v)?base+"/"+v:base+"/"+v+"/manifest.json";
+	readFile(path,function(t,e){
+		if(e||!t){cfg.expected={};renderExpected();if(tab==="roc")renderROC();return;}
+		cfg.expected=parseManifest(t);renderExpected();renderROC();
+		log("ROC expected FW loaded.");
+	});
+}
+
+// Parse DTC firmware folder name convention:
+//   DTC{YYYY}{Mon}{DD}_{HH}_{VivadoVer}_{Type}
+//   Example: DTC2026Jun03_14_22.1_6ROC
+//            DTC2025Dec10_14_22.1_CRV_6ROC
+//            DTC2024Oct24_11_22.1_TempOnly
+function parseDTCDirName(name) {
+	var o = {};
+	var months = {Jan:1,Feb:2,Mar:3,Apr:4,May:5,Jun:6,Jul:7,Aug:8,Sep:9,Oct:10,Nov:11,Dec:12};
+	// Match: DTC + YYYY + Mon + DD + _ + HH + _ + Vivado + _ + Type
+	var m = name.match(/^DTC(\d{4})([A-Za-z]{3})(\d{2})_(\d{2})_(\d+\.\d+)_(.+)$/);
+	if(!m) return o;
+	o.year     = parseInt(m[1]);
+	o.month    = months[m[2]] || 0;
+	o.day      = parseInt(m[3]);
+	o.hour     = parseInt(m[4]);
+	o.vivado   = m[5];         // e.g. "22.1"
+	o.type     = m[6];         // e.g. "6ROC", "CRV_6ROC", "TempOnly"
+	o.folderName = name;
+
+	// Build the expected designDate prefix for comparison
+	// ReadDesignDate() returns e.g. "DTC-Jun/03/2026 14:00   6-ROC  raw-data: 0x..."
+	var monNames = ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+	o.datePrefix = monNames[o.month] + "/" + p2(o.day) + "/20" + String(o.year).slice(-2) + " " + p2(o.hour) + ":00";
+
+	// Determine expected ROC mode string from type
+	if(/CRV/i.test(o.type))       o.rocMode = "CRV";
+	else if(/6ROC/i.test(o.type)) o.rocMode = "6-ROC";
+	else if(/3ROC/i.test(o.type)) o.rocMode = "3-ROC";
+	else                          o.rocMode = "";
+
+	return o;
+}
+// CodeEditor wants the extension in its own "ext" argument, not in the path
+function readFile(fp,cb){if(!CODE_EDITOR_APP_ID_){cb(null,"na");return;}var s=DesktopContent._localUrnLid;DesktopContent._localUrnLid=CODE_EDITOR_APP_ID_;
+var m=String(fp).match(/^(.*)\.([A-Za-z]+)$/),path=m?m[1]:fp,ext=m?m[2]:"";
+DesktopContent.XMLHttpRequest("Request?RequestType=readOnlycodeEditor&option=getFileContent&path="+encodeURIComponent(path)+"&ext="+encodeURIComponent(ext),"",
+function(r,rp,e){if(e||!r){cb(null,e||"fail");return;}cb(DesktopContent.getXMLValue(r,"text")||"","");},0,0,true);DesktopContent._localUrnLid=s;}
+// ROC-YYYYMMDD-MAJ-MIN.spi  ->  build date (BCD, as the ROC registers report it) + version
+function parseROCFileName(name){
+	var m=String(name).match(/^ROC-(\d{4})(\d{2})(\d{2})-(\d+)-(\d+)\.(spi|bit)$/i);
+	if(!m)return null;
+	var y=parseInt(m[1]),mo=parseInt(m[2]),d=parseInt(m[3]),maj=parseInt(m[4]),min=parseInt(m[5]);
+	return {
+		fileName:name, year:y, month:mo, day:d, major:maj, minor:min,
+		label:m[1]+"-"+m[2]+"-"+m[3]+"  v"+maj+"."+min,
+		fwDateHi:toBcd16(y), fwDateLo:(toBcd8(mo)<<8)|toBcd8(d),
+		fwVersion:((maj&0xff)<<8)|(min&0xff)
+	};
+}
+function toBcd8(v){return((Math.floor(v/10)%10)<<4)|(v%10);}
+function toBcd16(v){return(Math.floor(v/1000)%10<<12)|(Math.floor(v/100)%10<<8)|(Math.floor(v/10)%10<<4)|(v%10);}
+function rocFwOptionLabel(name){var p=parseROCFileName(name);return p?p.label+"   ("+name+")":name;}
+function parseManifest(t){var o={};try{var j=JSON.parse(t);o.project=px(j.fw_project_id||j.project);o.fwGit=px(j.fw_git_sha||j.fw_git);
+o.fwDateLo=px(j.fw_build_date_lo);o.fwDateHi=px(j.fw_build_date_hi);o.fwTimeLo=px(j.fw_build_time_lo);o.fwTimeHi=px(j.fw_build_time_hi);
+o.fwVersion=pv(j.fw_version||j.version);o.swHash=px(j.sw_hex_hash);}catch(e){}return o;}
+function pv(v){if(v===undefined||v===null||v==="")return undefined;if(typeof v==="number")return v&0xffff;
+var s=String(v).trim(),m=s.match(/^(\d+)\.(\d+)$/);if(m)return((parseInt(m[1])&0xff)<<8)|(parseInt(m[2])&0xff);return px(v);}
+
+// ── Refresh Inventory ───────────────────────────────────
+function refreshInventory(){
+	var tgts=getFilteredTargets(); if(!tgts.length){log("No DTC targets.");return;}
+	rocRows_=[]; dtcInfoMap_={}; rocSel_={}; dtcSel_={}; inventoryFailed_={};
+	setBusy(true); var total=tgts.length, done=0;
+	log("Querying "+total+" DTC(s)...");
+	for(var i=0;i<tgts.length;++i)(function(uid){
+		var t0=Date.now();
+		runMacro(uid,function(u,js,e){
+			var el=((Date.now()-t0)/1000).toFixed(1); done++;
+			document.getElementById("progressText").textContent=done+"/"+total;
+			if(e){inventoryFailed_[u]=e;log("ERR "+u+" ("+el+"s): "+e);}
+			else if(!js){inventoryFailed_[u]="empty response";log("WARN "+u+": empty response");}
+			else{try{var p=JSON.parse(js);var a=Array.isArray(p)?p:(p.rocs||[]);
+			if(!Array.isArray(p)&&p.dtc)dtcInfoMap_[u]=p.dtc;
+			for(var r=0;r<a.length;++r)rocRows_.push(toRow(u,a[r]));
+			log(u+": "+a.length+" ROC(s) "+el+"s");}catch(x){inventoryFailed_[u]="bad JSON: "+x.message;log("JSON err "+u+": "+x.message);}}
+			if(done===total){setBusy(false);rocRows_.sort(function(a,b){return a.target!==b.target?nc(a.target,b.target):a.link-b.link;});
+			compareAll(); renderDTC(); renderROC(); updateTabBadges();
+			var failed=Object.keys(inventoryFailed_).sort(nc);
+			log("Done. "+Object.keys(dtcInfoMap_).length+"/"+total+" DTC(s), "+rocRows_.length+" ROC(s)."+(failed.length?" MISSING: "+failed.join(", "):""));
+			if(failed.length)showFlashMessage(failed.length+" of "+total+" DTC(s) did not answer",
+				failed.map(function(u){return "<b>"+esc(u)+"</b>: "+esc(inventoryFailed_[u]);}).concat(["Use <b>Retry Missing</b> to query only these again."]));}
+		});
+	})(tgts[i]);
+}
+var inventoryFailed_={};
+function retryMissing(){
+	var failed=Object.keys(inventoryFailed_).sort(nc);
+	if(!failed.length){showFlashMessage("Nothing to retry",["All DTCs answered on the last refresh."]);return;}
+	setBusy(true); var total=failed.length, done=0; inventoryFailed_={};
+	log("Retrying "+total+" DTC(s): "+failed.join(", "));
+	for(var i=0;i<failed.length;++i)(function(uid){
+		var t0=Date.now();
+		runMacro(uid,function(u,js,e){
+			var el=((Date.now()-t0)/1000).toFixed(1); done++;
+			document.getElementById("progressText").textContent=done+"/"+total;
+			if(e){inventoryFailed_[u]=e;log("ERR "+u+" ("+el+"s): "+e);}
+			else{try{var p=JSON.parse(js);var a=Array.isArray(p)?p:(p.rocs||[]);
+			if(!Array.isArray(p)&&p.dtc)dtcInfoMap_[u]=p.dtc;
+			rocRows_=rocRows_.filter(function(r){return r.target!==u;});
+			for(var r=0;r<a.length;++r)rocRows_.push(toRow(u,a[r]));
+			log(u+": "+a.length+" ROC(s) "+el+"s");}catch(x){inventoryFailed_[u]="bad JSON: "+x.message;log("JSON err "+u+": "+x.message);}}
+			if(done===total){setBusy(false);rocRows_.sort(function(a,b){return a.target!==b.target?nc(a.target,b.target):a.link-b.link;});
+			compareAll(); renderDTC(); renderROC(); updateTabBadges();
+			var still=Object.keys(inventoryFailed_).sort(nc);
+			log("Retry done. "+Object.keys(dtcInfoMap_).length+" DTC(s), "+rocRows_.length+" ROC(s)."+(still.length?" STILL MISSING: "+still.join(", "):""));}
+		});
+	})(failed[i]);
+}
+function setBusy(b){document.getElementById("refreshBtn").disabled=b;
+	document.getElementById("busyDot").style.background=b?"var(--c-warn)":"var(--c-ok)";
+	document.getElementById("busyLabel").textContent=b?"scanning...":"ready";}
+
+var INVENTORY_POLL_MS_=1500, INVENTORY_TIMEOUT_MS_=120000, INVENTORY_RETRIES_=1;
+function runMacro(uid,cb,attempt){
+	attempt=attempt||0;
+	var info=dtcMap_[uid];if(!info||!MACRO_MAKER_APP_ID_){cb(uid,"","n/a");return;}
+	var post="inputArgs="+encodeURIComponent("Target ROC or Mask (Default = -1 := all ROCs, or 0x111111 := all)")+",-1&outputArgs=Status,InventoryJSON";
+	var t0=Date.now();
+	function fail(msg){
+		if(attempt<INVENTORY_RETRIES_){log("retry "+uid+" after: "+msg);setTimeout(function(){runMacro(uid,cb,attempt+1);},1000);}
+		else cb(uid,"",msg);
+	}
+	function handle(r,rp,e){
+		if(e){fail(e);return;}
+		var se=DesktopContent.getXMLValue(r,"Error");if(se){fail(se);return;}
+		// macro still running on the server: MacroMaker only waits ~300 ms before going async
+		var notDoneID=DesktopContent.getXMLValue(r,"NotDoneID");
+		if(notDoneID){
+			if(Date.now()-t0>INVENTORY_TIMEOUT_MS_){fail("timeout waiting for inventory (NotDoneID "+notDoneID+")");return;}
+			setTimeout(function(){
+				var s=DesktopContent._localUrnLid; DesktopContent._localUrnLid=MACRO_MAKER_APP_ID_;
+				DesktopContent.XMLHttpRequest("Request?RequestType=runFEMacro&NotDoneID="+notDoneID,"",handle,0,0,true,true);
+				DesktopContent._localUrnLid=s;
+			},INVENTORY_POLL_MS_);
+			return;
+		}
+		var js=extractOutputArg(r,"InventoryJSON");
+		if(!js){fail("empty response");return;}
+		cb(uid,js,"");
+	}
+	var s=DesktopContent._localUrnLid; DesktopContent._localUrnLid=MACRO_MAKER_APP_ID_;
+	DesktopContent.XMLHttpRequest("Request?RequestType=runFEMacro&feClassSelected="+encodeURIComponent(info.feClass)+
+		"&feUIDSelected="+encodeURIComponent(uid)+"&macroType=fe&macroName="+encodeURIComponent("ROC Firmware Inventory")+"&saveOutputs=0",
+		post,handle,0,0,true,true);
+	DesktopContent._localUrnLid=s;
+}
+function extractOutputArg(r,name){
+	var js="",fe=r.responseXML.getElementsByTagName("feMacroExec");
+	var scope=fe.length?fe:[r.responseXML];
+	for(var f=0;f<scope.length;++f){var n=scope[f].getElementsByTagName("outputArgs_name"),v=scope[f].getElementsByTagName("outputArgs_value");
+		for(var i=0;i<n.length;++i)if(n[i].getAttribute("value")===name){try{js=decodeURIComponent(v[i].getAttribute("value"));}catch(x){js=v[i].getAttribute("value");}}}
+	return js;
+}
+
+// ── Board ID → calo geometry ────────────────────────────
+// boardID = side + 2*board + 8*crate + 40*phi + 80*disk (ROCCalorimeterInterface::SetBoardVoltages).
+// crate is the index inside the half-disk (0-4); board is the slot inside the crate (0-3 in the formula,
+// shown 1-4 because the physical crate slots are counted from 1); side L/R.
+function boardGeometry(boardId){
+	if(boardId===undefined||boardId<0)return{disk:-1,phi:-1,crate:-1,boardNum:-1,side:"",slot:""};
+	var disk=Math.floor(boardId/80),rem=boardId%80,phi=Math.floor(rem/40);rem%=40;
+	var crate=Math.floor(rem/8);rem%=8;
+	var boardNum=Math.floor(rem/2)+1,side=rem%2?"R":"L";
+	return{disk:disk,phi:phi,crate:crate,boardNum:boardNum,side:side,slot:boardNum+side};
+}
+
+function toRow(dtc,e){var d=e.data||{};var r={target:dtc,link:e.link,rocUID:e.rocUID||"",error:e.error||false,errorMsg:e.errorMessage||"",
+boardId:d.boardId!==undefined?d.boardId:-1,uidMsb:d.uidMsb,uidCsb:d.uidCsb,uidLsb:d.uidLsb,
+project:d.project,fwGit:d.fwGit,fwDateLo:d.fwDateLo,fwDateHi:d.fwDateHi,fwTimeLo:d.fwTimeLo,fwTimeHi:d.fwTimeHi,fwVersion:d.fwVersion,
+swGit:d.swGit,swHash:d.swHash,swDateLo:d.swDateLo,swDateHi:d.swDateHi,timeout:d.timeout||false,
+uid:"",fwDate:"",fwTime:"",swDate:"",status:"IDLE",match:"",mm:[],ms:{}};
+r.uid=uid3(r.uidLsb,r.uidCsb,r.uidMsb);r.fwDate=fmtD(r.fwDateHi,r.fwDateLo);r.fwTime=fmtT(r.fwTimeHi,r.fwTimeLo);r.swDate=fmtD(r.swDateHi,r.swDateLo);
+var geometry=boardGeometry(r.boardId);r.disk=geometry.disk;r.phi=geometry.phi;r.crate=geometry.crate;r.boardNum=geometry.boardNum;r.side=geometry.side;r.slot=geometry.slot;return r;}
+
+// ── Comparison ──────────────────────────────────────────
+function compareAll(){for(var i=0;i<rocRows_.length;++i)cmpRow(rocRows_[i]);}
+function cmpRow(r){r.mm=[];r.ms={};
+if(r.error){r.status="ERROR";r.match=r.errorMsg||"error";return;}
+if(r.timeout){r.status="TIMEOUT";r.match="timeout";r.ms.timeout=true;return;}
+if(r.boardId<0){r.mm.push("BOARD_ID");r.ms.boardId=true;}
+if(r.uid==="0x000000000000"){r.mm.push("UID");r.ms.uid=true;}
+if(hasExp()){cf(r,"project","project","proj");cf(r,"fwGit","fwGit","SHA");cf(r,"fwDateLo","fwDateLo","date");cf(r,"fwDateHi","fwDateHi","date");
+cf(r,"fwTimeLo","fwTimeLo","time");cf(r,"fwTimeHi","fwTimeHi","time");cf(r,"fwVersion","fwVersion","ver");cf(r,"swHash","swHash","SW");}
+if(!r.mm.length){r.status=hasExp()?"OK":"READ";r.match=hasExp()?"OK":"no ref";}
+else{r.status=hasExp()?"MISMATCH":"WARN";r.match=r.mm.join(", ");}}
+function cf(r,rf,ef,l){var ex=tabFwCfg_.roc.expected;if(ex[ef]===undefined)return;if(r[rf]===undefined||r[rf]!==ex[ef]){r.mm.push(l);r.ms[rf]=true;}}
+
+// ── DTC Comparison ──────────────────────────────────────
+function compareDTCRow(d) {
+	// Compare DTC register data against expected from folder name
+	var ex = tabFwCfg_.dtc.expected;
+	d._dtcStatus = "IDLE"; d._dtcMatch = ""; d._dtcMM = [];
+	if(!ex || !ex.datePrefix) { d._dtcStatus = "READ"; d._dtcMatch = "no ref"; return; }
+
+	// Compare date+hour: check if designDate contains the expected prefix
+	if(d.designDate && ex.datePrefix) {
+		if(d.designDate.indexOf(ex.datePrefix) < 0)
+			d._dtcMM.push("date/time");
+	}
+	// Compare Vivado version
+	if(ex.vivado && d.vivadoVersion) {
+		// vivadoVersion from register is like "2022-0001", from folder is "22.1"
+		// Convert folder "22.1" to register format "2022-0001"
+		var vm = ex.vivado.match(/^(\d+)\.(\d+)$/);
+		if(vm) {
+			var expVivado = "20" + vm[1] + "-" + ("0000" + vm[2]).slice(-4);
+			if(d.vivadoVersion !== expVivado) d._dtcMM.push("vivado");
+		}
+	}
+	// Compare ROC mode (6-ROC vs CRV)
+	if(ex.rocMode && d.designDate) {
+		if(d.designDate.indexOf(ex.rocMode) < 0)
+			d._dtcMM.push("type");
+	}
+
+	if(!d._dtcMM.length) { d._dtcStatus = "OK"; d._dtcMatch = "OK"; }
+	else { d._dtcStatus = "MISMATCH"; d._dtcMatch = d._dtcMM.join(", "); }
+}
+
+// ── DTC Table ───────────────────────────────────────────
+function renderDTC(){
+	var tb=document.getElementById("dtcTb"),ks=Object.keys(dtcInfoMap_).sort(nc);
+	if(!ks.length){tb.innerHTML='<tr><td colspan="11" style="padding:24px;color:var(--c-text-dim);text-align:center;">No DTC data yet. Press <b>Refresh</b>.</td></tr>';updDTCInfo();return;}
+	var h="";
+	for(var i=0;i<ks.length;++i){var u=ks[i],d=dtcInfoMap_[u],k="d:"+u;
+	compareDTCRow(d);
+	var ty=d.designType==="D"?"DTC":d.designType==="C"?"CFO":d.designType==="E"?"CRV":d.designType||"?";
+	var sc = d._dtcStatus==="OK"?"st-ok":d._dtcStatus==="MISMATCH"?"st-mismatch":"";
+	h+='<tr class="'+sc+'" onclick="openDTC(\''+ea(u)+'\')">';
+	h+='<td onclick="event.stopPropagation()"><input type="checkbox" '+(dtcSel_[k]?"checked ":"")+'onchange="dtcSel_[\''+ea(k)+'\']=this.checked;updDTCInfo()"></td>';
+	h+='<td><b>'+esc(u)+'</b></td><td>'+esc(ty)+'</td><td class="mono">'+esc(d.designVersion||"-")+'</td>';
+	h+='<td>'+esc(d.designDate||"-")+'</td><td class="mono">'+esc(d.vivadoVersion||"-")+'</td>';
+	h+='<td>'+esc(d.linkSpeed||"-")+'</td>';
+	h+='<td>'+(d.fpgaTemp!==undefined?d.fpgaTemp.toFixed(1)+" &deg;C":"-")+'</td>';
+	h+='<td>dev'+(d.deviceIndex!==undefined?d.deviceIndex:"?")+'</td>';
+	h+='<td>'+statusBadge(d._dtcStatus)+'</td>';
+	h+='<td>'+esc(d._dtcMatch||"-")+'</td></tr>';}
+	tb.innerHTML=h; updDTCInfo();
+}
+function updDTCInfo(){var t=Object.keys(dtcInfoMap_).length,s=0,ok=0,mm=0;
+for(var k in dtcSel_)if(dtcSel_[k])s++;
+for(var u in dtcInfoMap_){var st=dtcInfoMap_[u]._dtcStatus;if(st==="OK")ok++;else if(st==="MISMATCH")mm++;}
+document.getElementById("dtcInfo").innerHTML='<b>'+t+'</b> DTC(s) &middot; <b>'+s+'</b> selected' +
+(ok?' &middot; <span style="color:var(--c-ok)"><b>'+ok+'</b> OK</span>':'') +
+(mm?' &middot; <span style="color:var(--c-bad)"><b>'+mm+'</b> MISMATCH</span>':'');}
+function selAllDTC(v){var ks=Object.keys(dtcInfoMap_);for(var i=0;i<ks.length;++i)dtcSel_["d:"+ks[i]]=v;renderDTC();}
+
+// ── ROC Sort ────────────────────────────────────────────
+function sortROC(col){
+	if(rocSortCol_===col) rocSortAsc_=!rocSortAsc_;
+	else { rocSortCol_=col; rocSortAsc_=true; }
+	renderROC();
+}
+function rocSortedRows(){
+	var rows=rocRows_.slice();
+	var col=rocSortCol_, asc=rocSortAsc_;
+	if(col==="default") return rows.sort(function(a,b){return a.target!==b.target?nc(a.target,b.target):a.link-b.link;});
+	rows.sort(function(a,b){
+		var va,vb;
+		if(col==="boardId"){va=a.boardId;vb=b.boardId;}
+		else if(col==="fwDate"){va=(a.fwDate||"")+" "+(a.fwTime||"");vb=(b.fwDate||"")+" "+(b.fwTime||"");}
+		else if(col==="dtc"){va=a.target;vb=b.target;}
+		else if(col==="link"){va=a.link;vb=b.link;}
+		else if(col==="status"){va=a.status;vb=b.status;}
+		else if(col==="fwVersion"){va=a.fwVersion===undefined?-1:a.fwVersion;vb=b.fwVersion===undefined?-1:b.fwVersion;}
+		else{va=a[col];vb=b[col];}
+		if(va===vb) return a.target!==b.target?nc(a.target,b.target):a.link-b.link;
+		if(typeof va==="number"&&typeof vb==="number") return asc?va-vb:vb-va;
+		return asc?nc(String(va),String(vb)):nc(String(vb),String(va));
+	});
+	return rows;
+}
+
+// ── ROC Table ───────────────────────────────────────────
+function renderROC(){compareAll();
+	var tb=document.getElementById("rocTb");
+	updateFlashBar();
+	if(!rocRows_.length){tb.innerHTML='<tr><td colspan="19" style="padding:24px;color:var(--c-text-dim);text-align:center;">No ROC data yet. Press <b>Refresh</b>.</td></tr>';updROCInfo();updateSortHeaders();return;}
+	var sorted=rocSortedRows(), h="",vis=0;
+	for(var i=0;i<sorted.length;++i){var r=sorted[i];if(!rocVis(r))continue;vis++;
+	var k=rk(r),sc=stCls(r);
+	h+='<tr class="'+sc+'" onclick="openROC(\''+ea(k)+'\')">';
+	h+='<td onclick="event.stopPropagation()"><input type="checkbox" '+(rocSel_[k]?"checked ":"")+'onchange="rocSel_[\''+ea(k)+'\']=this.checked;updROCInfo()"></td>';
+	h+='<td>'+esc(r.target)+'</td><td>'+r.link+'</td>';
+	h+=tc(r.boardId>=0?r.boardId:"-",r.ms.boardId);
+	h+=tc(r.disk>=0?r.disk:"-",false);
+	h+=tc(r.phi>=0?r.phi:"-",false);
+	h+=tc(r.crate>=0?r.crate:"-",false);
+	h+=tc(r.slot||"-",false);
+	h+=tc(r.uid||"-",r.ms.uid,1);
+	h+='<td>'+statusBadge(r.status)+'</td>';
+	h+=flashCell(r);
+	h+='<td>'+esc(r.match||"-")+'</td>';
+	h+=tc(hx(r.project),r.ms.project,1);
+	h+=tc(hx(r.fwGit),r.ms.fwGit,1);
+	h+=tc(r.fwDate||"-",r.ms.fwDateLo||r.ms.fwDateHi);
+	h+=tc(r.fwTime||"-",r.ms.fwTimeLo||r.ms.fwTimeHi);
+	h+=tc(fmtV(r.fwVersion),r.ms.fwVersion);
+	h+=tc(hx(r.swHash),r.ms.swHash,1);
+	h+=tc(r.swDate||"-",r.ms.swDateLo||r.ms.swDateHi);
+	h+='</tr>';}
+	if(!vis)h='<tr><td colspan="19" style="padding:20px;color:var(--c-text-dim);text-align:center;">No rows match current filters.</td></tr>';
+	tb.innerHTML=h; updROCInfo(); updateSortHeaders();
+}
+function statusBadge(s){var c="sb-"+s.toLowerCase();return'<span class="status-badge '+c+'">'+esc(s)+'</span>';}
+function updROCInfo(){var vis=0,sel=0,ok=0,mm=0,to=0,w=0;
+for(var i=0;i<rocRows_.length;++i){if(!rocVis(rocRows_[i]))continue;vis++;if(rocSel_[rk(rocRows_[i])])sel++;
+var s=rocRows_[i].status;if(s==="OK")ok++;else if(s==="MISMATCH")mm++;else if(s==="TIMEOUT"||s==="ERROR")to++;else w++;}
+document.getElementById("rocInfo").innerHTML=
+'<span class="chip chip-neutral"><b>'+vis+'</b> visible</span>'+
+'<span class="chip chip-neutral"><b>'+sel+'</b> selected</span>'+
+(ok?'<span class="chip chip-ok"><b>'+ok+'</b> OK</span>':"")+
+(mm?'<span class="chip chip-bad"><b>'+mm+'</b> MISMATCH</span>':"")+
+(to?'<span class="chip chip-timeout"><b>'+to+'</b> TIMEOUT</span>':"")+
+(w?'<span class="chip chip-warn"><b>'+w+'</b> OTHER</span>':"");}
+function rocSelAll(v){for(var i=0;i<rocRows_.length;++i)if(rocVis(rocRows_[i]))rocSel_[rk(rocRows_[i])]=v;renderROC();}
+function updateSortHeaders(){
+	var ths=document.querySelectorAll("#rocTable th.sortable");
+	for(var i=0;i<ths.length;++i){
+		ths[i].classList.remove("sort-asc","sort-desc");
+		if(ths[i].getAttribute("data-sort")===rocSortCol_)
+			ths[i].classList.add(rocSortAsc_?"sort-asc":"sort-desc");
+	}
+}
+function rocSelSt(st){for(var i=0;i<rocRows_.length;++i)if(rocVis(rocRows_[i])&&rocRows_[i].status===st)rocSel_[rk(rocRows_[i])]=true;renderROC();}
+function updateTabBadges(){
+	document.getElementById("dtcBadge").textContent=Object.keys(dtcInfoMap_).length||Object.keys(dtcMap_).length||"0";
+	document.getElementById("rocBadge").textContent=rocRows_.length||"0";}
+
+// ── Modals ──────────────────────────────────────────────
+function openDTC(uid){var d=dtcInfoMap_[uid];if(!d)return;modalCtx_={type:"dtc",uid:uid};
+compareDTCRow(d);
+document.getElementById("mTitle").textContent=uid;
+var ex=tabFwCfg_.dtc.expected;
+var expBlock="";
+if(ex && ex.folderName) expBlock=msec("Expected")+mkv("Folder",ex.folderName)+mkv("Date/Time",ex.datePrefix||"-")+mkv("Vivado",ex.vivado||"-")+mkv("Type",ex.rocMode||"-");
+document.getElementById("mBody").innerHTML=
+	msec("DTC Firmware")+
+	mkv("Status",d._dtcStatus||"IDLE")+mkv("Match",d._dtcMatch||"-")+
+	mkv("FW Version",d.designVersion)+mkv("Design Date",d.designDate)+
+	mkv("Type",d.designType==="D"?"DTC":d.designType==="C"?"CFO":d.designType)+
+	mkv("Link Speed",d.linkSpeed)+mkv("Vivado",d.vivadoVersion)+
+	mkv("FPGA Temp",d.fpgaTemp!==undefined?d.fpgaTemp.toFixed(1)+" C":"-")+
+	mkv("PCIe Device","dev"+(d.deviceIndex!==undefined?d.deviceIndex:"?"))+
+	mkv("Driver",d.driverVersion)+expBlock;
+document.getElementById("mFlash").textContent="Flash This DTC";
+document.getElementById("mSel").onclick=function(){dtcSel_["d:"+uid]=true;renderDTC();};
+document.getElementById("modalBg").style.display="block";}
+
+function openROC(key){var r=rkFind(key);if(!r)return;modalCtx_={type:"roc",key:key,row:r};
+document.getElementById("mTitle").textContent=r.target+" / ROC "+r.link;
+var di=dtcInfoMap_[r.target],db="";
+if(di)db=msec("Parent DTC")+mkv("DTC FW",di.designVersion)+mkv("Design Date",di.designDate)+mkv("FPGA Temp",di.fpgaTemp!==undefined?di.fpgaTemp.toFixed(1)+" C":"-");
+document.getElementById("mBody").innerHTML=
+	msec("ROC Firmware")+
+	mkv("DTC",r.target)+mkv("ROC Link",r.link)+mkv("ROC UID",r.rocUID)+
+	mkv("Board ID",r.boardId>=0?r.boardId:"-")+
+	mkv("Disk / Phi / Crate",r.disk>=0?r.disk+" / "+r.phi+" / "+r.crate:"-")+
+	mkv("Slot in crate",r.slot||"-")+
+	mkv("BOARD UID",r.uid)+
+	mkv("Status",r.status)+mkv("Match",r.match)+
+	mkv("FW Project",hx(r.project))+mkv("FW SHA",hx(r.fwGit))+
+	mkv("FW Build",(r.fwDate||"-")+" "+(r.fwTime||"-"))+mkv("FW Version",fmtV(r.fwVersion))+
+	mkv("SW SHA",hx(r.swGit))+mkv("SW Hash",hx(r.swHash))+mkv("SW Date",r.swDate)+db;
+document.getElementById("mFlash").textContent="Flash This ROC";
+document.getElementById("mSel").onclick=function(){rocSel_[key]=true;renderROC();};
+document.getElementById("modalBg").style.display="block";}
+
+function closeModal(){document.getElementById("modalBg").style.display="none";}
+function flashModal(){
+	if(!modalCtx_)return;
+	if(modalCtx_.type==="dtc"){closeModal();flashDTC();return;}
+	closeModal(); rocSel_={}; rocSel_[modalCtx_.key]=true; renderROC(); flashROC();
+}
+function flashDTC(){showFlashMessage("DTC flashing not available",["Flashing DTC firmware from this page is not implemented yet. Use the Vivado scripts in otsdaq-mu2e/tools (program_flash_*.sh)."]);}
+
+// ── ROC flashing (Program ROCs Safe macro) ──────────────
+// "flash":   erase + write + verify every 64 kB segment against the file (retried), then program.
+// "upload":  same, without programming (the ROC keeps running its current firmware).
+// "program": nothing written; the flash is verified against the file, then programmed.
+// The on-ROC check of each 128-byte chunk used before compares the flash with what the ROC
+// RECEIVED, so it cannot see a record damaged on the link: on 2026-10-15 (1.7) damaged images
+// were programmed and ~50 ROCs stopped answering. The verification is now against the file.
+// The old "read 0 words" failure of the read-back (2026-10-12) came from the 0 ms reply timeout of
+// the ROC block read; the new macro reads with a 200 ms timeout.
+function loadFlashState(){
+	try{fwJobs_=JSON.parse(localStorage.getItem(FW_JOBS_KEY_)||"{}")||{};}catch(e){fwJobs_={};}
+	var resumed=0;
+	for(var dtc in fwJobs_){var j=fwJobs_[dtc];
+		if(j.state==="running"){resumed++; j.resumed=true; setTimeout((function(d){return function(){pollFlashJob(d);};})(dtc),500);}}
+	if(resumed)log("Resumed polling of "+resumed+" running flash job(s) after page reload.");
+}
+function saveFlashState(){
+	localStorage.setItem(FW_JOBS_KEY_,JSON.stringify(fwJobs_));
+}
+
+// ── Persistent flash history (one line per event, on the shared disk) ─────────
+// $USER_DATA/ServiceData/ROCFirmwareFlash/flash_history.txt via the CodeEditor
+// supervisor: read, append, write back. Appends are serialized through a queue
+// because the CodeEditor has no append and parallel DTC jobs finish together.
+// leading "/" required: CodeEditor saveFileContent only maps "/$USER_DATA/..."
+var FLASH_HISTORY_PATH_="/$USER_DATA/ServiceData/ROCFirmwareFlash/flash_history";
+var FLASH_HISTORY_EXT_="txt";
+var flashHistoryQueue_=[], flashHistoryBusy_=false;
+function nowStamp(){var t=new Date();return t.getFullYear()+"-"+p2(t.getMonth()+1)+"-"+p2(t.getDate())+" "+p2(t.getHours())+":"+p2(t.getMinutes())+":"+p2(t.getSeconds());}
+function boardIdsFor(dtc,links){var ids=[];for(var l=0;l<links.length;++l){var r=rkFind(dtc+":"+links[l]);ids.push(r&&r.boardId>=0?r.boardId:"?");}return ids.join("/");}
+function appendFlashHistory(event,dtc,j,extra){
+	var user=(DesktopContent.getUsername&&DesktopContent.getUsername())||"?";
+	var fields=[nowStamp(),user,event,j.phase,dtc,"link="+j.links.slice().sort().join("/"),"boardId="+boardIdsFor(dtc,j.links),
+		"image="+j.imageIndex,"addr=0x"+((j.address||0).toString(16)),"bitfile="+(j.bitfile||"-"),"macro=ProgramROCsSafe"];
+	if(j.finishedAt)fields.push("elapsed="+Math.round((j.finishedAt-j.startedAt)/1000)+"s");
+	if(extra)fields.push(String(extra).replace(/\s+/g," ").slice(0,500));
+	flashHistoryQueue_.push(fields.join("\t"));
+	flushFlashHistory();
+}
+function showFlashHistory(){
+	readFile(FLASH_HISTORY_PATH_+"."+FLASH_HISTORY_EXT_,function(t,e){
+		var path=FLASH_HISTORY_PATH_.replace(/^\/?\$USER_DATA/,"Data_calo")+"."+FLASH_HISTORY_EXT_;
+		if(e||t===null){showFlashMessage("Flash history",["Cannot read "+esc(path)+": "+esc(e||"empty")]);return;}
+		var lines=t.split("\n").filter(Boolean).reverse().slice(0,200);
+		var html='<div class="dim" style="font-size:12px;margin-bottom:8px;">'+esc(path)+' &mdash; newest first, '+lines.length+' shown</div>';
+		html+='<pre style="white-space:pre-wrap;font-size:12px;margin:0;max-height:60vh;overflow:auto;">'+esc(lines.join("\n"))+'</pre>';
+		showFlashConfirm("Flash history",html,null,null);
+	});
+}
+function flushFlashHistory(){
+	if(flashHistoryBusy_||!flashHistoryQueue_.length)return;
+	if(!CODE_EDITOR_APP_ID_){log("flash history not written (CodeEditor supervisor not found): "+flashHistoryQueue_.join(" | "));flashHistoryQueue_=[];return;}
+	flashHistoryBusy_=true;
+	var batch=flashHistoryQueue_.splice(0,flashHistoryQueue_.length);
+	readFile(FLASH_HISTORY_PATH_+"."+FLASH_HISTORY_EXT_,function(old,e){
+		// a missing file is created; any other read error must not overwrite the history
+		if(e&&!/Could not open file/i.test(e)){
+			flashHistoryBusy_=false;
+			log("flash history read FAILED, not written: "+e+" | "+batch.join(" | "));
+			flushFlashHistory();
+			return;
+		}
+		old=e?"":(old||"");
+		if(old.length&&old[old.length-1]!=="\n")old+="\n";
+		var content=old+batch.join("\n")+"\n";
+		var s=DesktopContent._localUrnLid; DesktopContent._localUrnLid=CODE_EDITOR_APP_ID_;
+		DesktopContent.XMLHttpRequest("Request?RequestType=codeEditor&option=saveFileContent&path="+encodeURIComponent(FLASH_HISTORY_PATH_)+"&ext="+FLASH_HISTORY_EXT_,
+			"content="+encodeURIComponent(content),
+			function(r2,rp2,e2){
+				flashHistoryBusy_=false;
+				if(e2){log("flash history write FAILED: "+e2+" | "+batch.join(" | "));}
+				flushFlashHistory();
+			},0,0,true,true);
+		DesktopContent._localUrnLid=s;
+	});
+}
+function selectedBitfilePath(){
+	var sel=document.getElementById("rocFwSel").value; if(!sel)return "";
+	var base=document.getElementById("rocFwDir").value.replace(/\/+$/,"");
+	if(/\.(spi|bit)$/i.test(sel))return base+"/"+sel;
+	if(/\.(json|manifest)$/i.test(sel))return "";
+	var custom=document.getElementById("rocBitfileName").value.trim();
+	return base+"/"+sel+"/"+(custom||"roc.spi");
+}
+function linkMask(links){var m=0;for(var i=0;i<links.length;++i)m|=(1<<(links[i]*4));return "0x"+m.toString(16);}
+// Target argument of the macro: a value 0-5 is read as a LINK INDEX, a larger one as a mask (4 bits per link).
+// The mask of link 0 alone is 0x1, which the macro takes as link 1: a single link is therefore always sent as
+// its index (bug of 2026-10-15: link 0 selected, link 1 flashed). Two or more links give a mask >= 0x11.
+function targetArg(links){if(links.length>=6)return "0x111111";if(links.length===1)return String(links[0]);return linkMask(links);}
+function jobFor(dtc){return fwJobs_[dtc]&&fwJobs_[dtc].state==="running"?fwJobs_[dtc]:null;}
+
+function flashROC(){
+	var phase=document.getElementById("flashPhase").value;
+	var bitfile=selectedBitfilePath();
+	var imageIndex=parseInt(document.getElementById("rocImageIndex").value);
+	var address=IMAGE_ADDR_[imageIndex];
+	var exp=tabFwCfg_.roc.expected||{};
+	var expVersion=(exp.fwVersion!==undefined)?exp.fwVersion:0;
+
+	var nSel=0;for(var k in rocSel_)if(rocSel_[k])nSel++;
+	var problems=[];
+	if(!nSel)problems.push("No ROC selected. Tick the checkbox of the ROCs to flash (or use Select All / Sel Mismatch).");
+	if(!bitfile)problems.push("No bitfile chosen. Pick the firmware in the <b>Expected ROC Firmware</b> menu: that file is what gets written (or, for program only, what the flash must contain).");
+	if(address===undefined)problems.push("Image index "+esc(String(imageIndex))+" not allowed: use 1 (0x1010000) or 2 (0x5000000). Index 0 is the golden image and is never written from this page.");
+	if(!MACRO_MAKER_APP_ID_)problems.push("MacroMaker supervisor not found: cannot run FE macros.");
+	if(problems.length){showFlashMessage("Cannot flash",problems);return;}
+
+	// group selected ROCs by DTC
+	var byDtc={}, skippedBusy=[];
+	for(var i=0;i<rocRows_.length;++i){var r=rocRows_[i],k=rk(r);
+		if(!rocSel_[k])continue;
+		if(jobFor(r.target)){skippedBusy.push(k);continue;}
+		(byDtc[r.target]=byDtc[r.target]||[]).push(r.link);}
+	var dtcs=Object.keys(byDtc).sort(nc);
+	var notes=[];
+	if(skippedBusy.length)notes.push("Skipped, DTC already flashing: "+skippedBusy.join(", "));
+	if(!dtcs.length){showFlashMessage("Nothing to flash",notes.length?notes:["Selected ROCs are not in the inventory table. Press Refresh Inventory first."]);return;}
+
+	var n=0,lines=[];for(var d=0;d<dtcs.length;++d){n+=byDtc[dtcs[d]].length;
+		lines.push("<b>"+esc(dtcs[d])+"</b> &rarr; link "+byDtc[dtcs[d]].sort().join(", ")+(byDtc[dtcs[d]].length>=6?" (all)":""));}
+	var ctx={dtcs:dtcs,byDtc:byDtc,phase:phase,bitfile:bitfile,imageIndex:imageIndex,address:address,expVersion:expVersion};
+	var addrHex="0x"+address.toString(16);
+	var body='';
+	if(phase==="program"){
+		body+='<div class="fc-info">VERIFY + PROGRAM &mdash; nothing is written. The SPI image at '+addrHex+' is read back and compared with the file below; only the ROCs whose flash matches it exactly are programmed.</div>';
+	}else{
+		body+='<div class="fc-info">'+(phase==="upload"?'WRITE + VERIFY':'WRITE + VERIFY + PROGRAM')+' &mdash; the image is written at '+addrHex+' in 64 kB segments; each segment is read back from the flash and compared with the file (CRC on ROCs with the new MiV), and rewritten up to 5 times if different. '+
+			(phase==="upload"?'Nothing is programmed: the ROCs keep running their current firmware.':'Only the ROCs whose whole image verified are programmed; a ROC that fails keeps its current firmware.')+' The ROCs keep running meanwhile; the slow controls of the DTC are paused and restored at the end.</div>';
+	}
+	if(phase!=="upload")body+='<div class="fc-warn" style="margin-top:8px;">At the end the programmed ROCs <b>reboot</b> and go offline for a short while.</div>';
+	body+='<div class="fc-grid">';
+	body+='<div class="mk">Bitfile</div><div class="mv mono">'+esc(bitfile)+'</div>';
+	body+='<div class="mk">Checksum</div><div class="mv mono">'+esc(bitfile)+'.sha256 <span class="dim">(must exist; the file is refused if it differs)</span></div>';
+	body+='<div class="mk">SPI address</div><div class="mv mono">'+addrHex+' (image index '+imageIndex+'; directory not touched)</div>';
+	body+='<div class="mk">Expected version</div><div class="mv mono">'+(expVersion?'0x'+expVersion.toString(16):'<span class="dim">not checked (version not in the file name)</span>')+'</div>';
+	body+='<div class="mk">Targets</div><div class="mv">'+n+' ROC(s) on '+dtcs.length+' DTC(s)<br>'+lines.join("<br>")+'</div>';
+	body+='</div>';
+	if(notes.length)body+='<div class="fc-note">'+notes.map(esc).join("<br>")+'</div>';
+	body+='<div class="fc-warn" style="margin-top:12px;">Do <b>not</b> Halt, Configure or power-cycle while this runs: an interrupted programming can brick the board.</div>';
+	showFlashConfirm(phase==="program"?"Verify + program "+n+" ROC(s)?":phase==="upload"?"Write + verify "+n+" ROC(s)?":"Flash "+n+" ROC(s)?",body,
+		phase==="program"?"YES, VERIFY + PROGRAM":phase==="upload"?"YES, WRITE + VERIFY":"YES, FLASH NOW",
+		function(){for(var d=0;d<ctx.dtcs.length;++d)startFlashJob(ctx.dtcs[d],ctx.byDtc[ctx.dtcs[d]],ctx.phase,ctx.bitfile,ctx.imageIndex,ctx.address,ctx.expVersion);renderROC();});
+}
+function showFlashMessage(title,items){
+	showFlashConfirm(title,'<ul class="fc-list">'+items.map(function(s){return "<li>"+s+"</li>";}).join("")+'</ul>',null,null);
+}
+function showFlashConfirm(title,bodyHtml,okLabel,onOk){
+	document.getElementById("fcTitle").textContent=title;
+	document.getElementById("fcBody").innerHTML=bodyHtml;
+	var ok=document.getElementById("fcOk");
+	ok.style.display=onOk?"":"none";
+	ok.textContent=okLabel||"OK";
+	ok.onclick=function(){closeFlashConfirm();if(onOk)onOk();};
+	document.getElementById("fcBg").style.display="block";
+}
+function closeFlashConfirm(){document.getElementById("fcBg").style.display="none";}
+
+function startFlashJob(dtc,links,phase,bitfile,imageIndex,address,expVersion){
+	var info=dtcMap_[dtc];
+	var inputs={};
+	inputs[PROGRAM_ARGS_.target]=targetArg(links);
+	inputs[PROGRAM_ARGS_.bitfile]=bitfile;
+	inputs[PROGRAM_ARGS_.sha]="Default";
+	inputs[PROGRAM_ARGS_.address]="0x"+address.toString(16);
+	inputs[PROGRAM_ARGS_.write]=(phase==="program")?"false":"true";
+	inputs[PROGRAM_ARGS_.program]=(phase==="upload")?"false":"true";
+	inputs[PROGRAM_ARGS_.version]=expVersion?"0x"+expVersion.toString(16):"0";
+	inputs[PROGRAM_ARGS_.quiet]="Default";
+	var post="inputArgs=";var first=true;
+	for(var name in PROGRAM_ARGS_){var a=PROGRAM_ARGS_[name];
+		post+=(first?"":";")+encodeURIComponent(a)+","+encodeURIComponent(inputs[a]);first=false;}
+	post+="&outputArgs=Result";
+
+	fwJobs_[dtc]={phase:phase,links:links,state:"running",percent:0,msg:"launching",notDoneID:0,
+		startedAt:Date.now(),bitfile:bitfile,imageIndex:imageIndex,address:address,expVersion:expVersion};
+	saveFlashState(); renderROC();
+	log(dtc+": "+phase+" started on link "+links.join(",")+" (mask "+inputs[PROGRAM_ARGS_.target]+")");
+	appendFlashHistory("START",dtc,fwJobs_[dtc],"mask="+inputs[PROGRAM_ARGS_.target]);
+
+	var s=DesktopContent._localUrnLid; DesktopContent._localUrnLid=MACRO_MAKER_APP_ID_;
+	DesktopContent.XMLHttpRequest("Request?RequestType=runFEMacro&feClassSelected="+encodeURIComponent(info.feClass)+
+		"&feUIDSelected="+encodeURIComponent(dtc)+"&macroType=fe&macroName="+encodeURIComponent(PROGRAM_MACRO_)+"&saveOutputs=0",
+		post,function(r,rp,e){handleFlashResponse(dtc,r,e);},0,0,true,true);
+	DesktopContent._localUrnLid=s;
+}
+
+function pollFlashJob(dtc){
+	var j=fwJobs_[dtc]; if(!j||j.state!=="running")return;
+	if(!MACRO_MAKER_APP_ID_){setTimeout(function(){pollFlashJob(dtc);},FW_POLL_MS_);return;}
+	if(!j.notDoneID){ // resumed after reload before we ever got an ID: nothing to poll
+		j.state="stale"; j.msg="page reloaded before job ID was known; check MacroMaker / messages";
+		saveFlashState(); renderROC(); return;}
+	var s=DesktopContent._localUrnLid; DesktopContent._localUrnLid=MACRO_MAKER_APP_ID_;
+	DesktopContent.XMLHttpRequest("Request?RequestType=runFEMacro&NotDoneID="+j.notDoneID,"",
+		function(r,rp,e){handleFlashResponse(dtc,r,e);},0,0,true,true);
+	DesktopContent._localUrnLid=s;
+}
+
+function handleFlashResponse(dtc,r,errStr){
+	var j=fwJobs_[dtc]; if(!j)return;
+	var err=errStr||(r&&DesktopContent.getXMLValue(r,"Error"));
+	if(err){
+		// a "not found" after reload means the server already finished and forgot the job
+		if(j.resumed&&/not found|invalid ID|more than 5 minutes/i.test(err)){
+			j.state="stale"; j.msg="finished while page was closed; result unknown, run Refresh Inventory";
+		}else{
+			var full=String(err).replace(/&lt;/g,"<").replace(/&gt;/g,">").replace(/&amp;/g,"&");
+			// keep the last, innermost line: the outer wrappers are MacroMaker/FESupervisor boilerplate
+			var lines=full.split(/\s*\|\s*(?=[A-Za-z]+:)/).map(function(s){return s.trim();}).filter(Boolean);
+			j.state="failed"; j.msg=(lines[lines.length-1]||full).replace(/\s+/g," ").slice(0,600); j.fullError=full.slice(0,6000);
+		}
+		j.finishedAt=Date.now();
+		saveFlashState(); renderROC(); log(dtc+": "+j.phase+" FAILED: "+j.msg);
+		appendFlashHistory(j.state==="stale"?"STALE":"FAIL",dtc,j,j.msg);
+		if(j.fullError)showFlashMessage(dtc+": "+j.phase+" failed",["<pre style='white-space:pre-wrap;font-size:12px;margin:0'>"+esc(j.fullError)+"</pre>"]);
+		return;
+	}
+	var notDoneID=DesktopContent.getXMLValue(r,"NotDoneID");
+	if(notDoneID){
+		j.notDoneID=notDoneID;
+		var prog=DesktopContent.getXMLChildren(r,"feMacroProgress");
+		if(prog&&prog.length)for(var p=0;p<prog.length;++p)if(prog[p].getAttribute("value")===dtc){
+			var pct=parseInt(DesktopContent.getXMLValue(prog[p],"progress"));if(!isNaN(pct))j.percent=pct;}
+		j.msg=flashStageLabel(j);
+		saveFlashState(); renderROC();
+		setTimeout(function(){pollFlashJob(dtc);},FW_POLL_MS_);
+		return;
+	}
+	// done
+	var result="";
+	var fe=r.responseXML.getElementsByTagName("feMacroExec");
+	var scope=fe.length?fe:[r.responseXML];
+	for(var f=0;f<scope.length;++f){var n=scope[f].getElementsByTagName("outputArgs_name"),v=scope[f].getElementsByTagName("outputArgs_value");
+		for(var i=0;i<n.length;++i)if(n[i].getAttribute("value")==="Result"){try{result=decodeURIComponent(v[i].getAttribute("value"));}catch(x){result=v[i].getAttribute("value");}}}
+	j.percent=100; j.state="done"; j.msg=(j.phase==="upload")?"written + verified":"programmed";
+	j.finishedAt=Date.now(); j.result=result.slice(0,2000);
+	saveFlashState(); renderROC();
+	log(dtc+": "+j.phase+" DONE in "+Math.round((j.finishedAt-j.startedAt)/1000)+"s on link "+j.links.join(",")+(j.phase==="upload"?" (not programmed).":" - run Refresh Inventory to confirm the new firmware version."));
+	if(result)log(dtc+": "+result.replace(/\n/g," | "));
+	appendFlashHistory("DONE",dtc,j,(result||"").replace(/\s+/g," ").slice(0,300));
+}
+function flashStageLabel(j){
+	// Program ROCs Safe percent: segments 0-90 (erase+write+verify, or verify only), then program
+	var p=j.percent; if(p<90)return j.phase==="program"?"verifying":"writing+verifying"; return j.phase==="upload"?"final check":"programming";
+}
+function clearFlashJob(dtc){var j=fwJobs_[dtc];if(!j||j.state==="running")return;delete fwJobs_[dtc];saveFlashState();renderROC();}
+function clearFinishedJobs(){for(var d in fwJobs_)if(fwJobs_[d].state!=="running")delete fwJobs_[d];saveFlashState();renderROC();}
+function selFailedJobs(){rocSel_={};
+	for(var d in fwJobs_){var j=fwJobs_[d];if(j.state!=="failed"&&j.state!=="stale")continue;
+		for(var l=0;l<j.links.length;++l)rocSel_[d+":"+j.links[l]]=true;}
+	renderROC();}
+function flashCell(r){
+	var k=rk(r), j=fwJobs_[r.target];
+	if(j&&j.links.indexOf(r.link)>=0){
+		var cls=j.state==="done"?"ok":j.state==="failed"?"bad":j.state==="stale"?"stale":"";
+		var txt=j.state==="running"?(j.msg+" "+j.percent+"%"):j.state==="done"?j.msg:j.state;
+		var tip=esc(j.phase+" | "+j.msg+(j.result?" | "+j.result:""));
+		var clr=j.state!=="running"?' <span style="cursor:pointer;color:var(--c-text-dim)" title="dismiss" onclick="event.stopPropagation();clearFlashJob(\''+ea(r.target)+'\')">&#10005;</span>':"";
+		return '<td onclick="event.stopPropagation()" title="'+tip+'"><div class="fwbar '+cls+'"><i style="width:'+j.percent+'%"></i><span>'+esc(txt)+'</span></div>'+clr+'</td>';
+	}
+	return '<td style="color:var(--c-text-dim)">-</td>';
+}
+function updateFlashBar(){
+	var running=0;for(var d in fwJobs_)if(fwJobs_[d].state==="running")running++;
+	var el=document.getElementById("flashRunning");
+	el.innerHTML=running?'<span class="fwchip locked">'+running+' flash job(s) running</span>':"";
+	var ph=document.getElementById("flashPhase").value;
+	document.getElementById("flashBtn").textContent=ph==="program"?"Verify + Program Selected ROCs":ph==="upload"?"Write + Verify Selected ROCs":"Flash Selected ROCs";
+	document.getElementById("flashBtn").className="danger";
+}
+
+function exportInventoryCSV(){
+	if(!rocRows_.length){log("Nothing to export — run Refresh first.");return;}
+	var lines=["DTC,Link,BoardID,Disk,Phi,Crate,Slot,FW_Date,FW_Time"];
+	for(var i=0;i<rocRows_.length;++i){
+		var r=rocRows_[i];
+		if(!rocVis(r))continue;
+		lines.push([r.target,r.link,r.boardId>=0?r.boardId:"",r.disk>=0?r.disk:"",r.phi>=0?r.phi:"",r.crate>=0?r.crate:"",
+			r.slot,r.fwDate||"",r.fwTime||""].join(","));
+	}
+	var blob=new Blob([lines.join("\n")+"\n"],{type:"text/csv"});
+	var a=document.createElement("a");
+	a.href=URL.createObjectURL(blob);
+	var ts=new Date();
+	a.download="firmware_inventory_"+ts.getFullYear()+p2(ts.getMonth()+1)+p2(ts.getDate())+"_"+p2(ts.getHours())+p2(ts.getMinutes())+".csv";
+	a.click();
+	URL.revokeObjectURL(a.href);
+	log("Exported "+lines.length+" rows (incl. header).");
+}
+
+// ── Filters ─────────────────────────────────────────────
+function rocVis(r){var tf=document.getElementById("dtcFilter").value,sf=document.getElementById("stFilter").value,
+tx=document.getElementById("txFilter").value.toLowerCase().trim();
+if(tf&&r.target!==tf)return false;if(sf&&r.status!==sf)return false;
+if(tx){var geometryTokens=r.disk>=0?" disk"+r.disk+" phi"+r.phi+" crate"+r.crate+" slot"+r.slot+" "+r.slot:"";
+var b=(r.target+" "+r.link+" "+r.boardId+" "+r.uid+" "+r.match+" "+r.rocUID+geometryTokens).toLowerCase();if(b.indexOf(tx)<0)return false;}return true;}
+function getFilteredTargets(){var f=document.getElementById("dtcFilter").value;if(f)return dtcMap_[f]?[f]:[];return Object.keys(dtcMap_).sort(nc);}
+function paintDTCFilter(){var s=document.getElementById("dtcFilter"),ks=Object.keys(dtcMap_).sort(nc);
+var h='<option value="">All DTCs ('+ks.length+')</option>';for(var i=0;i<ks.length;++i)h+='<option value="'+esc(ks[i])+'">'+esc(ks[i])+'</option>';s.innerHTML=h;}
+function renderExpected(){
+	// ROC expected
+	var re=tabFwCfg_.roc.expected, b=[];
+	if(re.fileName)b.push(re.fileName);
+	if(re.fwDateHi!==undefined&&re.fwDateLo!==undefined)b.push("build "+fmtD(re.fwDateHi,re.fwDateLo));
+	if(re.project!==undefined)b.push("proj "+hx(re.project));if(re.fwGit!==undefined)b.push("SHA "+hx(re.fwGit));
+	if(re.fwVersion!==undefined)b.push("ver "+fmtV(re.fwVersion));if(re.swHash!==undefined)b.push("SW "+hx(re.swHash));
+	document.getElementById("rocExpLine").innerHTML=b.length?b.join(" &middot; "):'<span style="color:var(--c-text-dim)">None</span>';
+	// DTC expected (parsed from folder name)
+	var de=tabFwCfg_.dtc.expected, d=[];
+	if(de.folderName) d.push(de.folderName);
+	if(de.datePrefix) d.push(de.datePrefix);
+	if(de.vivado)     d.push("Vivado " + de.vivado);
+	if(de.rocMode)    d.push(de.rocMode);
+	document.getElementById("dtcExpLine").innerHTML=d.length?d.join(" &middot; "):'<span style="color:var(--c-text-dim)">None</span>';
+}
+function hasExp(){return Object.keys(tabFwCfg_.roc.expected).length>0;}
+
+// ── Firmware year/month filter ──────────────────────────
+// Extract year and month from firmware folder names
+// DTC: DTC2026Jun03_14_22.1_6ROC  -> year=2026, month=Jun
+// ROC: ROC20260602.spi            -> year=2026, month=06
+function extractYearMonth(name) {
+	// DTC pattern: DTC{YYYY}{Mon}{DD}_...
+	var m = name.match(/^DTC(\d{4})([A-Za-z]{3})/);
+	if(m) return { year: m[1], month: m[2] };
+	// ROC pattern: ROC-{YYYYMMDD}-{MAJ}-{MIN}.spi, ROC{YYYYMMDD}... or CaloROC_{YYYYMMDD}_...
+	m = name.match(/^(?:CaloROC_|ROC-?)(\d{4})(\d{2})/);
+	if(m) {
+		var monNames = ["","Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+		return { year: m[1], month: monNames[parseInt(m[2])] || m[2] };
+	}
+	return { year: "?", month: "?" };
+}
+
+function buildFwYearMonthFilters(tab, items) {
+	var years = {}, months = {};
+	for(var i=0;i<items.length;++i) {
+		var ym = extractYearMonth(items[i]);
+		if(ym.year !== "?") years[ym.year] = true;
+		if(ym.month !== "?") months[ym.month] = true;
+	}
+	var yearList = Object.keys(years).sort().reverse();
+	var monthOrder = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+	var monthList = monthOrder.filter(function(m){return months[m];});
+
+	var ySel = document.getElementById(tab+"FwYear");
+	var mSel = document.getElementById(tab+"FwMonth");
+	if(!ySel || !mSel) return;
+
+	var yh='<option value="">All years</option>';
+	for(var i=0;i<yearList.length;++i) yh+='<option value="'+yearList[i]+'">'+yearList[i]+'</option>';
+	ySel.innerHTML=yh;
+	// Default to most recent year
+	if(yearList.length) ySel.value=yearList[0];
+
+	var mh='<option value="">All months</option>';
+	for(var i=0;i<monthList.length;++i) mh+='<option value="'+monthList[i]+'">'+monthList[i]+'</option>';
+	mSel.innerHTML=mh;
+}
+
+function filterFwDropdown(tab) {
+	var cfg = tabFwCfg_[tab]; if(!cfg) return;
+	var items = fwItemsCache_[tab] || [];
+	var yearFilter = document.getElementById(tab+"FwYear");
+	var monthFilter = document.getElementById(tab+"FwMonth");
+	var selYear = yearFilter ? yearFilter.value : "";
+	var selMonth = monthFilter ? monthFilter.value : "";
+
+	var filtered = [];
+	for(var i=0;i<items.length;++i) {
+		var ym = extractYearMonth(items[i]);
+		if(selYear && ym.year !== selYear) continue;
+		if(selMonth && ym.month !== selMonth) continue;
+		filtered.push(items[i]);
+	}
+
+	var sel = document.getElementById(cfg.selId);
+	var h='<option value="">-- select firmware ('+filtered.length+'/'+items.length+') --</option>';
+	if(tab==="roc")filtered.sort(function(a,b){var pa=parseROCFileName(a),pb=parseROCFileName(b);
+		if(pa&&pb){var da=pa.year*10000+pa.month*100+pa.day,db=pb.year*10000+pb.month*100+pb.day;
+			if(da!==db)return db-da; if(pa.major!==pb.major)return pb.major-pa.major; return pb.minor-pa.minor;}
+		if(pa)return -1; if(pb)return 1; return nc(b,a);});
+	for(var j=0;j<filtered.length;++j)h+='<option value="'+esc(filtered[j])+'">'+esc(tab==="roc"?rocFwOptionLabel(filtered[j]):filtered[j])+'</option>';
+	if(!filtered.length)h='<option value="">-- none match --</option>';
+	sel.innerHTML=h;
+
+	var sv=localStorage.getItem(cfg.selKey);
+	if(sv) { sel.value=sv; if(!sel.value) sel.selectedIndex=0; }
+	if(sel.value) loadSelFw(tab);
+}
+
+// ── Helpers ─────────────────────────────────────────────
+function tc(t,bad,mono){var c="";if(mono&&bad)c=' class="mono cell-bad"';else if(mono)c=' class="mono"';else if(bad)c=' class="cell-bad"';return"<td"+c+">"+esc(String(t))+"</td>";}
+function stCls(r){if(r.status==="OK")return"st-ok";if(r.status==="TIMEOUT"||r.status==="ERROR")return"st-timeout";if(r.status==="MISMATCH")return"st-mismatch";if(r.status==="WARN"||r.status==="READ")return"st-warn";return"";}
+function uid3(l,c,m){if(l===undefined||c===undefined||m===undefined)return"";if(l===TIMEOUT_WORD_||c===TIMEOUT_WORD_||m===TIMEOUT_WORD_)return"timeout";return"0x"+p4(m)+p4(c)+p4(l);}
+function fmtD(h,l){if(h===undefined||l===undefined||h===TIMEOUT_WORD_||l===TIMEOUT_WORD_)return"";return bcd16(h)+"-"+p2(bcd8((l>>8)&0xff))+"-"+p2(bcd8(l&0xff));}
+function fmtT(h,l){if(h===undefined||l===undefined||h===TIMEOUT_WORD_||l===TIMEOUT_WORD_)return"";return p2(bcd8(h&0xff))+":"+p2(bcd8((l>>8)&0xff))+":"+p2(bcd8(l&0xff));}
+function fmtV(v){if(v===undefined)return"-";if(v===TIMEOUT_WORD_)return"timeout";return((v>>8)&0xff)+"."+(v&0xff);}
+function bcd8(v){return((v>>4)&0xf)*10+(v&0xf);}
+function bcd16(v){return((v>>12)&0xf)*1000+((v>>8)&0xf)*100+((v>>4)&0xf)*10+(v&0xf);}
+function p2(v){return(v<10?"0":"")+v;} function p4(v){return("0000"+((v===undefined?0:v)&0xffff).toString(16)).slice(-4);}
+function hx(v){return v===undefined?"-":"0x"+p4(v);}
+function px(v){if(v===undefined||v===null||v==="")return undefined;if(typeof v==="number")return v&0xffff;var s=String(v).trim().replace(/^x/i,"0x");if(!/^0x/i.test(s)&&/^[0-9a-fA-F]+$/.test(s))s="0x"+s;var n=parseInt(s,16);return isNaN(n)?undefined:(n&0xffff);}
+function rk(r){return r.target+":"+r.link;}
+function rkFind(k){for(var i=0;i<rocRows_.length;++i)if(rk(rocRows_[i])===k)return rocRows_[i];return null;}
+function mkv(k,v){return'<div class="mk">'+esc(k)+'</div><div class="mv mono">'+esc(String(v===undefined||v===null?"-":v))+'</div>';}
+function msec(t){return'<div class="modal-section">'+esc(t)+'</div>';}
+function log(m){var e=document.getElementById("log"),t=new Date();e.innerHTML=esc(p2(t.getHours())+":"+p2(t.getMinutes())+":"+p2(t.getSeconds())+"  "+m)+"<br>"+e.innerHTML;}
+function esc(s){return String(s===undefined||s===null?"":s).replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;").replace(/'/g,"&#39;");}
+function ea(s){return esc(s).replace(/\\/g,"\\\\").replace(/'/g,"\\'");}
+function nc(a,b){return String(a).localeCompare(String(b),undefined,{numeric:true,sensitivity:"base"});}
+</script>
+</head>
+
+<body onload="//init() called by DesktopContent.js">
+<div id="app">
+
+	<!-- ═══ Header ═══ -->
+	<div class="header-bar">
+		<h1>FIRMWARE MANAGER</h1>
+		<div class="spacer"></div>
+		<div class="status-pill"><div class="dot" id="busyDot"></div><span id="busyLabel">ready</span></div>
+		<span style="font-size:13px;color:var(--c-text-dim);">Progress: <b id="progressText">--</b></span>
+		<button id="refreshBtn" class="primary" onclick="refreshInventory()" style="width:auto;padding:0 24px;">Refresh Inventory</button>
+		<button onclick="retryMissing()" title="Query again only the DTCs that failed or timed out on the last refresh">Retry Missing</button>
+	</div>
+
+	<!-- ═══ Global Controls ═══ -->
+	<div class="controls-row" style="grid-template-columns: auto 1fr;">
+		<div class="field-group">
+			<label>DTC Filter</label>
+			<select id="dtcFilter" onchange="renderROC();renderDTC();"><option value="">All DTCs</option></select>
+		</div>
+		<div></div>
+	</div>
+
+	<!-- ═══ Tab Navigation ═══ -->
+	<div class="tab-nav">
+		<button class="active" data-tab="dtc" onclick="switchTab('dtc')">DTC Firmware <span class="tab-badge" id="dtcBadge">0</span></button>
+		<button data-tab="roc" onclick="switchTab('roc')">ROC Firmware <span class="tab-badge" id="rocBadge">0</span></button>
+	</div>
+
+	<!-- ═══ Panel Container ═══ -->
+	<div class="panel-container">
+
+		<!-- DTC Panel -->
+		<div id="p-dtc" class="tab-panel active">
+			<div class="action-bar" style="flex-wrap:wrap;">
+				<div class="field-group" style="width:280px;">
+					<label>DTC Firmware Directory</label>
+					<input id="dtcFwDir" type="text" style="height:30px;font-size:13px;" onkeydown="if(event.keyCode==13)loadFwList('dtc');">
+				</div>
+				<div class="field-group" style="width:80px;">
+					<label>Year</label>
+					<select id="dtcFwYear" onchange="filterFwDropdown('dtc')" style="height:30px;font-size:13px;"><option value="">All</option></select>
+				</div>
+				<div class="field-group" style="width:80px;">
+					<label>Month</label>
+					<select id="dtcFwMonth" onchange="filterFwDropdown('dtc')" style="height:30px;font-size:13px;"><option value="">All</option></select>
+				</div>
+				<div class="field-group" style="width:300px;">
+					<label>Expected DTC Firmware</label>
+					<select id="dtcFwSel" onchange="loadSelFw('dtc')" style="height:30px;font-size:13px;"><option value="">-- select --</option></select>
+				</div>
+				<button onclick="loadFwList('dtc')">Reload</button>
+				<div class="sep"></div>
+				<button onclick="selAllDTC(true)">Select All</button>
+				<button onclick="selAllDTC(false)">Clear</button>
+				<div class="sep"></div>
+				<button class="danger" onclick="flashDTC()">Flash Selected DTCs</button>
+				<div class="info"><span id="dtcExpLine" style="font-size:12px;color:var(--c-text-dim);">None</span></div>
+				<div class="info" id="dtcInfo"><b>0</b> DTC(s)</div>
+			</div>
+			<div class="table-scroll">
+				<table>
+					<thead><tr><th>Sel</th><th>DTC</th><th>Type</th><th>FW Version</th><th>Design Date</th><th>Vivado</th><th>Link Speed</th><th>FPGA Temp</th><th>PCIe</th><th>Status</th><th>Match</th></tr></thead>
+					<tbody id="dtcTb"><tr><td colspan="11" style="padding:24px;color:var(--c-text-dim);text-align:center;">No DTC data yet. Press <b>Refresh Inventory</b>.</td></tr></tbody>
+				</table>
+			</div>
+		</div>
+
+		<!-- ROC Panel -->
+		<div id="p-roc" class="tab-panel">
+			<div class="action-bar" style="flex-wrap:wrap;">
+				<div class="field-group" style="width:280px;">
+					<label>ROC Firmware Directory</label>
+					<input id="rocFwDir" type="text" style="height:30px;font-size:13px;" onkeydown="if(event.keyCode==13)loadFwList('roc');">
+				</div>
+				<div class="field-group" style="width:80px;">
+					<label>Year</label>
+					<select id="rocFwYear" onchange="filterFwDropdown('roc')" style="height:30px;font-size:13px;"><option value="">All</option></select>
+				</div>
+				<div class="field-group" style="width:80px;">
+					<label>Month</label>
+					<select id="rocFwMonth" onchange="filterFwDropdown('roc')" style="height:30px;font-size:13px;"><option value="">All</option></select>
+				</div>
+				<div class="field-group" style="width:300px;">
+					<label>Expected ROC Firmware</label>
+					<select id="rocFwSel" onchange="loadSelFw('roc')" style="height:30px;font-size:13px;"><option value="">-- select --</option></select>
+				</div>
+				<button onclick="loadFwList('roc')">Reload</button>
+				<div class="sep"></div>
+				<div class="field-group" style="width:120px;">
+					<select id="stFilter" onchange="renderROC()" style="height:30px;font-size:13px;">
+						<option value="">All status</option><option value="OK">OK</option><option value="MISMATCH">MISMATCH</option>
+						<option value="TIMEOUT">TIMEOUT</option><option value="ERROR">ERROR</option><option value="WARN">WARN</option>
+					</select>
+				</div>
+				<div class="field-group" style="width:160px;">
+					<input id="txFilter" type="text" placeholder="Search..." oninput="renderROC()" style="height:30px;font-size:13px;">
+				</div>
+				<div class="sep"></div>
+				<button onclick="rocSelAll(true)">Select All</button>
+				<button onclick="rocSelAll(false)">Clear</button>
+				<button onclick="rocSelSt('MISMATCH')">Sel Mismatch</button>
+				<button onclick="rocSelSt('TIMEOUT')">Sel Timeout</button>
+				<div class="sep"></div>
+				<button onclick="exportInventoryCSV()">Export CSV</button>
+				<div class="info"><span id="rocExpLine" style="font-size:12px;color:var(--c-text-dim);">None</span></div>
+			</div>
+			<div class="action-bar flash-bar" style="flex-wrap:wrap;">
+				<div class="field-group" style="width:150px;">
+					<label>Bitfile in release</label>
+					<input id="rocBitfileName" type="text" placeholder="roc.spi" title="File name inside the selected release folder (ignored if the selection is itself a .spi/.bit file)" style="height:30px;font-size:13px;" onchange="localStorage.setItem('FWMgr.rocBitfileName',this.value)">
+				</div>
+				<div class="field-group" style="width:70px;">
+					<label>Image idx</label>
+					<input id="rocImageIndex" type="number" min="1" max="2" value="1" title="1 = operational (0x1010000), 2 = 0x5000000. 0 (golden, 0x10000) is never written from this page." style="height:30px;font-size:13px;" onchange="localStorage.setItem('FWMgr.rocImageIndex',this.value)">
+				</div>
+				<div class="field-group" style="width:230px;">
+					<label>Action</label>
+					<select id="flashPhase" onchange="updateFlashBar()" title="Every 64 kB segment is verified against the file. write + verify + program: the usual flash. write + verify: upload only, no reboot. verify + program: nothing written, the flash must already hold exactly this file." style="height:30px;font-size:13px;">
+						<option value="flash">Write + verify + program</option>
+						<option value="upload">Write + verify (no program)</option>
+						<option value="program">Verify flash + program (no write)</option>
+					</select>
+				</div>
+				<button id="flashBtn" class="danger" onclick="flashROC()">Flash Selected ROCs</button>
+				<div class="sep"></div>
+				<button onclick="selFailedJobs()">Sel Failed</button>
+				<button onclick="clearFinishedJobs()">Clear Finished</button>
+				<button onclick="showFlashHistory()" title="Persistent log of every flash start/done/fail, on the shared disk">History</button>
+				<div class="info" id="flashRunning"></div>
+			</div>
+			<div class="summary-bar" id="rocInfo"></div>
+			<div class="table-scroll">
+				<table>
+					<thead id="rocTable"><tr><th>Sel</th><th class="sortable" data-sort="dtc" onclick="sortROC('dtc')">DTC</th><th class="sortable" data-sort="link" onclick="sortROC('link')">ROC</th><th class="sortable" data-sort="boardId" onclick="sortROC('boardId')">Board ID</th><th class="sortable" data-sort="disk" onclick="sortROC('disk')" title="Disk = boardID / 80">Disk</th><th class="sortable" data-sort="phi" onclick="sortROC('phi')" title="Phi (half-disk) = (boardID % 80) / 40">Phi</th><th class="sortable" data-sort="crate" onclick="sortROC('crate')" title="Crate inside the half-disk (0-4) = (boardID % 40) / 8">Crate</th><th class="sortable" data-sort="slot" onclick="sortROC('slot')" title="Slot in crate (1-4) + side: (boardID % 8) / 2 + 1, L if boardID even, R if odd">Slot</th><th>Board UID</th><th class="sortable" data-sort="status" onclick="sortROC('status')">Status</th><th>Flash</th><th>Match</th><th>Project</th><th>FW SHA</th><th class="sortable" data-sort="fwDate" onclick="sortROC('fwDate')">FW Date</th><th>FW Time</th><th class="sortable" data-sort="fwVersion" onclick="sortROC('fwVersion')">FW Ver</th><th>SW Hash</th><th>SW Date</th></tr></thead>
+					<tbody id="rocTb"><tr><td colspan="19" style="padding:24px;color:var(--c-text-dim);text-align:center;">No ROC data yet. Press <b>Refresh Inventory</b>.</td></tr></tbody>
+				</table>
+			</div>
+		</div>
+	</div>
+
+	<!-- ═══ Log ═══ -->
+	<div id="log" class="log-panel"></div>
+</div>
+
+<!-- ═══ Flash confirm dialog ═══ -->
+<div id="fcBg" class="modal-backdrop" onclick="closeFlashConfirm()">
+	<div class="modal" onclick="event.stopPropagation()">
+		<div class="modal-header">
+			<h3 id="fcTitle">Confirm</h3>
+			<button class="close-x" onclick="closeFlashConfirm()">&#10005;</button>
+		</div>
+		<div class="modal-body"><div id="fcBody"></div></div>
+		<div class="modal-footer">
+			<button onclick="closeFlashConfirm()">Cancel</button>
+			<div class="spacer"></div>
+			<button id="fcOk" class="danger">OK</button>
+		</div>
+	</div>
+</div>
+
+<!-- ═══ Modal ═══ -->
+<div id="modalBg" class="modal-backdrop" onclick="closeModal()">
+	<div class="modal" onclick="event.stopPropagation()">
+		<div class="modal-header">
+			<h3 id="mTitle">Details</h3>
+			<button class="close-x" onclick="closeModal()">&#10005;</button>
+		</div>
+		<div class="modal-body"><div id="mBody" class="modal-grid"></div></div>
+		<div class="modal-footer">
+			<button onclick="refreshInventory()">Refresh All</button>
+			<button id="mFlash" class="danger" onclick="flashModal()">Flash</button>
+			<button id="mSel">Select</button>
+			<div class="spacer"></div>
+			<button onclick="closeModal()">Close</button>
+		</div>
+	</div>
+</div>
+
+</body>
+</html>

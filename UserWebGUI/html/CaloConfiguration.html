@@ -91,6 +91,13 @@
 				description:    "Channel dead/hot quality map.",
 				boardConfigDir: "channelstatus",
 				mongoTable:     "/SubsystemCalorimeterStatusTable",
+				//optional companion GUI: per-channel editor for this table
+				linkGui: {
+					label:   "Edit channels with GUI",
+					title:   "Open the Calo Channel Status GUI to enable/disable individual channels.",
+					name:    "Calo Channel Status",
+					path:    "/WebPath/UserWebPath/WebGUI_calo/html/CaloChannelStatus.html"
+				},
 			},
 		];
 
@@ -344,6 +351,7 @@
 			{
 				_activeAlias = "";
 				localStorage.removeItem(LOCALSTORAGE_ALIAS_PREFIX_ + _activeFsm);
+				refreshAllActiveLines(); //fall back to the active Configuration group
 			}
 		}
 
@@ -502,6 +510,10 @@
 			str +=   '<button class="btn-configure" id="btn-' + sec.id +
 				'" onclick="onConfigure(\'' + sec.id +
 				'\')" disabled>Upload</button>';
+			if (sec.linkGui)
+				str += '<button class="btn-link-gui" onclick="openLinkedGui(\'' + sec.id + '\')"' +
+					' title="' + escapeHtml(sec.linkGui.title) + '">' +
+					escapeHtml(sec.linkGui.label) + ' &#8599;</button>';
 				str += '</div>';
 
 				str += '<div class="status-msg" id="status-' + sec.id + '"></div>';
@@ -1312,7 +1324,7 @@
 								if (/No rows were modified/i.test(err))
 								{
 									modifiedTablesMap_[sec.id] = undefined;
-									fetchActiveTableInfo(sec, function(info /*, infoErr*/)
+									fetchActiveTableInfoForSection(sec, function(info /*, infoErr*/)
 									{
 										done(true, {
 											savedVersion:    info ? info.version : "(unchanged)",
@@ -1423,144 +1435,159 @@
 
 
 		///////////////////////////////////////////////////////////////////////////
-		// "Active" line per section: fetch the currently-active version of the
-		// table and (if present) the source CSV filename from its tableComment.
+		// "Active" line per section: show the version of the table that is a
+		// member of the Configuration group behind the selected alias (or, if
+		// no alias is selected, the system's active Configuration group), and
+		// (if present) the source CSV filename from its tableComment.
 		//
 		// Implementation notes (verified against the server):
-		//   * descriptionOnly=1 returns ONLY <TableName> + <TableDescription>;
-		//     it omits <TableVersion> and <TableComment> (see
-		//     ConfigurationGUISupervisor.cc:6097). So we cannot use it here.
-		//   * With &version="", the server picks the latest persistent version
-		//     (see ConfigurationGUISupervisor.cc:665-672) -- which is exactly
-		//     the one created by saveSpecificTable on the most recent upload.
-		//   * The server emits the active version as <TableVersion> (not
-		//     "currentVersion" or "Version"), see line 6292. The comment is in
-		//     <TableComment>, see line 6370.
-		//
-		// We do request the row data here (no descriptionOnly) but only because
-		// the server gives us no lighter way to read the comment. For the four
-		// calo tables (a few hundred rows of ~80 chars each) this is still a
-		// single tens-of-KB response, much cheaper than the per-cell write loop
-		// we replaced.
+		//   * The group membership comes from getSpecificTableGroup
+		//     (ConfigurationGUISupervisor.cc, "getSpecificTableGroup"), which
+		//     emits paired <MemberName>/<MemberVersion> elements under
+		//     <TableGroupMembers> (ConfigurationSupervisorBase.cc,
+		//     handleGetTableGroupXML). Version-aliased members carry
+		//     "ALIAS:<alias>" with a <ProvenanceMemberVersion> child holding
+		//     the numeric version.
+		//   * getSpecificTable with an explicit version returns the comment in
+		//     <TableComment>. descriptionOnly=1 omits it, so we cannot use it.
+		//   * We never fall back to "latest persistent version": that is not
+		//     what the alias points to and would silently mislead the shifter.
 		///////////////////////////////////////////////////////////////////////////
-		function fetchActiveTableInfo(sec, cb)
-		{
-			var bareTableName = sec.mongoTable.replace(/^\/+/, "");
 
-			// First, get the active Configuration group to find the actual active version
+		// Resolve which Configuration group the "Active" lines refer to.
+		// cb({ groupName, groupKey, label }, errStr)
+		function resolveTargetGroup(cb)
+		{
+			if (_activeAlias)
+			{
+				ConfigurationAPI.getAliasesAndGroups(
+					function(aliasesAndGroupsObj)
+					{
+						var configAliases = (aliasesAndGroupsObj && aliasesAndGroupsObj.aliases)
+							? (aliasesAndGroupsObj.aliases["Configuration"] || []) : [];
+						for (var i = 0; i < configAliases.length; ++i)
+						{
+							if (configAliases[i].alias === _activeAlias)
+							{
+								cb({
+									groupName: configAliases[i].name,
+									groupKey:  configAliases[i].key,
+									label:     "alias " + _activeAlias + " = " +
+										configAliases[i].name + "(" + configAliases[i].key + ")"
+								}, null);
+								return;
+							}
+						}
+						cb(null, "alias '" + _activeAlias + "' not found");
+					},
+					false, //optionForNoAliases
+					true   //optionForNoGroups (only need the alias list)
+				);
+				return;
+			}
+
 			ConfigurationAPI.getActiveGroups(
 				function(activeGroups)
 				{
-					if (!activeGroups || !activeGroups.Configuration)
-					{
-						cb(null, "Could not determine active Configuration group");
-						return;
-					}
-
-					var configGroupName = activeGroups.Configuration.groupName;
-					var configGroupKey = activeGroups.Configuration.groupKey;
-
-					if (!configGroupName || configGroupName === "")
+					var cfg = activeGroups && activeGroups.Configuration;
+					if (!cfg || !cfg.groupName)
 					{
 						cb(null, "No active Configuration group");
 						return;
 					}
-
-					// Now fetch the metadata for this group to get the active versions
-					var reqStr =
-						"Request?RequestType=getTableGroupMembers" +
-						"&GroupName=" + encodeURIComponent(configGroupName) +
-						"&GroupKey=" + encodeURIComponent(configGroupKey) +
-						"&TableName=" + encodeURIComponent(bareTableName);
-
-					DesktopContent.XMLHttpRequest(reqStr, "",
-						function(req, reqParam, errStr)
-						{
-							if (errStr)
-							{
-								// Fallback: try latest version
-								fetchLatestTableInfo(bareTableName, cb);
-								return;
-							}
-
-							// Parse the response to find this table's version
-							var version = DesktopContent.getXMLValue(req, "Version") || "";
-
-							if (!version)
-							{
-								// Fallback: try latest version
-								fetchLatestTableInfo(bareTableName, cb);
-								return;
-							}
-
-							// Got active version, now fetch the table metadata with this version
-							var reqStr2 =
-								"Request?RequestType=getSpecificTable" +
-								"&dataOffset=0" +
-								"&chunkSize=0" +
-								"&tableName=" + encodeURIComponent(bareTableName) +
-								"&version=" + encodeURIComponent(version);
-
-							DesktopContent.XMLHttpRequest(reqStr2, "",
-								function(req2, reqParam2, errStr2)
-								{
-									if (errStr2) { cb(null, errStr2); return; }
-									var err = DesktopContent.getXMLValue(req2, "Error");
-									if (err)    { cb(null, err);    return; }
-
-									var comment  = DesktopContent.getXMLValue(req2, "TableComment") || "";
-									var fileName = extractFileNameFromComment(comment);
-
-									cb({
-										version:  version,
-										fileName: fileName, //null if not configured via this GUI
-										comment:  comment   //full comment, for tooltip
-									}, null);
-								},
-								0, 0, true
-							);
-						},
-						0, 0, true
-					);
+					cb({
+						groupName: cfg.groupName,
+						groupKey:  cfg.groupKey,
+						label:     "active group " + cfg.groupName + "(" + cfg.groupKey + ")"
+					}, null);
 				}
 			);
 		}
 
-		function fetchLatestTableInfo(bareTableName, cb)
+		// Fetch the member table versions of one group.
+		// cb({ <bareTableName>: <version string> }, errStr)
+		function fetchGroupMemberVersions(groupName, groupKey, cb)
 		{
-			// Fallback: fetch the latest persistent version
-			var reqStr =
-				"Request?RequestType=getSpecificTable" +
-				"&dataOffset=0" +
-				"&chunkSize=0" +
-				"&tableName=" + encodeURIComponent(bareTableName) +
-				"&version="; //empty -> server uses latest persistent version
-
-			DesktopContent.XMLHttpRequest(reqStr, "",
+			DesktopContent.XMLHttpRequest(
+				"Request?RequestType=getSpecificTableGroup" +
+				"&groupName=" + encodeURIComponent(groupName) +
+				"&groupKey=" + encodeURIComponent(groupKey),
+				"",
 				function(req, reqParam, errStr)
 				{
 					if (errStr) { cb(null, errStr); return; }
 					var err = DesktopContent.getXMLValue(req, "Error");
 					if (err)    { cb(null, err);    return; }
 
-					var version  = DesktopContent.getXMLValue(req, "TableVersion") || "";
+					var names    = req.responseXML.getElementsByTagName("MemberName");
+					var versions = req.responseXML.getElementsByTagName("MemberVersion");
+					var members  = {};
+					for (var i = 0; i < names.length && i < versions.length; ++i)
+					{
+						var ver = DesktopContent.getXMLValue(versions[i]) || "";
+						if (ver.indexOf(ConfigurationAPI._VERSION_ALIAS_PREPEND) == 0)
+							ver = DesktopContent.getXMLValue(versions[i], "ProvenanceMemberVersion") || ver;
+						members[DesktopContent.getXMLValue(names[i])] = ver;
+					}
+					cb(members, null);
+				},
+				0, 0, true
+			);
+		}
+
+		// Fetch the comment of one section's table at the given (group member)
+		// version. cb({ version, fileName, comment, groupLabel }, errStr)
+		function fetchActiveTableInfo(sec, version, groupLabel, cb)
+		{
+			var bareTableName = sec.mongoTable.replace(/^\/+/, "");
+
+			if (version === undefined || version === "")
+			{
+				cb(null, bareTableName + " is not a member of " + groupLabel);
+				return;
+			}
+
+			DesktopContent.XMLHttpRequest(
+				"Request?RequestType=getSpecificTable" +
+				"&dataOffset=0" +
+				"&chunkSize=0" +
+				"&tableName=" + encodeURIComponent(bareTableName) +
+				"&version=" + encodeURIComponent(version),
+				"",
+				function(req, reqParam, errStr)
+				{
+					if (errStr) { cb(null, errStr); return; }
+					var err = DesktopContent.getXMLValue(req, "Error");
+					if (err)    { cb(null, err);    return; }
+
 					var comment  = DesktopContent.getXMLValue(req, "TableComment") || "";
 					var fileName = extractFileNameFromComment(comment);
 
-					if (!version)
-					{
-						cb(null, "No TableVersion in response.");
-						return;
-					}
-
 					cb({
-						version:  version,
-						fileName: fileName,
-						comment:  comment
+						version:    version,
+						fileName:   fileName,  //null if not configured via this GUI
+						comment:    comment,   //full comment, for tooltip
+						groupLabel: groupLabel
 					}, null);
 				},
 				0, 0, true
 			);
+		}
+
+		// Convenience for a single section: resolve group, get members, fetch.
+		function fetchActiveTableInfoForSection(sec, cb)
+		{
+			resolveTargetGroup(function(group, groupErr)
+			{
+				if (groupErr) { cb(null, groupErr); return; }
+				fetchGroupMemberVersions(group.groupName, group.groupKey,
+					function(members, memErr)
+					{
+						if (memErr) { cb(null, memErr); return; }
+						var bareTableName = sec.mongoTable.replace(/^\/+/, "");
+						fetchActiveTableInfo(sec, members[bareTableName], group.label, cb);
+					});
+			});
 		}
 
 		// Render the "Active: v9 · file foo.csv" line on a section card.
@@ -1595,25 +1622,47 @@
 			el.className = "active-line is-known";
 			el.innerHTML = 'Active: <span class="active-version">' + verStr + '</span>' +
 				' &middot; ' + fileStr;
-			el.title = info.comment || "";
+			el.title = (info.comment || "") +
+				(info.groupLabel ? ("\nfrom " + info.groupLabel) : "");
 		}
 
-		// Refresh "Active" lines for all sections; called on init and on FSM
-		// change. Each section is fetched independently so they can render in
-		// parallel and one failure does not block the others.
+		// Refresh "Active" lines for all sections; called on init, on FSM
+		// change and on alias change. The group and its member list are
+		// resolved once, then each section's comment is fetched independently
+		// so one failure does not block the others.
 		function refreshAllActiveLines()
 		{
-			for (var i = 0; i < CONFIG_SECTIONS_.length; ++i)
+			var i;
+			for (i = 0; i < CONFIG_SECTIONS_.length; ++i)
+				updateSectionActiveLine(CONFIG_SECTIONS_[i], null); //reset to "(loading)"
+
+			function failAll(err)
 			{
-				(function(sec) {
-					updateSectionActiveLine(sec, null); //reset to "(loading)"
-					fetchActiveTableInfo(sec, function(info, err)
-					{
-						if (err) updateSectionActiveLine(sec, null, err);
-						else     updateSectionActiveLine(sec, info, null);
-					});
-				})(CONFIG_SECTIONS_[i]);
+				for (var j = 0; j < CONFIG_SECTIONS_.length; ++j)
+					updateSectionActiveLine(CONFIG_SECTIONS_[j], null, err);
 			}
+
+			resolveTargetGroup(function(group, groupErr)
+			{
+				if (groupErr) { failAll(groupErr); return; }
+				fetchGroupMemberVersions(group.groupName, group.groupKey,
+					function(members, memErr)
+					{
+						if (memErr) { failAll(memErr); return; }
+						for (var k = 0; k < CONFIG_SECTIONS_.length; ++k)
+						{
+							(function(sec) {
+								var bareTableName = sec.mongoTable.replace(/^\/+/, "");
+								fetchActiveTableInfo(sec, members[bareTableName], group.label,
+									function(info, err)
+									{
+										if (err) updateSectionActiveLine(sec, null, err);
+										else     updateSectionActiveLine(sec, info, null);
+									});
+							})(CONFIG_SECTIONS_[k]);
+						}
+					});
+			});
 		}
 
 
@@ -1674,6 +1723,23 @@
 			for (var i = 0; i < CONFIG_SECTIONS_.length; ++i)
 				if (CONFIG_SECTIONS_[i].id === id) return CONFIG_SECTIONS_[i];
 			return null;
+		}
+
+		///////////////////////////////////////////////////////////////////////////
+		// Open a companion GUI (sec.linkGui) in a new ots Desktop window.
+		// The path is relative to the local gateway; DesktopContent.openNewWindow
+		// takes care of remote-gateway redirection. Appending urn= makes the
+		// new window's ConfigurationAPI calls target the same supervisor as
+		// this page.
+		///////////////////////////////////////////////////////////////////////////
+		function openLinkedGui(sectionId)
+		{
+			var sec = getSectionById(sectionId);
+			if (!sec || !sec.linkGui) return;
+			var path = sec.linkGui.path;
+			if (DesktopContent._localUrnLid)
+				path += (path.indexOf("?") >= 0 ? "&" : "?") + "urn=" + DesktopContent._localUrnLid;
+			DesktopContent.openNewWindow(sec.linkGui.name, "" /*subname*/, path, false /*unique*/);
 		}
 
 		var _dayArr   = ["Sun","Mon","Tue","Wed","Thu","Fri","Sat"];

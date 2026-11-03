@@ -58,6 +58,26 @@ b, h3, h1 {
 .btn-configure:hover        { background-color: #43a047; }
 .btn-configure:disabled     { background-color: #aaa; color: #ddd; cursor: not-allowed; box-shadow: none; }
 
+/* ---- Per-card "open companion GUI" link button (outlined navy) ---- */
+.btn-link-gui {
+	font-family:		'Inconsolata', monospace;
+	font-weight:		bold;
+	font-size:			12px;
+	padding:			4px 12px;
+	border:				2px solid #2c3e6b;
+	border-radius:		4px;
+	background:			#fff;
+	color:				#2c3e6b;
+	cursor:				pointer;
+	white-space:		nowrap;
+	transition:			background-color 0.15s, color 0.15s, border-color 0.15s;
+}
+.btn-link-gui:hover {
+	background-color:	#1565c0;
+	border-color:		#1565c0;
+	color:				#fff;
+}
+
 /* ---- Header Configure All (blue) ---- */
 .btn-configure-all {
 	padding:			6px 16px;

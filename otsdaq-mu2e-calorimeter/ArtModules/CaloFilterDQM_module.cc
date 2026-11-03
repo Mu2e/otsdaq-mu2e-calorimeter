@@ -33,8 +33,12 @@ namespace mu2e {
 class CaloFilterDQM : public art::EDFilter {
   public:
 	struct Config {
-		fhicl::Atom<int> verbosity{fhicl::Name("verbosity"), fhicl::Comment("Verbosity [0-2]"), 0};
-		fhicl::Atom<int> metrics_level{fhicl::Name("metricsLevel"), fhicl::Comment("Metrics reporting level"), 1};
+		fhicl::Atom<int>  verbosity{fhicl::Name("verbosity"), fhicl::Comment("Verbosity [0-2]"), 0};
+		fhicl::Atom<bool> printDump{fhicl::Name("printDump"), fhicl::Comment("Print dump"), false};
+		fhicl::Atom<bool> printHexDump{fhicl::Name("printHexDump"), fhicl::Comment("Print hex dump"), false};
+		fhicl::Atom<bool> stop_on_failure{fhicl::Name("stopOnFailure"), fhicl::Comment("Throw exception if checks fail [default: false]"), false};
+		fhicl::Atom<int>  max_failures{fhicl::Name("maxFailures"), fhicl::Comment("Number of failed events after which to throw when stopOnFailure is true [default: 1]"), 1};
+		fhicl::Atom<int>  metrics_level{fhicl::Name("metricsLevel"), fhicl::Comment("Metrics reporting level"), 1};
 	};
 
 	explicit CaloFilterDQM(const art::EDFilter::Table<Config>& config);
@@ -45,10 +49,21 @@ class CaloFilterDQM : public art::EDFilter {
 	void processCFOData(mu2e::DTCEventFragment& eventFragment);
 	void processCaloData(mu2e::DTCEventFragment& eventFragment);
 
-	void printRunSummary();
+	uint32_t extractBits(const uint16_t* words, size_t startBit, size_t bitLength);
+	void     printEvent(const DTCLib::DTC_Event& dtcevent);
+	void     printSubEvent(const DTCLib::DTC_SubEvent& subevent);
+	void     printEventHeader(const DTCLib::DTC_Event& dtcevent);
+	void     printDTCHeader(const DTCLib::DTC_SubEvent& subevent);
+	void     printROC(const DTCLib::DTC_DataBlock& dataBlock);
+	void     printRunSummary();
 
   private:
 	int                    verbosity_;
+	bool                   print_dump_;
+	bool                   print_hex_dump_;
+	bool                   stopOnFailure_;
+	int                    maxFailures_;
+	int                    nFailedEvents_;
 	int                    metrics_reporting_level_;
 	mu2e::CaloDAQUtilities caloDAQUtil_;
 
@@ -87,7 +102,15 @@ class CaloFilterDQM : public art::EDFilter {
 }  // namespace mu2e
 
 mu2e::CaloFilterDQM::CaloFilterDQM(const art::EDFilter::Table<Config>& config)
-    : art::EDFilter{config}, verbosity_(config().verbosity()), metrics_reporting_level_(config().metrics_level()), caloDAQUtil_("CaloDigiFromFragments") {
+    : art::EDFilter{config}
+    , verbosity_(config().verbosity())
+    , print_dump_(config().printDump())
+    , print_hex_dump_(config().printHexDump())
+    , stopOnFailure_(config().stop_on_failure())
+    , maxFailures_(config().max_failures())
+    , nFailedEvents_(0)
+    , metrics_reporting_level_(config().metrics_level())
+    , caloDAQUtil_("CaloDigiFromFragments") {
 	nEvents          = 0;
 	nTotalCaloHits   = 0;
 	nTotalGoodHits   = 0;
@@ -100,6 +123,7 @@ mu2e::CaloFilterDQM::CaloFilterDQM(const art::EDFilter::Table<Config>& config)
 
 bool mu2e::CaloFilterDQM::filter(art::Event& event) {
 	art::EventNumber_t eventNumber = event.event();
+	failedEvent                    = false;
 
 	nEvents++;
 
@@ -118,6 +142,13 @@ bool mu2e::CaloFilterDQM::filter(art::Event& event) {
 		mu2e::DTCEventFragment eventFragment(frag);
 		processCFOData(eventFragment);
 		processCaloData(eventFragment);
+	}
+
+	if(failedEvent) {
+		nFailedEvents_++;
+		if(stopOnFailure_ && nFailedEvents_ >= maxFailures_) {
+			throw cet::exception("CaloFilterDQM") << "Failure detected in event " << (int)eventNumber << " (" << nFailedEvents_ << " failed events, maxFailures = " << maxFailures_ << ")! Stopping.";
+		}
 	}
 
 	nTotalCaloHits += nEventCaloHits;
@@ -238,8 +269,6 @@ void mu2e::CaloFilterDQM::processCFOData(mu2e::DTCEventFragment& eventFragment) 
 }
 
 void mu2e::CaloFilterDQM::processCaloData(mu2e::DTCEventFragment& eventFragment) {
-	failedEvent = false;
-
 	auto caloSubEvents = eventFragment.getSubsystemData(DTCLib::DTC_Subsystem::DTC_Subsystem_Calorimeter);
 
 	// Loop over calo DTCs (should be only one per fragment)
@@ -278,11 +307,12 @@ void mu2e::CaloFilterDQM::processCaloData(mu2e::DTCEventFragment& eventFragment)
 					failure_type_counter[errorCode]++;
 					failures_per_dtc_link[dtcID][iroc]++;
 					nEventBadHits++;
+					failedEvent = true;
 				} else {
 					goodHits_per_dtc_link[dtcID][iroc]++;
 					nEventGoodHits++;
 
-					long int hitEWT = hit.InPayloadEventWindowTag - 1;
+					long int hitEWT = hit.InPayloadEventWindowTag;
 					if(hitEWT != dtcEWT % 65536) {
 						if(verbosity_ > 2) {
 							std::cout << "WARNING! DTC " << dtcID << " Link " << iroc << " Board " << hit.BoardID << " Channel " << hit.ChannelID << ": Hit EwT " << hitEWT << " != DTC EwT "
@@ -299,6 +329,139 @@ void mu2e::CaloFilterDQM::processCaloData(mu2e::DTCEventFragment& eventFragment)
 			}
 		}  // loop over ROCs
 	}      // loop over subevents (DTCs)
+
+	if(failedEvent && print_dump_) {
+		std::cout << "======================================================\n";
+		std::cout << "========== THIS FRAGMENT HAS SOME FAILURES ===========\n";
+		std::cout << "======================================================\n";
+		std::cout << "\n----- Dumping current fragment -----\n\n";
+		DTCLib::DTC_Event dtcevent = eventFragment.getData();
+		printEvent(dtcevent);
+	}
+}
+
+void mu2e::CaloFilterDQM::printEvent(const DTCLib::DTC_Event& dtcevent) {
+	printEventHeader(dtcevent);
+	std::vector<DTCLib::DTC_SubEvent> subevents = dtcevent.GetSubEvents();
+	for(uint idtc = 0; idtc < subevents.size(); idtc++) {
+		std::cout << "-- DTC " << int(subevents[idtc].GetDTCID()) << " --\n";
+		printSubEvent(subevents[idtc]);
+	}
+}
+
+void mu2e::CaloFilterDQM::printSubEvent(const DTCLib::DTC_SubEvent& subevent) {
+	printDTCHeader(subevent);
+	std::vector<DTCLib::DTC_DataBlock> dataBlocks = subevent.GetDataBlocks();
+	for(uint iroc = 0; iroc < dataBlocks.size(); iroc++) {
+		std::cout << "-- ROC " << iroc << " --\n";
+		printROC(dataBlocks[iroc]);
+	}
+}
+
+void mu2e::CaloFilterDQM::printEventHeader(const DTCLib::DTC_Event& dtcevent) {
+	auto headerPtr = reinterpret_cast<uint16_t const*>(dtcevent.GetRawBufferPointer());
+	if(print_hex_dump_) {
+		std::cout << "Event HEX DUMP (24 bytes) ------------------\n";
+		for(size_t word = 0; word < 12; word++) {
+			std::cout << std::hex << std::setw(4) << std::setfill('0') << headerPtr[word] << std::setfill(' ') << std::dec << " ";
+		}
+		std::cout << std::endl;
+	}
+	return;
+}
+
+void mu2e::CaloFilterDQM::printDTCHeader(const DTCLib::DTC_SubEvent& subevent) {
+	auto headerPtr = reinterpret_cast<uint16_t const*>(subevent.GetRawBufferPointer());
+	if(print_hex_dump_) {
+		std::cout << "DTC HEX DUMP (48 bytes) ------------------\n";
+		for(size_t word = 0; word < 24; word++) {
+			std::cout << std::hex << std::setw(4) << std::setfill('0') << headerPtr[word] << std::setfill(' ') << std::dec << " ";
+			if(word % 8 == 7)
+				std::cout << std::endl;
+		}
+	}
+	return;
+}
+
+uint32_t mu2e::CaloFilterDQM::extractBits(const uint16_t* words, size_t startBit, size_t bitLength) {
+	uint32_t result = 0;
+	for(size_t bitIndex = startBit; bitIndex < startBit + bitLength; bitIndex++) {
+		size_t   wordIndex = (bitIndex / 16) ^ 0x1;  // Swap pairs of 16-bit words (just flip the last bit)
+		size_t   bitOffset = 15 - (bitIndex % 16);   // Big-endian
+		uint16_t bit       = (words[wordIndex] >> bitOffset) & 0x1;
+		result             = (result << 1) | bit;
+	}
+	return result;
+}
+
+// TODO Implement these printing functions inside CalorimeterDataDecoder, so that they use the same decoding logic as the rest of the code
+void mu2e::CaloFilterDQM::printROC(const DTCLib::DTC_DataBlock& dataBlock) {
+	auto headerPtr = reinterpret_cast<uint16_t const*>(dataBlock.GetRawBufferPointer());
+	auto dataPtr   = reinterpret_cast<uint16_t const*>(dataBlock.GetData());
+	if(print_hex_dump_) {
+		std::cout << "ROC HEX DUMP (" << dataBlock.byteSize << " bytes) ------------------\n";
+		for(size_t word = 0; word < 8; word++) {
+			std::cout << std::hex << std::setw(4) << std::setfill('0') << headerPtr[word] << std::setfill(' ') << std::dec << " ";
+		}
+		std::cout << std::endl;
+		for(size_t word = 0; word < (dataBlock.byteSize - 16) / 2; word++) {
+			std::cout << std::hex << std::setw(4) << std::setfill('0') << dataPtr[word] << std::setfill(' ') << std::dec << " ";
+			if(word % 16 == 15)
+				std::cout << std::endl;
+		}
+	}
+	std::cout << "--- DECODED WORDS --- " << std::endl;
+	auto blockPos      = reinterpret_cast<const uint8_t*>(dataPtr);  // byte position in block (multiple of 16)
+	auto endOfBlockPos = blockPos + dataBlock.byteSize - 16;
+	while(blockPos < endOfBlockPos)  // until the end of this block
+	{
+		// Ignore any 0xFFFF word
+		if((reinterpret_cast<const uint16_t*>(blockPos))[0] == 0xFFFF) {
+			blockPos += 2;
+			continue;
+		}
+		if(endOfBlockPos - blockPos < 12)
+			break;  // hit header is 12 bytes
+		const uint16_t* words                     = reinterpret_cast<const uint16_t*>(blockPos);
+		uint16_t        Reserved1                 = static_cast<uint16_t>(extractBits(words, 0, 12));
+		uint16_t        BoardID                   = static_cast<uint8_t>(extractBits(words, 12, 8));
+		uint16_t        DetectorID                = static_cast<uint8_t>(extractBits(words, 20, 3));
+		uint16_t        ChannelID                 = static_cast<uint8_t>(extractBits(words, 23, 5));
+		uint16_t        Time                      = static_cast<uint16_t>(extractBits(words, 28, 16));
+		uint16_t        InPayloadEventWindowTag   = static_cast<uint16_t>(extractBits(words, 44, 16));
+		uint16_t        Baseline                  = static_cast<uint16_t>(extractBits(words, 60, 12));
+		uint16_t        IndexOfMaxDigitizerSample = static_cast<uint16_t>(extractBits(words, 72, 10));
+		uint16_t        ErrorFlags                = static_cast<uint8_t>(extractBits(words, 82, 4));
+		uint16_t        NumberOfSamples           = static_cast<uint16_t>(extractBits(words, 86, 10));
+		// Waveform
+		mu2e::CalorimeterDataDecoder::Data12bitReader reader(reinterpret_cast<const uint16_t*>(blockPos + 12));
+		std::cout << "HIT HEADER--\n";
+		std::cout << std::hex << Reserved1 << " ";
+		std::cout << std::hex << BoardID << " ";
+		std::cout << std::hex << DetectorID << " ";
+		std::cout << std::hex << ChannelID << " ";
+		std::cout << std::hex << Time << " ";
+		std::cout << std::hex << InPayloadEventWindowTag << " ";
+		std::cout << std::hex << Baseline << " ";
+		std::cout << std::hex << IndexOfMaxDigitizerSample << " ";
+		std::cout << std::hex << ErrorFlags << " ";
+		std::cout << std::hex << NumberOfSamples << " ";
+		std::cout << "\nHIT WAVEFORM--\n";
+		// Make sure we don't read over the block if there is an error
+		uint bytesLeft  = endOfBlockPos - (blockPos + 12);
+		uint maxSamples = bytesLeft / 1.5;
+		if(NumberOfSamples > maxSamples)
+			NumberOfSamples = maxSamples;
+		for(size_t word = 0; word < NumberOfSamples; word++) {
+			std::cout << std::hex << std::setw(3) << std::setfill('0') << reader[word] << std::setfill(' ') << std::dec << " ";
+		}
+		std::cout << "\n";
+		// Advance to the next 12-byte packet
+		float   hitByteSize = 12 + NumberOfSamples * 1.5;
+		uint8_t hitPackets  = uint8_t(std::ceil(hitByteSize / 12));  // number of 12-byte packets this hit occupied
+		blockPos += hitPackets * 12;                                 // advance by 12 bytes per packet
+	}
+	return;
 }
 
 void mu2e::CaloFilterDQM::printRunSummary() {
