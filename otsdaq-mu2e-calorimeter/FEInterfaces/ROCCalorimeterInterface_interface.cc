@@ -7,6 +7,7 @@
 
 #include "cetlib/filepath_maker.h"
 
+#include <algorithm>
 #include <chrono>
 #include <cstdlib>
 #include <cstring>
@@ -14,7 +15,6 @@
 #include <filesystem>
 #include <fstream>
 #include <initializer_list>
-#include <algorithm>
 #include <iomanip>
 #include <vector>
 
@@ -196,8 +196,8 @@ ROCCalorimeterInterface::ROCCalorimeterInterface(const std::string& rocUID, cons
 	                                                 "EMPTY maximum hit length [samples, Default := 100]",
 	                                                 "NLOW samples below threshold that close a hit [1-63, Default := 4]",
 	                                                 "Restore standard hit (all types 0/100, NLOW 60)? [bool, Default := 0]"},  // inputs parameters
-	                        std::vector<std::string>{"Status"},  // output parameters
-	                        1);                                  // requiredUserPermissions
+	                        std::vector<std::string>{"Status"},                                                                 // output parameters
+	                        1);                                                                                                 // requiredUserPermissions
 
 	registerFEMacroFunction(
 	    "Setup for ADCs Data Taking",
@@ -2618,14 +2618,14 @@ void ROCCalorimeterInterface::ReadROCHitRates(__ARGS__) {
 // the inputs are ignored and all types go back to 0/100, NLOW 60 (as written by Configure). Needs ROC firmware 1.11
 // or later.
 void ROCCalorimeterInterface::SetupForMuLifetimeRun(__ARGS__) {
-	static const char* const minName[4] = {"CAL (CsI) minimum hit length [samples, Default := 200]",
-	                                       "CAPHRI (LYSO) minimum hit length [samples, Default := 0]",
-	                                       "PIN-DIODE minimum hit length [samples, Default := 0]",
-	                                       "EMPTY minimum hit length [samples, Default := 0]"};
-	static const char* const maxName[4] = {"CAL (CsI) maximum hit length [samples, Default := 200]",
-	                                       "CAPHRI (LYSO) maximum hit length [samples, Default := 100]",
-	                                       "PIN-DIODE maximum hit length [samples, Default := 100]",
-	                                       "EMPTY maximum hit length [samples, Default := 100]"};
+	static const char* const minName[4]    = {"CAL (CsI) minimum hit length [samples, Default := 200]",
+	                                          "CAPHRI (LYSO) minimum hit length [samples, Default := 0]",
+	                                          "PIN-DIODE minimum hit length [samples, Default := 0]",
+	                                          "EMPTY minimum hit length [samples, Default := 0]"};
+	static const char* const maxName[4]    = {"CAL (CsI) maximum hit length [samples, Default := 200]",
+	                                          "CAPHRI (LYSO) maximum hit length [samples, Default := 100]",
+	                                          "PIN-DIODE maximum hit length [samples, Default := 100]",
+	                                          "EMPTY maximum hit length [samples, Default := 100]"};
 	static const uint32_t    minDefault[4] = {200, 0, 0, 0};
 	static const uint32_t    maxDefault[4] = {200, 100, 100, 100};
 

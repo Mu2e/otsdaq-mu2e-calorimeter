@@ -82,9 +82,9 @@ bool mu2e::CaloHitFilter::filter(art::Event& event) {
 			// Loop over ROCs
 			for(size_t iROC = 0; iROC < caloDecoder.block_count(); iROC++) {
 				auto calHitTestDataVec = caloDecoder.GetCalorimeterHitsForTrigger(iROC);
-				for (const auto& hit : *calHitTestDataVec) {
-					if (caloDAQUtil_.isHitGood(hit) != mu2e::CaloDAQUtilities::CaloHitError::Good) {
-						continue;  // Skip bad hits	
+				for(const auto& hit : *calHitTestDataVec) {
+					if(caloDAQUtil_.isHitGood(hit) != mu2e::CaloDAQUtilities::CaloHitError::Good) {
+						continue;  // Skip bad hits
 					}
 					event_hits++;
 				}
