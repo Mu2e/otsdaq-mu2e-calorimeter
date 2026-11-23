@@ -69,5 +69,35 @@ cet_build_plugin(CaloHitFilter art::module
       Offline::DAQ
 )
 
+cet_build_plugin(CaloCSIFilter art::module
+    REG_SOURCE CaloCSIFilter_module.cc
+    LIBRARIES REG
+      artdaq-core-mu2e::Data
+      artdaq-core-mu2e::Data_dict
+      artdaq-core-mu2e::Overlays
+      artdaq::DAQdata
+      Offline::DAQ
+)
+
+cet_build_plugin(CaloCAPHRIFilter art::module
+    REG_SOURCE CaloCAPHRIFilter_module.cc
+    LIBRARIES REG
+      artdaq-core-mu2e::Data
+      artdaq-core-mu2e::Data_dict
+      artdaq-core-mu2e::Overlays
+      artdaq::DAQdata
+      Offline::DAQ
+)
+cet_build_plugin(CaloLaserFilter art::module
+    REG_SOURCE CaloLaserFilter_module.cc
+    LIBRARIES REG
+      artdaq-core-mu2e::Data
+      artdaq-core-mu2e::Data_dict
+      artdaq-core-mu2e::Overlays
+      artdaq::DAQdata
+      Offline::DAQ
+)
+
+
 install_headers()
 install_source()

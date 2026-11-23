@@ -85,6 +85,27 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
         ROC_ADDRESS_SIMWF_MULTI_A            = 152,
         ROC_ADDRESS_SIMWF_MULTI_B            = 153,
 
+		ROC_ADDRESS_HIT_LENGTH               = 154,
+
+        ROC_ADDRESS_CHTYPE_0                 = 160,  // channel type -> DET field of the hits, 2 bits/channel: ch 0-7
+        ROC_ADDRESS_CHTYPE_1                 = 161,  //   ch 8-15
+        ROC_ADDRESS_CHTYPE_2                 = 162,  //   ch 16-19 (bits 7:0); firmware 1.7 and later
+
+        // hit length per channel type (samples, 10 bits); firmware 1.11 and later. Defaults MIN 0, MAX 100 (as before)
+        ROC_ADDRESS_HITLEN_MIN_CAL           = 158,  // CAL (CsI): the hit stays open at least MIN samples
+        ROC_ADDRESS_HITLEN_MAX_CAL           = 159,  //   and is closed after MAX samples
+        ROC_ADDRESS_HITLEN_MIN_CAPHRI        = 163,
+        ROC_ADDRESS_HITLEN_MAX_CAPHRI        = 164,
+        ROC_ADDRESS_HITLEN_MIN_PIN           = 165,
+        ROC_ADDRESS_HITLEN_MAX_PIN           = 166,
+        ROC_ADDRESS_HITLEN_MIN_EMPTY         = 167,
+        ROC_ADDRESS_HITLEN_MAX_EMPTY         = 168,
+
+        ROC_ADDRESS_HITRATE_SEQ              = 169,  // hit rate update counter (+1 per second of open event window); firmware 1.9 and later
+        ROC_ADDRESS_HITRATE_BLOCKED_A        = 170,  // bit n = ch n (0-9) writing a hit for > 7/8 of the open window (layout of MASK_A)
+        ROC_ADDRESS_HITRATE_BLOCKED_B        = 171,  // bit n = ch n+10 (layout of MASK_B)
+        ROC_ADDRESS_HITRATE_BASE             = 176,  // 176 + ch (0-19): hits per second of open event window, 0xFFFF = saturated
+
         ROC_ADDRESS_FW_PROJECT_ID            = 240,
         ROC_ADDRESS_FW_GIT_SHA               = 241,
         ROC_ADDRESS_FW_BUILD_DATE_LO         = 242,
@@ -166,6 +187,9 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 	void ToggleMBBusy(bool busyonoff);
 	void SetADCsThresholds(__ARGS__);
 	void SetADCsThresholds(int offset);
+	void SetChannelTypes();  // sensorType of the 20 channels into the DET field of the hits (registers 160-162)
+	void SetupForMuLifetimeRun(__ARGS__);
+	bool SetHitLengths(const uint16_t minLength[4], const uint16_t maxLength[4], std::ostream& os);  // registers 158-168
 
 	void        ReadVoltagesFromDB(__ARGS__);
 	void        ReadChannelStatusFromDB(__ARGS__);
@@ -178,6 +202,7 @@ class ROCCalorimeterInterface : public ROCPolarFireCoreInterface
 	// void ReadVoltagesFromDB();
 
 	void ReadROCErrorCounter(__ARGS__);
+	void ReadROCHitRates(__ARGS__);
 	void ReadMBRegisters(__ARGS__);
 	void GetMZBStatus(__ARGS__);
 
